@@ -8,12 +8,7 @@ import 'package:wasm_compare/src/shell/performance_hud.dart';
 import 'package:wasm_compare/src/shell/runtime_selector.dart';
 
 void main() {
-  runApp(
-    MultiProvider(
-      providers: [ChangeNotifierProvider(create: (_) => FrameTimingService())],
-      child: const WasmCompareApp(),
-    ),
-  );
+  runApp(const WasmCompareApp());
 }
 
 class WasmCompareApp extends StatelessWidget {
@@ -21,15 +16,18 @@ class WasmCompareApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Wasm vs JS Compare',
-      theme: ThemeData.dark(useMaterial3: true).copyWith(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.blueAccent,
-          brightness: Brightness.dark,
+    return MultiProvider(
+      providers: [ChangeNotifierProvider(create: (_) => FrameTimingService())],
+      child: MaterialApp(
+        title: 'Wasm vs JS Compare',
+        theme: ThemeData.dark(useMaterial3: true).copyWith(
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: Colors.blueAccent,
+            brightness: Brightness.dark,
+          ),
         ),
+        home: const CompatibilityShield(child: DemoDashboard()),
       ),
-      home: const CompatibilityShield(child: DemoDashboard()),
     );
   }
 }

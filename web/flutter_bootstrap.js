@@ -1,4 +1,6 @@
 {{flutter_js}}
+{{flutter_build_config}}
+
 const searchParams = new URLSearchParams(window.location.search);
 let mode = searchParams.get("mode") || "auto";
 
@@ -11,7 +13,6 @@ let forceCanvasKit = false;
 
 if ((mode === "wasm" || mode === "skwasm" || mode === "auto") && isExperimentalWasm && !optin) {
   forceCanvasKit = true;
-  // Expose blocked state to Dart side
   window.experimentallyBlocked = true;
 }
 
@@ -19,15 +20,19 @@ if (mode === "js" || mode === "canvaskit") {
   forceCanvasKit = true;
 }
 
-const config = {};
+const userConfig = {'wasmAllowList': {'gecko': true, 'webkit': true}};
 if (forceCanvasKit) {
-  // Try to force canvaskit. 
-} 
+  userConfig.renderer = "canvaskit";
+} else if (mode === "skwasm-st") {
+  userConfig.forceSingleThreadedSkwasm = true;
+} else if (mode === "wimp") {
+  userConfig.enableWimp = true;
+}
 
 _flutter.loader.load({
+  config: userConfig,
   onEntrypointLoaded: async function(engineInitializer) {
-    const runConfig = forceCanvasKit ? { renderer: "canvaskit" } : {};
-    const appRunner = await engineInitializer.initializeEngine(runConfig);
+    const appRunner = await engineInitializer.initializeEngine();
     await appRunner.runApp();
   }
 });

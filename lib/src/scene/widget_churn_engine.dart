@@ -73,7 +73,7 @@ class _WidgetChurnEngineState extends State<WidgetChurnEngine>
               ),
               borderRadius: BorderRadius.circular(_controller.value * 4),
             ),
-            child: _buildChurnNode(depth - 1),
+            child: Row(children: [_buildChurnNode(depth - 1)]),
           ),
         );
       },
