@@ -1,8 +1,8 @@
 import 'dart:collection';
 import 'dart:ui';
 
-import 'package:flutter/scheduler.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 
 class FrameTimingMetrics {
   final double fps;
@@ -30,7 +30,7 @@ class FrameTimingService extends ChangeNotifier {
   }
 
   void _onTimings(List<FrameTiming> timings) {
-    bool hasNew = false;
+    var hasNew = false;
     for (final timing in timings) {
       _timingsLog.addLast(timing);
       hasNew = true;
@@ -48,9 +48,9 @@ class FrameTimingService extends ChangeNotifier {
   void _computeMetrics() {
     if (_timingsLog.isEmpty) return;
 
-    double totalBuild = 0.0;
-    double totalRaster = 0.0;
-    double totalFrame = 0.0;
+    var totalBuild = 0.0;
+    var totalRaster = 0.0;
+    var totalFrame = 0.0;
 
     for (final timing in _timingsLog) {
       totalBuild += timing.buildDuration.inMicroseconds / 1000.0;
@@ -68,7 +68,7 @@ class FrameTimingService extends ChangeNotifier {
         last.timestampInMicroseconds(FramePhase.buildStart) / 1000.0 -
         first.timestampInMicroseconds(FramePhase.buildStart) / 1000.0;
 
-    double fps = 0.0;
+    var fps = 0.0;
     if (elapsedMs > 0 && count > 1) {
       fps = (count - 1) * 1000.0 / elapsedMs;
     } else {

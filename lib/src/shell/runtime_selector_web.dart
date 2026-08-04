@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:web/web.dart' as web;
-import 'package:wasm_compare/src/metrics/benchmark_storage.dart';
 import 'package:provider/provider.dart';
-import 'package:wasm_compare/src/metrics/frame_timing_service.dart';
+import 'package:web/web.dart' as web;
+
+import '../metrics/benchmark_storage.dart';
+import '../metrics/frame_timing_service.dart';
 
 class RuntimeSelector extends StatelessWidget {
   const RuntimeSelector({super.key});

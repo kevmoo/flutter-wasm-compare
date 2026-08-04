@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:wasm_compare/src/metrics/frame_timing_service.dart';
-import 'package:wasm_compare/src/scene/adaptive_stress_scene.dart';
-import 'package:wasm_compare/src/scene/widget_churn_engine.dart';
-import 'package:wasm_compare/src/shell/compatibility_shield.dart';
-import 'package:wasm_compare/src/shell/performance_hud.dart';
-import 'package:wasm_compare/src/shell/runtime_selector.dart';
+
+import 'src/metrics/frame_timing_service.dart';
+import 'src/scene/adaptive_stress_scene.dart';
+import 'src/scene/widget_churn_engine.dart';
+import 'src/shell/compatibility_shield.dart';
+import 'src/shell/performance_hud.dart';
+import 'src/shell/runtime_selector.dart';
 
 void main() {
   runApp(const WasmCompareApp());
