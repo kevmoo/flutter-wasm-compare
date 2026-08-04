@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:wasm_compare/src/metrics/frame_timing_service.dart';
-import 'package:wasm_compare/src/metrics/benchmark_storage.dart';
+
+import '../metrics/benchmark_storage.dart';
+import '../metrics/frame_timing_service.dart';
 
 class PerformanceHud extends StatelessWidget {
   const PerformanceHud({super.key});
@@ -12,6 +13,14 @@ class PerformanceHud extends StatelessWidget {
       builder: (context, timingService, child) {
         final metrics = timingService.metrics;
         final savedBaseline = BenchmarkStorage.getLastRun();
+        final isFaster =
+            savedBaseline != null && metrics.fps > savedBaseline.fps;
+        final ratio = savedBaseline != null && savedBaseline.fps > 0
+            ? (isFaster
+                  ? (metrics.fps / savedBaseline.fps).toStringAsFixed(2)
+                  : (savedBaseline.fps / metrics.fps).toStringAsFixed(2))
+            : '0.00';
+        final speedupText = isFaster ? '${ratio}x Faster' : '${ratio}x Slower';
 
         return Container(
           padding: const EdgeInsets.all(16),
@@ -74,13 +83,9 @@ class PerformanceHud extends StatelessWidget {
                   Padding(
                     padding: const EdgeInsets.only(top: 8.0),
                     child: Text(
-                      metrics.fps > savedBaseline.fps
-                          ? '${(metrics.fps / savedBaseline.fps).toStringAsFixed(2)}x Faster'
-                          : '${(savedBaseline.fps / metrics.fps).toStringAsFixed(2)}x Slower',
+                      speedupText,
                       style: TextStyle(
-                        color: metrics.fps > savedBaseline.fps
-                            ? Colors.greenAccent
-                            : Colors.redAccent,
+                        color: isFaster ? Colors.greenAccent : Colors.redAccent,
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
                       ),

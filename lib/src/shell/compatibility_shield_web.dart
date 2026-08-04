@@ -1,7 +1,7 @@
+import 'dart:js_interop';
+
 import 'package:flutter/material.dart';
 import 'package:web/web.dart' as web;
-
-import 'dart:js_interop';
 
 @JS('window.experimentallyBlocked')
 external bool? get _experimentallyBlocked;

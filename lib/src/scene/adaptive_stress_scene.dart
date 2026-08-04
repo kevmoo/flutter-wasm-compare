@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:wasm_compare/src/scene/widget_churn_engine.dart';
+
+import 'widget_churn_engine.dart';
 
 class AdaptiveStressScene extends StatelessWidget {
   final StressLevel stressLevel;
@@ -26,10 +27,7 @@ class AdaptiveStressScene extends StatelessWidget {
   }
 
   Widget _buildMobileView(BuildContext context) {
-    return ListView.builder(
-      itemCount: 50,
-      itemBuilder: (context, index) => _buildMockCard(context, index),
-    );
+    return ListView.builder(itemCount: 50, itemBuilder: _buildMockCard);
   }
 
   Widget _buildDesktopView(BuildContext context) {
@@ -39,7 +37,7 @@ class AdaptiveStressScene extends StatelessWidget {
         childAspectRatio: 1.5,
       ),
       itemCount: 200,
-      itemBuilder: (context, index) => _buildMockCard(context, index),
+      itemBuilder: _buildMockCard,
     );
   }
 
