@@ -88,11 +88,19 @@ class StressController extends ChangeNotifier {
   String _autoTuneStatus = '';
   Timer? _tuningTimer;
 
+  double _targetRefreshRate = 60.0;
+  bool _hasAllowedDeviceDetails = false;
+  String? _deviceDetailsLabel;
+
   StressMode get mode => _mode;
   StressPreset get preset => _preset;
   int get nodeCount => _nodeCount;
   bool get isAutoTuning => _isAutoTuning;
   String get autoTuneStatus => _autoTuneStatus;
+
+  double get targetRefreshRate => _targetRefreshRate;
+  bool get hasAllowedDeviceDetails => _hasAllowedDeviceDetails;
+  String? get deviceDetailsLabel => _deviceDetailsLabel;
 
   String get currentLabel => switch (_mode) {
     StressMode.preset => _preset.name.toUpperCase(),
@@ -128,6 +136,19 @@ class StressController extends ChangeNotifier {
     }
   }
 
+  Future<void> allowDeviceDetails() async {
+    final rate = await requestScreenRefreshRate();
+    _hasAllowedDeviceDetails = true;
+    if (rate != null && rate > 0) {
+      _targetRefreshRate = rate;
+      _deviceDetailsLabel = '⚡ ${rate.toInt()} Hz Display';
+    } else {
+      _targetRefreshRate = 60.0;
+      _deviceDetailsLabel = '60 Hz Default';
+    }
+    notifyListeners();
+  }
+
   void setPreset(StressPreset p) {
     _stopTuning();
     _mode = StressMode.preset;
@@ -152,13 +173,9 @@ class StressController extends ChangeNotifier {
     _isAutoTuning = true;
     _nodeCount = 100;
 
-    final targetHz =
-        (timingService.highestFpsSeen > 80.0 ||
-            timingService.metrics.fps > 80.0)
-        ? 120
-        : 60;
-    // 85% of budget: 7.1ms for 120Hz (8.33ms budget), 14.2ms for 60Hz
-    final budgetTargetMs = targetHz == 120 ? 7.1 : 14.2;
+    final targetHz = _targetRefreshRate.toInt();
+    // 85% of budget target: 7.1ms for 120Hz (8.33ms), 14.2ms for 60Hz (16.67ms)
+    final budgetTargetMs = targetHz >= 100 ? 7.1 : 14.2;
 
     _autoTuneStatus = 'Calibrating ($targetHz FPS target)...';
     timingService.resetLog();

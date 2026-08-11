@@ -13,16 +13,18 @@ typedef _ComparisonData = ({
   String budgetPct,
   String budgetLabel,
   Color budgetColor,
+  Color fpsColor,
 });
 
-_ComparisonData _evaluateComparison(
-  double currentTotal,
-  double currentFps,
-  BenchmarkRun? savedBaseline,
-) {
-  final is120Hz = currentFps > 80.0;
-  final budgetTargetMs = is120Hz ? 8.33 : 16.67;
-  final budgetLabel = is120Hz ? '8.3ms (120Hz)' : '16.6ms (60Hz)';
+_ComparisonData _evaluateComparison({
+  required double currentTotal,
+  required double currentFps,
+  required double targetRefreshRate,
+  required BenchmarkRun? savedBaseline,
+}) {
+  final budgetTargetMs = 1000.0 / targetRefreshRate;
+  final budgetLabel =
+      '${budgetTargetMs.toStringAsFixed(1)}ms (${targetRefreshRate.toInt()}Hz)';
 
   final baseTotal = savedBaseline?.totalFrameTimeMs ?? 0.0;
   final hasValid =
@@ -51,6 +53,13 @@ _ComparisonData _evaluateComparison(
     _ => Colors.redAccent,
   };
 
+  final fpsRatio = currentFps / targetRefreshRate;
+  final fpsColor = switch (fpsRatio) {
+    >= 0.9 => Colors.greenAccent,
+    >= 0.7 => Colors.amberAccent,
+    _ => Colors.redAccent,
+  };
+
   return (
     hasValidComparison: hasValid,
     isFaster: isFaster,
@@ -59,6 +68,7 @@ _ComparisonData _evaluateComparison(
     budgetPct: budgetPct,
     budgetLabel: budgetLabel,
     budgetColor: budgetColor,
+    fpsColor: fpsColor,
   );
 }
 
@@ -76,9 +86,10 @@ class PerformanceHud extends StatelessWidget {
         );
 
         final comparison = _evaluateComparison(
-          metrics.totalFrameTimeMs,
-          metrics.fps,
-          savedBaseline,
+          currentTotal: metrics.totalFrameTimeMs,
+          currentFps: metrics.fps,
+          targetRefreshRate: stressCtrl.targetRefreshRate,
+          savedBaseline: savedBaseline,
         );
 
         return Container(
@@ -115,6 +126,7 @@ class PerformanceHud extends StatelessWidget {
               _LiveMetricsSection(
                 metrics: metrics,
                 nodeCount: stressCtrl.nodeCount,
+                fpsColor: comparison.fpsColor,
               ),
               const SizedBox(height: 10),
               _BudgetBar(
@@ -208,8 +220,13 @@ class _AutoTuneStatusBanner extends StatelessWidget {
 class _LiveMetricsSection extends StatelessWidget {
   final FrameTimingMetrics metrics;
   final int nodeCount;
+  final Color fpsColor;
 
-  const _LiveMetricsSection({required this.metrics, required this.nodeCount});
+  const _LiveMetricsSection({
+    required this.metrics,
+    required this.nodeCount,
+    required this.fpsColor,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -220,7 +237,7 @@ class _LiveMetricsSection extends StatelessWidget {
         _MetricRow(
           label: 'FPS',
           value: metrics.fps.toStringAsFixed(1),
-          valueColor: Colors.greenAccent,
+          valueColor: fpsColor,
         ),
         _MetricRow(
           label: 'Build Time',

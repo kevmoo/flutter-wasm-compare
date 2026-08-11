@@ -6,3 +6,5 @@ void exportMetrics({
   required double rasterTimeMs,
   required double totalFrameTimeMs,
 }) {}
+
+Future<double?> requestScreenRefreshRate() async => null;
