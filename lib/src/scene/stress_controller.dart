@@ -113,6 +113,13 @@ class StressController extends ChangeNotifier {
   }
 
   void _parseInitialQuery() {
+    final persistedHz = getPersistedRefreshRate();
+    if (persistedHz != null && persistedHz > 0) {
+      _targetRefreshRate = persistedHz;
+      _hasAllowedDeviceDetails = true;
+      _deviceDetailsLabel = '⚡ ${persistedHz.toInt()} Hz Display';
+    }
+
     final params = Uri.base.queryParameters;
     final stressParam = params['stress']?.toLowerCase();
     final nodesParam = int.tryParse(params['nodes'] ?? '');
@@ -142,9 +149,11 @@ class StressController extends ChangeNotifier {
     if (rate != null && rate > 0) {
       _targetRefreshRate = rate;
       _deviceDetailsLabel = '⚡ ${rate.toInt()} Hz Display';
+      savePersistedRefreshRate(rate);
     } else {
       _targetRefreshRate = 60.0;
       _deviceDetailsLabel = '60 Hz Default';
+      savePersistedRefreshRate(60.0);
     }
     notifyListeners();
   }

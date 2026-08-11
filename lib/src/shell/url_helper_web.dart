@@ -54,3 +54,30 @@ Future<double?> requestScreenRefreshRate() async {
   }
   return null;
 }
+
+void savePersistedRefreshRate(double rate) {
+  try {
+    web.window.localStorage.setItem('wasm_compare_screen_hz', rate.toString());
+    updateUrlQueryParam('hz', rate.toInt().toString());
+  } catch (_) {
+    // Ignore
+  }
+}
+
+double? getPersistedRefreshRate() {
+  try {
+    final hzParam = Uri.base.queryParameters['hz'];
+    if (hzParam != null) {
+      final parsed = double.tryParse(hzParam);
+      if (parsed != null && parsed > 0) return parsed;
+    }
+    final stored = web.window.localStorage.getItem('wasm_compare_screen_hz');
+    if (stored != null && stored.isNotEmpty) {
+      final parsed = double.tryParse(stored);
+      if (parsed != null && parsed > 0) return parsed;
+    }
+  } catch (_) {
+    // Ignore
+  }
+  return null;
+}
