@@ -48,8 +48,8 @@ _ComparisonData _evaluateComparison({
   final budgetRatio = (currentTotal / budgetTargetMs).clamp(0.0, 1.0);
   final budgetPct = (currentTotal / budgetTargetMs * 100).toStringAsFixed(0);
   final budgetColor = switch (budgetRatio) {
-    < 0.5 => Colors.greenAccent,
-    < 0.85 => Colors.amberAccent,
+    < 0.80 => Colors.greenAccent,
+    < 0.90 => Colors.amberAccent,
     _ => Colors.redAccent,
   };
 
