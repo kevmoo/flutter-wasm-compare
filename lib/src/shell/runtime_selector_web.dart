@@ -4,6 +4,7 @@ import 'package:web/web.dart' as web;
 
 import '../metrics/benchmark_storage.dart';
 import '../metrics/frame_timing_service.dart';
+import '../scene/stress_controller.dart';
 import 'build_config_web.dart';
 
 class RuntimeSelector extends StatelessWidget {
@@ -56,12 +57,11 @@ class RuntimeSelector extends StatelessWidget {
         if (selected && !isCurrent) {
           // Save baseline metrics before swapping out
           final metrics = context.read<FrameTimingService>().metrics;
+          final stressCtrl = context.read<StressController>();
           final currentMode = searchParams.contains('mode=canvaskit')
               ? 'js'
               : 'wasm';
           final currentUrl = web.URL(web.window.location.href);
-          final currentStress =
-              currentUrl.searchParams.get('stress') ?? 'medium';
 
           BenchmarkStorage.saveRun(
             mode: currentMode,
@@ -69,7 +69,8 @@ class RuntimeSelector extends StatelessWidget {
             buildTimeMs: metrics.buildTimeMs,
             rasterTimeMs: metrics.rasterTimeMs,
             totalFrameTimeMs: metrics.totalFrameTimeMs,
-            stressLevel: currentStress,
+            stressLevel: stressCtrl.currentLabel,
+            nodeCount: stressCtrl.nodeCount,
           );
 
           currentUrl.searchParams.set('mode', mode);

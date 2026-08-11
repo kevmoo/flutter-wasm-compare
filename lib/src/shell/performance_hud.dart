@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../metrics/benchmark_storage.dart';
 import '../metrics/frame_timing_service.dart';
+import '../scene/stress_controller.dart';
 
 typedef _ComparisonData = ({
   bool hasValidComparison,
@@ -10,13 +11,19 @@ typedef _ComparisonData = ({
   String speedupBadge,
   double budgetRatio,
   String budgetPct,
+  String budgetLabel,
   Color budgetColor,
 });
 
 _ComparisonData _evaluateComparison(
   double currentTotal,
+  double currentFps,
   BenchmarkRun? savedBaseline,
 ) {
+  final is120Hz = currentFps > 80.0;
+  final budgetTargetMs = is120Hz ? 8.33 : 16.67;
+  final budgetLabel = is120Hz ? '8.3ms (120Hz)' : '16.6ms (60Hz)';
+
   final baseTotal = savedBaseline?.totalFrameTimeMs ?? 0.0;
   final hasValid =
       savedBaseline != null && baseTotal > 0.1 && currentTotal > 0.1;
@@ -36,8 +43,8 @@ _ComparisonData _evaluateComparison(
       ? '⚡ ${ratio.toStringAsFixed(1)}x Faster Frame Time (-$pctDiff%)'
       : '⚠️ ${ratio.toStringAsFixed(1)}x Slower Frame Time (+$pctDiff%)';
 
-  final budgetRatio = (currentTotal / 16.67).clamp(0.0, 1.0);
-  final budgetPct = (currentTotal / 16.67 * 100).toStringAsFixed(0);
+  final budgetRatio = (currentTotal / budgetTargetMs).clamp(0.0, 1.0);
+  final budgetPct = (currentTotal / budgetTargetMs * 100).toStringAsFixed(0);
   final budgetColor = switch (budgetRatio) {
     < 0.5 => Colors.greenAccent,
     < 0.85 => Colors.amberAccent,
@@ -50,31 +57,32 @@ _ComparisonData _evaluateComparison(
     speedupBadge: badge,
     budgetRatio: budgetRatio,
     budgetPct: budgetPct,
+    budgetLabel: budgetLabel,
     budgetColor: budgetColor,
   );
 }
 
 class PerformanceHud extends StatelessWidget {
-  final String? currentStressLevel;
-
-  const PerformanceHud({super.key, this.currentStressLevel});
+  const PerformanceHud({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<FrameTimingService>(
-      builder: (context, timingService, child) {
+    return Consumer2<FrameTimingService, StressController>(
+      builder: (context, timingService, stressCtrl, child) {
         final metrics = timingService.metrics;
         final savedBaseline = BenchmarkStorage.getLastRun(
-          stressLevel: currentStressLevel,
+          stressLevel: stressCtrl.currentLabel,
+          nodeCount: stressCtrl.nodeCount,
         );
 
         final comparison = _evaluateComparison(
           metrics.totalFrameTimeMs,
+          metrics.fps,
           savedBaseline,
         );
 
         return Container(
-          constraints: const BoxConstraints(minWidth: 200, maxWidth: 300),
+          constraints: const BoxConstraints(minWidth: 220, maxWidth: 300),
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Colors.black87,
@@ -92,13 +100,27 @@ class PerformanceHud extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _HeaderTitle(stressLevel: currentStressLevel),
+              _HeaderTitle(
+                label: stressCtrl.currentLabel,
+                nodeCount: stressCtrl.nodeCount,
+              ),
+              if (stressCtrl.autoTuneStatus.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                _AutoTuneStatusBanner(
+                  status: stressCtrl.autoTuneStatus,
+                  isTuning: stressCtrl.isAutoTuning,
+                ),
+              ],
               const SizedBox(height: 12),
-              _LiveMetricsSection(metrics: metrics),
+              _LiveMetricsSection(
+                metrics: metrics,
+                nodeCount: stressCtrl.nodeCount,
+              ),
               const SizedBox(height: 10),
               _BudgetBar(
                 budgetRatio: comparison.budgetRatio,
                 budgetPct: comparison.budgetPct,
+                budgetLabel: comparison.budgetLabel,
                 budgetColor: comparison.budgetColor,
               ),
               if (savedBaseline != null)
@@ -117,28 +139,77 @@ class PerformanceHud extends StatelessWidget {
 }
 
 class _HeaderTitle extends StatelessWidget {
-  final String? stressLevel;
+  final String label;
+  final int nodeCount;
 
-  const _HeaderTitle({this.stressLevel});
+  const _HeaderTitle({required this.label, required this.nodeCount});
 
   @override
   Widget build(BuildContext context) {
-    final title = stressLevel != null
-        ? 'LIVE PERFORMANCE (${stressLevel!.toUpperCase()})'
-        : 'LIVE PERFORMANCE';
-
     return Text(
-      title,
+      'LIVE PERFORMANCE ($label)',
       style: Theme.of(context).textTheme.labelSmall
           ?.copyWith(color: Colors.white54, letterSpacing: 1.0),
     );
   }
 }
 
+class _AutoTuneStatusBanner extends StatelessWidget {
+  final String status;
+  final bool isTuning;
+
+  const _AutoTuneStatusBanner({required this.status, required this.isTuning});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: isTuning
+            ? Colors.blue.withValues(alpha: 0.2)
+            : Colors.green.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(
+          color: isTuning ? Colors.blueAccent : Colors.greenAccent,
+          width: 0.8,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isTuning)
+            const Padding(
+              padding: EdgeInsets.only(right: 6),
+              child: SizedBox(
+                width: 10,
+                height: 10,
+                child: CircularProgressIndicator(
+                  strokeWidth: 1.5,
+                  color: Colors.blueAccent,
+                ),
+              ),
+            ),
+          Flexible(
+            child: Text(
+              status,
+              style: TextStyle(
+                color: isTuning ? Colors.blueAccent : Colors.greenAccent,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _LiveMetricsSection extends StatelessWidget {
   final FrameTimingMetrics metrics;
+  final int nodeCount;
 
-  const _LiveMetricsSection({required this.metrics});
+  const _LiveMetricsSection({required this.metrics, required this.nodeCount});
 
   @override
   Widget build(BuildContext context) {
@@ -166,6 +237,11 @@ class _LiveMetricsSection extends StatelessWidget {
           value: '${metrics.totalFrameTimeMs.toStringAsFixed(1)} ms',
           valueColor: Colors.white,
         ),
+        _MetricRow(
+          label: 'Churn Nodes',
+          value: '$nodeCount',
+          valueColor: Colors.lightBlueAccent,
+        ),
       ],
     );
   }
@@ -174,11 +250,13 @@ class _LiveMetricsSection extends StatelessWidget {
 class _BudgetBar extends StatelessWidget {
   final double budgetRatio;
   final String budgetPct;
+  final String budgetLabel;
   final Color budgetColor;
 
   const _BudgetBar({
     required this.budgetRatio,
     required this.budgetPct,
+    required this.budgetLabel,
     required this.budgetColor,
   });
 
@@ -190,9 +268,9 @@ class _BudgetBar extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            const Text(
-              '16.6ms Budget',
-              style: TextStyle(color: Colors.white54, fontSize: 11),
+            Text(
+              '$budgetLabel Budget',
+              style: const TextStyle(color: Colors.white54, fontSize: 11),
             ),
             Text(
               '$budgetPct%',
@@ -234,12 +312,15 @@ class _BaselineSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final mode = savedBaseline.mode.toUpperCase();
+    final nodes = savedBaseline.nodeCount;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Divider(height: 24, color: Colors.white24),
         Text(
-          'BASELINE (${savedBaseline.mode.toUpperCase()})',
+          'BASELINE ($mode • $nodes NODES)',
           style: Theme.of(context).textTheme.labelSmall
               ?.copyWith(color: Colors.white54, letterSpacing: 1.0),
         ),

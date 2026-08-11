@@ -3,14 +3,14 @@ import 'package:flutter/material.dart';
 import 'widget_churn_engine.dart';
 
 class AdaptiveStressScene extends StatelessWidget {
-  final StressLevel stressLevel;
+  final int nodeCount;
 
-  const AdaptiveStressScene({super.key, required this.stressLevel});
+  const AdaptiveStressScene({super.key, required this.nodeCount});
 
   @override
   Widget build(BuildContext context) {
     return WidgetChurnEngine(
-      stressLevel: stressLevel,
+      nodeCount: nodeCount,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final isMobile = constraints.maxWidth < 600;

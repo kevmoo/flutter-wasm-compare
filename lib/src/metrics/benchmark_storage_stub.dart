@@ -5,6 +5,7 @@ typedef BenchmarkRun = ({
   double rasterTimeMs,
   double totalFrameTimeMs,
   String stressLevel,
+  int nodeCount,
 });
 
 class BenchmarkStorage {
@@ -15,7 +16,9 @@ class BenchmarkStorage {
     required double rasterTimeMs,
     required double totalFrameTimeMs,
     required String stressLevel,
+    required int nodeCount,
   }) {}
 
-  static BenchmarkRun? getLastRun({String? stressLevel}) => null;
+  static BenchmarkRun? getLastRun({String? stressLevel, int? nodeCount}) =>
+      null;
 }
