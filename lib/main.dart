@@ -76,11 +76,13 @@ class _DeviceDetailsButton extends StatelessWidget {
       return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4.0),
         child: Tooltip(
-          message: 'Screen Details: ${stressCtrl.deviceDetailsLabel}',
-          child: Chip(
+          message:
+              '${stressCtrl.deviceDetailsLabel} '
+              '(Click to re-query screen)',
+          child: ActionChip(
             visualDensity: VisualDensity.compact,
             avatar: const Icon(
-              Icons.check_circle,
+              Icons.refresh,
               size: 14,
               color: Colors.greenAccent,
             ),
@@ -88,6 +90,7 @@ class _DeviceDetailsButton extends StatelessWidget {
               stressCtrl.deviceDetailsLabel ?? '60 Hz Display',
               style: const TextStyle(fontSize: 11),
             ),
+            onPressed: stressCtrl.allowDeviceDetails,
           ),
         ),
       );
