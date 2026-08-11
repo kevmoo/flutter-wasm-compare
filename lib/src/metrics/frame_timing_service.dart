@@ -1,4 +1,5 @@
 import 'dart:collection';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
@@ -27,6 +28,9 @@ class FrameTimingService extends ChangeNotifier {
   FrameTimingMetrics _metrics = FrameTimingMetrics();
   FrameTimingMetrics get metrics => _metrics;
 
+  double _highestFpsSeen = 60.0;
+  double get highestFpsSeen => _highestFpsSeen;
+
   FrameTimingService() {
     SchedulerBinding.instance.addTimingsCallback(_onTimings);
   }
@@ -47,42 +51,25 @@ class FrameTimingService extends ChangeNotifier {
     }
   }
 
+  void resetLog() {
+    _timingsLog.clear();
+  }
+
+  FrameTimingMetrics sampleRecentMetrics({int frameCount = 15}) {
+    if (_timingsLog.isEmpty) return FrameTimingMetrics(fps: 60.0);
+    final count = math.min(_timingsLog.length, frameCount);
+    final recent = _timingsLog.toList().sublist(_timingsLog.length - count);
+    return _calculateMetricsForSlice(recent);
+  }
+
   void _computeMetrics() {
     if (_timingsLog.isEmpty) return;
 
-    var totalBuild = 0.0;
-    var totalRaster = 0.0;
-    var totalFrame = 0.0;
-
-    for (final timing in _timingsLog) {
-      totalBuild += timing.buildDuration.inMicroseconds / 1000.0;
-      totalRaster += timing.rasterDuration.inMicroseconds / 1000.0;
-      totalFrame += timing.totalSpan.inMicroseconds / 1000.0;
+    _metrics = _calculateMetricsForSlice(_timingsLog.toList());
+    if (_metrics.fps > _highestFpsSeen && _metrics.fps < 150.0) {
+      _highestFpsSeen = _metrics.fps;
     }
 
-    final count = _timingsLog.length;
-
-    // FPS computation based on period of frame timings
-    final first = _timingsLog.first;
-    final last = _timingsLog.last;
-
-    final elapsedMs =
-        last.timestampInMicroseconds(FramePhase.buildStart) / 1000.0 -
-        first.timestampInMicroseconds(FramePhase.buildStart) / 1000.0;
-
-    var fps = 0.0;
-    if (elapsedMs > 0 && count > 1) {
-      fps = (count - 1) * 1000.0 / elapsedMs;
-    } else {
-      fps = 60.0; // fallback default
-    }
-
-    _metrics = FrameTimingMetrics(
-      fps: fps,
-      buildTimeMs: totalBuild / count,
-      rasterTimeMs: totalRaster / count,
-      totalFrameTimeMs: totalFrame / count,
-    );
     exportMetrics(
       fps: _metrics.fps,
       buildTimeMs: _metrics.buildTimeMs,
@@ -90,6 +77,41 @@ class FrameTimingService extends ChangeNotifier {
       totalFrameTimeMs: _metrics.totalFrameTimeMs,
     );
     notifyListeners();
+  }
+
+  static FrameTimingMetrics _calculateMetricsForSlice(
+    List<FrameTiming> timings,
+  ) {
+    if (timings.isEmpty) return FrameTimingMetrics();
+
+    var totalBuild = 0.0;
+    var totalRaster = 0.0;
+    var totalFrame = 0.0;
+
+    for (final timing in timings) {
+      totalBuild += timing.buildDuration.inMicroseconds / 1000.0;
+      totalRaster += timing.rasterDuration.inMicroseconds / 1000.0;
+      totalFrame += timing.totalSpan.inMicroseconds / 1000.0;
+    }
+
+    final count = timings.length;
+    final first = timings.first;
+    final last = timings.last;
+
+    final elapsedMs =
+        last.timestampInMicroseconds(FramePhase.buildStart) / 1000.0 -
+        first.timestampInMicroseconds(FramePhase.buildStart) / 1000.0;
+
+    final fps = (elapsedMs > 0 && count > 1)
+        ? (count - 1) * 1000.0 / elapsedMs
+        : 60.0;
+
+    return FrameTimingMetrics(
+      fps: fps,
+      buildTimeMs: totalBuild / count,
+      rasterTimeMs: totalRaster / count,
+      totalFrameTimeMs: totalFrame / count,
+    );
   }
 
   @override

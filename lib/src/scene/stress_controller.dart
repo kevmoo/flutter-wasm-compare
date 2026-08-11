@@ -20,53 +20,63 @@ enum StressPreset {
 
 enum StressMode { preset, float, manual }
 
-typedef _TuneStepResult = ({
-  int newNodeCount,
-  int newStableRounds,
-  bool shouldFinish,
+enum _TuningPhase { ramping, backingOff, settled }
+
+typedef _TuningState = ({
+  int nodeCount,
+  _TuningPhase phase,
   String status,
+  bool isFinished,
 });
 
-_TuneStepResult _evaluateTuneStep({
+_TuningState _evaluateAdaptiveStep({
   required int nodeCount,
-  required int stableRounds,
-  required FrameTimingMetrics metrics,
+  required _TuningPhase phase,
+  required double budgetTargetMs,
+  required int targetHz,
+  required FrameTimingMetrics recentMetrics,
 }) {
-  final is120Hz = metrics.fps > 80.0;
-  final targetBudgetMs = is120Hz ? 7.8 : 15.0;
-  final targetFps = is120Hz ? 115.0 : 57.0;
-
-  final currentMs = metrics.totalFrameTimeMs;
-  final currentFps = metrics.fps;
+  final currentMs = recentMetrics.totalFrameTimeMs;
+  final currentFps = recentMetrics.fps;
   final msText = currentMs.toStringAsFixed(1);
+  final targetMinFps = targetHz == 120 ? 110.0 : 56.0;
 
-  if (currentMs < (targetBudgetMs - 1.2) && currentFps >= targetFps) {
-    final step = switch (nodeCount) {
-      < 500 => 100,
-      < 1500 => 200,
-      _ => 300,
-    };
-    final nextNodes = nodeCount + step;
+  if (phase == _TuningPhase.backingOff) {
     return (
-      newNodeCount: nextNodes,
-      newStableRounds: 0,
-      shouldFinish: false,
-      status: 'Tuning: $nextNodes nodes ($msText ms)',
+      nodeCount: nodeCount,
+      phase: _TuningPhase.settled,
+      status: 'Locked: $nodeCount nodes at $targetHz FPS ($msText ms)',
+      isFinished: true,
     );
   }
 
-  final updatedRounds = stableRounds + 1;
-  final shouldFinish = updatedRounds >= 2;
-  final finalFpsLabel = is120Hz ? '120 FPS' : '60 FPS';
-  final status = shouldFinish
-      ? 'Locked: $nodeCount nodes at $finalFpsLabel ($msText ms)'
-      : 'Stabilizing: $nodeCount nodes ($msText ms)';
+  // Check if current load is within budget
+  final isWithinBudget =
+      currentMs < budgetTargetMs && currentFps >= targetMinFps;
 
+  if (isWithinBudget) {
+    final step = switch (currentMs / budgetTargetMs) {
+      < 0.5 => 300,
+      < 0.75 => 150,
+      < 0.9 => 50,
+      _ => 25,
+    };
+    final nextNodes = nodeCount + step;
+    return (
+      nodeCount: nextNodes,
+      phase: _TuningPhase.ramping,
+      status: 'Tuning: $nextNodes nodes ($msText ms)',
+      isFinished: false,
+    );
+  }
+
+  // Overshot budget: back off by 12% to guarantee stable headroom
+  final backedOffNodes = (nodeCount * 0.88).toInt().clamp(50, 8000);
   return (
-    newNodeCount: nodeCount,
-    newStableRounds: updatedRounds,
-    shouldFinish: shouldFinish,
-    status: status,
+    nodeCount: backedOffNodes,
+    phase: _TuningPhase.backingOff,
+    status: 'Settling at $backedOffNodes nodes ($msText ms)...',
+    isFinished: false,
   );
 }
 
@@ -141,26 +151,38 @@ class StressController extends ChangeNotifier {
     _mode = StressMode.float;
     _isAutoTuning = true;
     _nodeCount = 100;
-    _autoTuneStatus = 'Calibrating baseline...';
+
+    final targetHz =
+        (timingService.highestFpsSeen > 80.0 ||
+            timingService.metrics.fps > 80.0)
+        ? 120
+        : 60;
+    // 85% of budget: 7.1ms for 120Hz (8.33ms budget), 14.2ms for 60Hz
+    final budgetTargetMs = targetHz == 120 ? 7.1 : 14.2;
+
+    _autoTuneStatus = 'Calibrating ($targetHz FPS target)...';
+    timingService.resetLog();
     notifyListeners();
 
-    var stableRounds = 0;
+    var currentPhase = _TuningPhase.ramping;
 
-    _tuningTimer = Timer.periodic(const Duration(milliseconds: 350), (timer) {
-      final metrics = timingService.metrics;
-      if (metrics.totalFrameTimeMs <= 0.1) return;
+    _tuningTimer = Timer.periodic(const Duration(milliseconds: 300), (timer) {
+      final recent = timingService.sampleRecentMetrics(frameCount: 12);
+      if (recent.totalFrameTimeMs <= 0.1) return;
 
-      final result = _evaluateTuneStep(
+      final result = _evaluateAdaptiveStep(
         nodeCount: _nodeCount,
-        stableRounds: stableRounds,
-        metrics: metrics,
+        phase: currentPhase,
+        budgetTargetMs: budgetTargetMs,
+        targetHz: targetHz,
+        recentMetrics: recent,
       );
 
-      _nodeCount = result.newNodeCount;
-      stableRounds = result.newStableRounds;
+      _nodeCount = result.nodeCount;
+      currentPhase = result.phase;
       _autoTuneStatus = result.status;
 
-      if (result.shouldFinish) {
+      if (result.isFinished) {
         _stopTuning();
         updateUrlQueryParam('stress', 'float');
         updateUrlQueryParam('nodes', '$_nodeCount');
