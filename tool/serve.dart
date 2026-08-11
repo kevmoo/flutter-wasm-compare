@@ -77,7 +77,6 @@ void _handleRequests(HttpServer server, Directory webDir) {
   server.listen((HttpRequest request) async {
     final response = request.response;
 
-    // Cross-origin isolation headers for multi-threaded Skwasm
     response.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
     response.headers.set('Cross-Origin-Embedder-Policy', 'require-corp');
     response.headers.set(
@@ -85,31 +84,41 @@ void _handleRequests(HttpServer server, Directory webDir) {
       'no-cache, no-store, must-revalidate',
     );
 
-    final uriPath = Uri.decodeComponent(request.uri.path);
-    final relativePath = uriPath == '/' ? 'index.html' : uriPath.substring(1);
-    final file = File('${webDir.path}/$relativePath');
-
-    if (await file.exists()) {
-      final ext = file.path.contains('.')
-          ? '.${file.path.split('.').last.toLowerCase()}'
-          : '';
-      final mimeType = _mimeTypes[ext] ?? 'application/octet-stream';
-      response.headers.set('Content-Type', mimeType);
-
-      await response.addStream(file.openRead());
-    } else {
-      // SPA Fallback to index.html if file doesn't exist
-      final indexFile = File('${webDir.path}/index.html');
-      if (await indexFile.exists()) {
-        response.headers.set('Content-Type', 'text/html; charset=utf-8');
-        await response.addStream(indexFile.openRead());
-      } else {
-        response.statusCode = HttpStatus.notFound;
-        response.write('404 Not Found');
-      }
+    final file = await _resolveFile(webDir, request.uri.path);
+    if (file == null) {
+      response.statusCode = HttpStatus.notFound;
+      response.write('404 Not Found');
+      await response.close();
+      return;
     }
+
+    final ext = file.path.contains('.')
+        ? '.${file.path.split('.').last.toLowerCase()}'
+        : '';
+    final mimeType = _mimeTypes[ext] ?? 'application/octet-stream';
+    response.headers.set('Content-Type', mimeType);
+
+    await response.addStream(file.openRead());
     await response.close();
   });
+}
+
+Future<File?> _resolveFile(Directory webDir, String uriPath) async {
+  final decoded = Uri.decodeComponent(uriPath);
+  final relativePath = decoded == '/' ? 'index.html' : decoded.substring(1);
+  final directFile = File('${webDir.path}/$relativePath');
+
+  if (await directFile.exists()) {
+    return directFile;
+  }
+
+  // SPA fallback
+  final indexFile = File('${webDir.path}/index.html');
+  if (await indexFile.exists()) {
+    return indexFile;
+  }
+
+  return null;
 }
 
 void _handleTerminalInput(String url) {
@@ -119,37 +128,48 @@ void _handleTerminalInput(String url) {
     stdin.lineMode = false;
     stdin.echoMode = false;
   } catch (_) {
-    // Non-interactive environment
     return;
   }
 
   var isBuilding = false;
-
   stdin.listen((List<int> bytes) async {
     for (final char in bytes) {
-      final key = String.fromCharCode(char).toLowerCase();
-      if (key == 'r') {
-        if (isBuilding) {
-          print('⏳ Build already in progress...');
-          continue;
-        }
-        isBuilding = true;
-        await _buildWeb();
-        isBuilding = false;
-      } else if (key == 'o') {
-        print('🌐 Opening $url');
-        if (Platform.isMacOS) {
-          unawaited(Process.run('open', [url]));
-        } else if (Platform.isLinux) {
-          unawaited(Process.run('xdg-open', [url]));
-        } else if (Platform.isWindows) {
-          unawaited(Process.run('cmd', ['/c', 'start', url]));
-        }
-      } else if (key == 'q' || char == 3) {
-        // 'q' or Ctrl+C
-        print('\n👋 Exiting serve.');
-        exit(0);
-      }
+      isBuilding = await _processKey(char, url, isBuilding);
     }
   });
+}
+
+Future<bool> _processKey(int char, String url, bool isBuilding) async {
+  final key = String.fromCharCode(char).toLowerCase();
+  switch (key) {
+    case 'r':
+      if (isBuilding) {
+        print('⏳ Build already in progress...');
+        return true;
+      }
+      await _buildWeb();
+      return false;
+    case 'o':
+      _openBrowser(url);
+      return isBuilding;
+    case 'q' || _ when char == 3:
+      print('\n👋 Exiting serve.');
+      exit(0);
+    default:
+      return isBuilding;
+  }
+}
+
+void _openBrowser(String url) {
+  print('🌐 Opening $url');
+  final (command, args) = switch (Platform.operatingSystem) {
+    'macos' => ('open', [url]),
+    'linux' => ('xdg-open', [url]),
+    'windows' => ('cmd', ['/c', 'start', url]),
+    _ => (null, <String>[]),
+  };
+
+  if (command != null) {
+    unawaited(Process.run(command, args));
+  }
 }

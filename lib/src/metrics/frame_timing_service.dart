@@ -4,6 +4,8 @@ import 'dart:ui';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 
+import '../shell/url_helper.dart';
+
 class FrameTimingMetrics {
   final double fps;
   final double buildTimeMs;
@@ -80,6 +82,12 @@ class FrameTimingService extends ChangeNotifier {
       buildTimeMs: totalBuild / count,
       rasterTimeMs: totalRaster / count,
       totalFrameTimeMs: totalFrame / count,
+    );
+    exportMetrics(
+      fps: _metrics.fps,
+      buildTimeMs: _metrics.buildTimeMs,
+      rasterTimeMs: _metrics.rasterTimeMs,
+      totalFrameTimeMs: _metrics.totalFrameTimeMs,
     );
     notifyListeners();
   }
