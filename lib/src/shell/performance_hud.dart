@@ -72,8 +72,25 @@ _ComparisonData _evaluateComparison({
   );
 }
 
-class PerformanceHud extends StatelessWidget {
-  const PerformanceHud({super.key});
+class PerformanceHud extends StatefulWidget {
+  final bool initiallyCollapsed;
+
+  const PerformanceHud({super.key, this.initiallyCollapsed = false});
+
+  @override
+  State<PerformanceHud> createState() => _PerformanceHudState();
+}
+
+class _PerformanceHudState extends State<PerformanceHud> {
+  late bool _isCollapsed = widget.initiallyCollapsed;
+
+  @override
+  void didUpdateWidget(PerformanceHud oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initiallyCollapsed != widget.initiallyCollapsed) {
+      _isCollapsed = widget.initiallyCollapsed;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -91,6 +108,59 @@ class PerformanceHud extends StatelessWidget {
           targetRefreshRate: stressCtrl.targetRefreshRate,
           savedBaseline: savedBaseline,
         );
+
+        if (_isCollapsed) {
+          return InkWell(
+            onTap: () => setState(() => _isCollapsed = false),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: Colors.black87,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.white12),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Colors.black45,
+                    blurRadius: 8,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.speed, size: 16, color: comparison.fpsColor),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${metrics.fps.toStringAsFixed(1)} FPS',
+                    style: TextStyle(
+                      color: comparison.fpsColor,
+                      fontFamily: 'monospace',
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${metrics.totalFrameTimeMs.toStringAsFixed(1)}ms',
+                    style: const TextStyle(
+                      color: Colors.white70,
+                      fontFamily: 'monospace',
+                      fontSize: 12,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Icon(
+                    Icons.expand_more,
+                    size: 16,
+                    color: Colors.white54,
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
 
         return Container(
           constraints: const BoxConstraints(minWidth: 220, maxWidth: 300),
@@ -114,6 +184,7 @@ class PerformanceHud extends StatelessWidget {
               _HeaderTitle(
                 label: stressCtrl.currentLabel,
                 nodeCount: stressCtrl.nodeCount,
+                onCollapse: () => setState(() => _isCollapsed = true),
               ),
               if (stressCtrl.autoTuneStatus.isNotEmpty) ...[
                 const SizedBox(height: 6),
@@ -153,15 +224,37 @@ class PerformanceHud extends StatelessWidget {
 class _HeaderTitle extends StatelessWidget {
   final String label;
   final int nodeCount;
+  final VoidCallback onCollapse;
 
-  const _HeaderTitle({required this.label, required this.nodeCount});
+  const _HeaderTitle({
+    required this.label,
+    required this.nodeCount,
+    required this.onCollapse,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      'LIVE PERFORMANCE ($label)',
-      style: Theme.of(context).textTheme.labelSmall
-          ?.copyWith(color: Colors.white54, letterSpacing: 1.0),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Text(
+            'LIVE PERFORMANCE ($label)',
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.labelSmall
+                ?.copyWith(color: Colors.white54, letterSpacing: 1.0),
+          ),
+        ),
+        const SizedBox(width: 4),
+        InkWell(
+          onTap: onCollapse,
+          borderRadius: BorderRadius.circular(4),
+          child: const Padding(
+            padding: EdgeInsets.all(2.0),
+            child: Icon(Icons.expand_less, size: 16, color: Colors.white54),
+          ),
+        ),
+      ],
     );
   }
 }
