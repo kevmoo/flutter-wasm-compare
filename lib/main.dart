@@ -7,6 +7,7 @@ import 'src/scene/widget_churn_engine.dart';
 import 'src/shell/compatibility_shield.dart';
 import 'src/shell/performance_hud.dart';
 import 'src/shell/runtime_selector.dart';
+import 'src/shell/url_helper.dart';
 
 void main() {
   runApp(const WasmCompareApp());
@@ -41,7 +42,32 @@ class DemoDashboard extends StatefulWidget {
 }
 
 class _DemoDashboardState extends State<DemoDashboard> {
-  StressLevel _stressLevel = StressLevel.medium;
+  late StressLevel _stressLevel;
+
+  @override
+  void initState() {
+    super.initState();
+    _stressLevel = _parseInitialStressLevel();
+  }
+
+  static StressLevel _parseInitialStressLevel() {
+    final query = Uri.base.queryParameters['stress'];
+    if (query != null) {
+      for (final level in StressLevel.values) {
+        if (level.name.toLowerCase() == query.toLowerCase()) {
+          return level;
+        }
+      }
+    }
+    return StressLevel.medium;
+  }
+
+  void _onStressChanged(StressLevel? val) {
+    if (val != null && val != _stressLevel) {
+      setState(() => _stressLevel = val);
+      updateUrlQueryParam('stress', val.name);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,11 +79,7 @@ class _DemoDashboardState extends State<DemoDashboard> {
             padding: const EdgeInsets.all(8.0),
             child: DropdownButton<StressLevel>(
               value: _stressLevel,
-              onChanged: (val) {
-                if (val != null) {
-                  setState(() => _stressLevel = val);
-                }
-              },
+              onChanged: _onStressChanged,
               items: StressLevel.values.map((level) {
                 return DropdownMenuItem(
                   value: level,
@@ -73,7 +95,11 @@ class _DemoDashboardState extends State<DemoDashboard> {
           Positioned.fill(
             child: AdaptiveStressScene(stressLevel: _stressLevel),
           ),
-          const Positioned(top: 20, left: 20, child: PerformanceHud()),
+          Positioned(
+            top: 20,
+            left: 20,
+            child: PerformanceHud(currentStressLevel: _stressLevel.name),
+          ),
           const Positioned(top: 20, right: 20, child: RuntimeSelector()),
         ],
       ),

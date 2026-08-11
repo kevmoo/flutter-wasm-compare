@@ -55,15 +55,25 @@ class RuntimeSelector extends StatelessWidget {
       onSelected: (selected) {
         if (selected && !isCurrent) {
           // Save baseline metrics before swapping out
-          final currentFps = context.read<FrameTimingService>().metrics.fps;
+          final metrics = context.read<FrameTimingService>().metrics;
           final currentMode = searchParams.contains('mode=canvaskit')
               ? 'js'
               : 'wasm';
-          BenchmarkStorage.saveRun(currentMode, currentFps);
+          final currentUrl = web.URL(web.window.location.href);
+          final currentStress =
+              currentUrl.searchParams.get('stress') ?? 'medium';
 
-          final url = web.URL(web.window.location.href);
-          url.searchParams.set('mode', mode);
-          web.window.location.href = url.href;
+          BenchmarkStorage.saveRun(
+            mode: currentMode,
+            fps: metrics.fps,
+            buildTimeMs: metrics.buildTimeMs,
+            rasterTimeMs: metrics.rasterTimeMs,
+            totalFrameTimeMs: metrics.totalFrameTimeMs,
+            stressLevel: currentStress,
+          );
+
+          currentUrl.searchParams.set('mode', mode);
+          web.window.location.href = currentUrl.href;
         }
       },
     );

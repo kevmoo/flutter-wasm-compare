@@ -1,31 +1,75 @@
+import 'dart:convert';
+
 import 'package:web/web.dart' as web;
 
-class BenchmarkStorage {
-  static const String _lastRunModeKey = 'wasm_compare_last_mode';
-  static const String _lastFpsKey = 'wasm_compare_last_fps';
+typedef BenchmarkRun = ({
+  String mode,
+  double fps,
+  double buildTimeMs,
+  double rasterTimeMs,
+  double totalFrameTimeMs,
+  String stressLevel,
+});
 
-  static void saveRun(String mode, double fps) {
+class BenchmarkStorage {
+  static const String _storagePrefix = 'wasm_compare_run_';
+
+  static void saveRun({
+    required String mode,
+    required double fps,
+    required double buildTimeMs,
+    required double rasterTimeMs,
+    required double totalFrameTimeMs,
+    required String stressLevel,
+  }) {
     try {
       final storage = web.window.localStorage;
-      storage.setItem(_lastRunModeKey, mode);
-      storage.setItem(_lastFpsKey, fps.toString());
-    } catch (e) {
+      final data = {
+        'mode': mode,
+        'fps': fps,
+        'buildTimeMs': buildTimeMs,
+        'rasterTimeMs': rasterTimeMs,
+        'totalFrameTimeMs': totalFrameTimeMs,
+        'stressLevel': stressLevel,
+      };
+      final jsonStr = jsonEncode(data);
+      storage.setItem('wasm_compare_last_run', jsonStr);
+      storage.setItem('$_storagePrefix$stressLevel', jsonStr);
+    } catch (_) {
       // Ignore
     }
   }
 
-  static ({String mode, double fps})? getLastRun() {
+  static BenchmarkRun? getLastRun({String? stressLevel}) {
     try {
       final storage = web.window.localStorage;
-      final mode = storage.getItem(_lastRunModeKey);
-      final fpsStr = storage.getItem(_lastFpsKey);
-      if (mode != null && fpsStr != null && fpsStr.isNotEmpty) {
-        final fps = double.tryParse(fpsStr);
-        if (fps != null) {
-          return (mode: mode, fps: fps);
-        }
+      final jsonStr = stressLevel != null
+          ? (storage.getItem('$_storagePrefix$stressLevel') ??
+                storage.getItem('wasm_compare_last_run'))
+          : storage.getItem('wasm_compare_last_run');
+
+      if (jsonStr == null || jsonStr.isEmpty) return null;
+
+      final map = jsonDecode(jsonStr) as Map<String, dynamic>;
+      final mode = map['mode'] as String?;
+      final fps = (map['fps'] as num?)?.toDouble();
+      final buildTimeMs = (map['buildTimeMs'] as num?)?.toDouble() ?? 0.0;
+      final rasterTimeMs = (map['rasterTimeMs'] as num?)?.toDouble() ?? 0.0;
+      final totalFrameTimeMs =
+          (map['totalFrameTimeMs'] as num?)?.toDouble() ?? 0.0;
+      final stress = (map['stressLevel'] as String?) ?? 'medium';
+
+      if (mode != null && fps != null) {
+        return (
+          mode: mode,
+          fps: fps,
+          buildTimeMs: buildTimeMs,
+          rasterTimeMs: rasterTimeMs,
+          totalFrameTimeMs: totalFrameTimeMs,
+          stressLevel: stress,
+        );
       }
-    } catch (e) {
+    } catch (_) {
       // Ignore
     }
     return null;
