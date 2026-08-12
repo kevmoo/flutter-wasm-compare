@@ -5,8 +5,25 @@ import 'package:flutter/foundation.dart';
 import '../metrics/frame_timing_service.dart';
 import '../shell/url_helper.dart';
 
+const List<int> kDecadeEngineeringLadder = [
+  0,
+  25,
+  50,
+  100,
+  200,
+  350,
+  500,
+  750,
+  1000,
+  1500,
+  2000,
+  3000,
+  4000,
+  5000,
+];
+
 enum StressPreset {
-  none(0, 'None'),
+  none(0, 'None (0)'),
   light(100, 'Light (100)'),
   medium(500, 'Medium (500)'),
   heavy(1500, 'Heavy (1.5k)'),
@@ -50,7 +67,6 @@ _TuningState _evaluateAdaptiveStep({
     );
   }
 
-  // Check if current load is within budget
   final isWithinBudget =
       currentMs < budgetTargetMs && currentFps >= targetMinFps;
 
@@ -70,7 +86,6 @@ _TuningState _evaluateAdaptiveStep({
     );
   }
 
-  // Overshot budget: back off by 12% to guarantee stable headroom
   final backedOffNodes = (nodeCount * 0.88).toInt().clamp(50, 8000);
   return (
     nodeCount: backedOffNodes,
@@ -102,10 +117,23 @@ class StressController extends ChangeNotifier {
   bool get hasAllowedDeviceDetails => _hasAllowedDeviceDetails;
   String? get deviceDetailsLabel => _deviceDetailsLabel;
 
+  bool get canStepDown => _nodeCount > kDecadeEngineeringLadder.first;
+  bool get canStepUp => _nodeCount < kDecadeEngineeringLadder.last;
+
+  String get formattedNodeCount {
+    if (_nodeCount >= 1000) {
+      final kVal = _nodeCount / 1000.0;
+      return kVal == kVal.roundToDouble()
+          ? '${kVal.toInt()}k'
+          : '${kVal.toStringAsFixed(1)}k';
+    }
+    return '$_nodeCount';
+  }
+
   String get currentLabel => switch (_mode) {
     StressMode.preset => _preset.name.toUpperCase(),
-    StressMode.float => 'FLOAT ($nodeCount)',
-    StressMode.manual => 'MANUAL ($nodeCount)',
+    StressMode.float => 'FLOAT ($formattedNodeCount)',
+    StressMode.manual => 'MANUAL ($formattedNodeCount)',
   };
 
   StressController() {
@@ -158,6 +186,28 @@ class StressController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void stepDown() {
+    var target = kDecadeEngineeringLadder.first;
+    for (final rung in kDecadeEngineeringLadder) {
+      if (rung < _nodeCount) {
+        target = rung;
+      } else {
+        break;
+      }
+    }
+    setManualNodes(target);
+  }
+
+  void stepUp() {
+    for (final rung in kDecadeEngineeringLadder) {
+      if (rung > _nodeCount) {
+        setManualNodes(rung);
+        return;
+      }
+    }
+    setManualNodes(kDecadeEngineeringLadder.last);
+  }
+
   void setPreset(StressPreset p) {
     _stopTuning();
     _mode = StressMode.preset;
@@ -171,6 +221,18 @@ class StressController extends ChangeNotifier {
     _stopTuning();
     _mode = StressMode.manual;
     _nodeCount = count.clamp(0, 8000);
+
+    // Check if matching preset exists
+    for (final p in StressPreset.values) {
+      if (p.nodeCount == _nodeCount) {
+        _preset = p;
+        _mode = StressMode.preset;
+        updateUrlQueryParam('stress', p.name);
+        notifyListeners();
+        return;
+      }
+    }
+
     updateUrlQueryParam('stress', 'manual');
     updateUrlQueryParam('nodes', '$_nodeCount');
     notifyListeners();
@@ -183,7 +245,6 @@ class StressController extends ChangeNotifier {
     _nodeCount = 100;
 
     final targetHz = _targetRefreshRate.toInt();
-    // 85% of budget target: 7.1ms for 120Hz (8.33ms), 14.2ms for 60Hz (16.67ms)
     final budgetTargetMs = targetHz >= 100 ? 7.1 : 14.2;
 
     _autoTuneStatus = 'Calibrating ($targetHz FPS target)...';

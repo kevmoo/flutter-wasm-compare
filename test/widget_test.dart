@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:wasm_compare/main.dart';
+import 'package:wasm_compare/src/scene/adaptive_stress_scene.dart';
+import 'package:wasm_compare/src/scene/morphing_layout_matrix.dart';
 import 'package:wasm_compare/src/shell/performance_hud.dart';
 
 void main() {
@@ -27,9 +29,9 @@ void main() {
     // Verify compact title is used
     expect(find.text('Wasm vs JS'), findsOneWidget);
 
-    // Verify mobile ListView is used inside AdaptiveStressScene
-    expect(find.byType(ListView), findsOneWidget);
-    expect(find.byType(GridView), findsNothing);
+    // Verify MorphingLayoutMatrix is rendered
+    expect(find.byType(AdaptiveStressScene), findsOneWidget);
+    expect(find.byType(MorphingLayoutMatrix), findsOneWidget);
 
     // Verify PerformanceHud is collapsed on compact screens initially
     expect(find.byType(PerformanceHud), findsOneWidget);
@@ -55,9 +57,9 @@ void main() {
       // Verify full title is used
       expect(find.text('Wasm vs JS Performance'), findsOneWidget);
 
-      // Verify desktop GridView is used inside AdaptiveStressScene
-      expect(find.byType(GridView), findsOneWidget);
-      expect(find.byType(ListView), findsNothing);
+      // Verify MorphingLayoutMatrix is used inside AdaptiveStressScene
+      expect(find.byType(AdaptiveStressScene), findsOneWidget);
+      expect(find.byType(MorphingLayoutMatrix), findsOneWidget);
 
       // Verify expanded PerformanceHud
       expect(find.byType(PerformanceHud), findsOneWidget);

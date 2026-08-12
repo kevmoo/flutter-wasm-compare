@@ -76,7 +76,10 @@ class _DemoDashboardState extends State<DemoDashboard> {
             stressCtrl: stressCtrl,
             isCompact: isCompactScreen,
           ),
-          _AutoTuneButton(stressCtrl: stressCtrl, isCompact: isCompactScreen),
+          _StressStepperPill(
+            stressCtrl: stressCtrl,
+            isCompact: isCompactScreen,
+          ),
           _PresetDropdown(stressCtrl: stressCtrl, isCompact: isCompactScreen),
         ],
       ),
@@ -183,46 +186,68 @@ class _DeviceDetailsButton extends StatelessWidget {
   }
 }
 
-class _AutoTuneButton extends StatelessWidget {
+class _StressStepperPill extends StatelessWidget {
   final StressController stressCtrl;
   final bool isCompact;
 
-  const _AutoTuneButton({required this.stressCtrl, this.isCompact = false});
+  const _StressStepperPill({required this.stressCtrl, this.isCompact = false});
 
   @override
   Widget build(BuildContext context) {
-    final onPressed = stressCtrl.isAutoTuning
-        ? null
-        : () {
-            final timingService = context.read<FrameTimingService>();
-            context.read<StressController>().startAutoTune(timingService);
-          };
-
-    if (isCompact) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2.0),
-        child: IconButton.filledTonal(
-          onPressed: onPressed,
-          icon: stressCtrl.isAutoTuning
-              ? const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.flash_on, size: 18),
-          tooltip: stressCtrl.isAutoTuning ? 'Tuning...' : 'Auto-Tune',
-        ),
-      );
-    }
-
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4.0),
-      child: FilledButton.tonalIcon(
-        onPressed: onPressed,
-        icon: const Icon(Icons.flash_on, size: 15),
-        label: Text(
-          stressCtrl.isAutoTuning ? 'Tuning...' : 'Auto-Tune',
-          style: const TextStyle(fontSize: 11),
+      child: Container(
+        height: 36,
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              iconSize: 16,
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              icon: const Icon(Icons.remove),
+              onPressed: stressCtrl.canStepDown
+                  ? () {
+                      context.read<FrameTimingService>().resetLog();
+                      context.read<StressController>().stepDown();
+                    }
+                  : null,
+              tooltip: 'Decrease Stress',
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6.0),
+              child: Text(
+                isCompact
+                    ? stressCtrl.formattedNodeCount
+                    : '${stressCtrl.formattedNodeCount} Nodes',
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'monospace',
+                ),
+              ),
+            ),
+            IconButton(
+              iconSize: 16,
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              icon: const Icon(Icons.add),
+              onPressed: stressCtrl.canStepUp
+                  ? () {
+                      context.read<FrameTimingService>().resetLog();
+                      context.read<StressController>().stepUp();
+                    }
+                  : null,
+              tooltip: 'Increase Stress',
+            ),
+          ],
         ),
       ),
     );

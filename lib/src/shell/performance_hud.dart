@@ -74,14 +74,20 @@ _ComparisonData _evaluateComparison({
     if (ratio >= 1.05) {
       if (startupRatio >= 1.2) {
         badge =
-            '⚡ ${ratio.toStringAsFixed(1)}x Faster Frame • '
-            '${startupRatio.toStringAsFixed(1)}x Startup';
+            '⚡ ${ratio.toStringAsFixed(1)}x Faster Frames • '
+            '${startupRatio.toStringAsFixed(1)}x Faster Startup';
       } else {
         badge = '⚡ ${ratio.toStringAsFixed(1)}x Faster Frame Time';
       }
     } else if (ratio <= 0.95 && jsTotal > 0.01) {
       final jsRatio = wasmTotal / jsTotal;
-      badge = '⚡ JS is ${jsRatio.toStringAsFixed(1)}x Faster Frame Time';
+      if (startupRatio >= 1.2) {
+        badge =
+            '⚡ JS is ${jsRatio.toStringAsFixed(1)}x Faster Frames • '
+            'Wasm ${startupRatio.toStringAsFixed(1)}x Faster Startup';
+      } else {
+        badge = '⚡ JS is ${jsRatio.toStringAsFixed(1)}x Faster Frame Time';
+      }
     } else {
       badge = '⚡ Identical Frame Time (${wasmTotal.toStringAsFixed(1)} ms)';
     }
