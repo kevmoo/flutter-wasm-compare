@@ -8,12 +8,43 @@ typedef BenchmarkRun = ({
   double buildTimeMs,
   double rasterTimeMs,
   double totalFrameTimeMs,
+  double jitterMs,
+  double? startupTimeMs,
   String stressLevel,
   int nodeCount,
 });
 
 class BenchmarkStorage {
   static const String _storagePrefix = 'wasm_compare_run_';
+  static const String _startupPrefix = 'wasm_compare_startup_';
+
+  static void saveStartupTime({
+    required String mode,
+    required double startupTimeMs,
+  }) {
+    try {
+      final storage = web.window.localStorage;
+      final normMode = mode.toLowerCase();
+      storage.setItem(
+        '$_startupPrefix$normMode',
+        startupTimeMs.toStringAsFixed(1),
+      );
+    } catch (_) {
+      // Ignore
+    }
+  }
+
+  static double? getStartupTime({required String mode}) {
+    try {
+      final storage = web.window.localStorage;
+      final normMode = mode.toLowerCase();
+      final str = storage.getItem('$_startupPrefix$normMode');
+      if (str == null || str.isEmpty) return null;
+      return double.tryParse(str);
+    } catch (_) {
+      return null;
+    }
+  }
 
   static void saveRun({
     required String mode,
@@ -21,6 +52,8 @@ class BenchmarkStorage {
     required double buildTimeMs,
     required double rasterTimeMs,
     required double totalFrameTimeMs,
+    double jitterMs = 0.0,
+    double? startupTimeMs,
     required String stressLevel,
     required int nodeCount,
   }) {
@@ -32,6 +65,8 @@ class BenchmarkStorage {
         'buildTimeMs': buildTimeMs,
         'rasterTimeMs': rasterTimeMs,
         'totalFrameTimeMs': totalFrameTimeMs,
+        'jitterMs': jitterMs,
+        'startupTimeMs': startupTimeMs,
         'stressLevel': stressLevel,
         'nodeCount': nodeCount,
       };
@@ -76,6 +111,10 @@ class BenchmarkStorage {
       final rasterTimeMs = (map['rasterTimeMs'] as num?)?.toDouble() ?? 0.0;
       final totalFrameTimeMs =
           (map['totalFrameTimeMs'] as num?)?.toDouble() ?? 0.0;
+      final jitterMs = (map['jitterMs'] as num?)?.toDouble() ?? 0.0;
+      final startupTimeMs =
+          (map['startupTimeMs'] as num?)?.toDouble() ??
+          getStartupTime(mode: runMode ?? normMode);
       final stress = (map['stressLevel'] as String?) ?? 'medium';
       final nodes = (map['nodeCount'] as num?)?.toInt() ?? 500;
 
@@ -86,6 +125,8 @@ class BenchmarkStorage {
           buildTimeMs: buildTimeMs,
           rasterTimeMs: rasterTimeMs,
           totalFrameTimeMs: totalFrameTimeMs,
+          jitterMs: jitterMs,
+          startupTimeMs: startupTimeMs,
           stressLevel: stress,
           nodeCount: nodes,
         );
@@ -116,6 +157,8 @@ class BenchmarkStorage {
       final rasterTimeMs = (map['rasterTimeMs'] as num?)?.toDouble() ?? 0.0;
       final totalFrameTimeMs =
           (map['totalFrameTimeMs'] as num?)?.toDouble() ?? 0.0;
+      final jitterMs = (map['jitterMs'] as num?)?.toDouble() ?? 0.0;
+      final startupTimeMs = (map['startupTimeMs'] as num?)?.toDouble();
       final stress = (map['stressLevel'] as String?) ?? 'medium';
       final nodes = (map['nodeCount'] as num?)?.toInt() ?? 500;
 
@@ -126,6 +169,8 @@ class BenchmarkStorage {
           buildTimeMs: buildTimeMs,
           rasterTimeMs: rasterTimeMs,
           totalFrameTimeMs: totalFrameTimeMs,
+          jitterMs: jitterMs,
+          startupTimeMs: startupTimeMs,
           stressLevel: stress,
           nodeCount: nodes,
         );

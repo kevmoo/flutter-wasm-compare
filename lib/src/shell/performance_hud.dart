@@ -1,10 +1,10 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../metrics/benchmark_storage.dart';
 import '../metrics/frame_timing_service.dart';
 import '../scene/stress_controller.dart';
+import 'engine_mode.dart';
 import 'url_helper.dart';
 
 typedef _ComparisonData = ({
@@ -18,20 +18,16 @@ typedef _ComparisonData = ({
   Color fpsColor,
 });
 
-bool _isCurrentlyWasm() {
-  if (kIsWeb) {
-    final mode = Uri.base.queryParameters['mode'];
-    if (mode == 'js' || mode == 'canvaskit') return false;
-    if (mode == 'wasm' || mode == 'skwasm') return true;
-    return kIsWasm;
-  }
-  return true;
-}
-
 Color _getFpsColor(double fps, double targetHz) {
   final ratio = fps / targetHz;
   if (ratio >= 0.9) return Colors.greenAccent;
   if (ratio >= 0.7) return Colors.amberAccent;
+  return Colors.redAccent;
+}
+
+Color _getJitterColor(double jitterMs) {
+  if (jitterMs < 1.2) return Colors.greenAccent;
+  if (jitterMs < 3.0) return Colors.amberAccent;
   return Colors.redAccent;
 }
 
@@ -54,14 +50,34 @@ _ComparisonData _evaluateComparison({
       ? currentTotal
       : (jsRun?.totalFrameTimeMs ?? 0.0);
 
+  final wasmStartup = isCurrentWasm
+      ? BenchmarkStorage.getStartupTime(mode: 'wasm')
+      : wasmRun?.startupTimeMs;
+  final jsStartup = !isCurrentWasm
+      ? BenchmarkStorage.getStartupTime(mode: 'js')
+      : jsRun?.startupTimeMs;
+
   final hasBoth = wasmTotal > 0.1 && jsTotal > 0.1;
   final isWasmFaster = hasBoth && wasmTotal <= jsTotal;
 
   String badge;
   if (hasBoth) {
     final ratio = wasmTotal > 0.01 ? (jsTotal / wasmTotal) : 1.0;
+    final hasStartupCompare =
+        wasmStartup != null &&
+        jsStartup != null &&
+        wasmStartup > 10.0 &&
+        jsStartup > 10.0;
+    final startupRatio = hasStartupCompare ? (jsStartup / wasmStartup) : 1.0;
+
     if (ratio >= 1.05) {
-      badge = '⚡ ${ratio.toStringAsFixed(1)}x Faster Frame Time';
+      if (startupRatio >= 1.2) {
+        badge =
+            '⚡ ${ratio.toStringAsFixed(1)}x Faster Frame • '
+            '${startupRatio.toStringAsFixed(1)}x Startup';
+      } else {
+        badge = '⚡ ${ratio.toStringAsFixed(1)}x Faster Frame Time';
+      }
     } else if (ratio <= 0.95 && jsTotal > 0.01) {
       final jsRatio = wasmTotal / jsTotal;
       badge = '⚡ JS is ${jsRatio.toStringAsFixed(1)}x Faster Frame Time';
@@ -132,7 +148,7 @@ class _PerformanceHudState extends State<PerformanceHud> {
     return Consumer2<FrameTimingService, StressController>(
       builder: (context, timingService, stressCtrl, child) {
         final metrics = timingService.metrics;
-        final isCurrentWasm = _isCurrentlyWasm();
+        final isCurrentWasm = isCurrentlyWasm();
 
         // Automatically store the latest metrics for the active engine
         if (metrics.totalFrameTimeMs > 0.1) {
@@ -142,6 +158,12 @@ class _PerformanceHudState extends State<PerformanceHud> {
             buildTimeMs: metrics.buildTimeMs,
             rasterTimeMs: metrics.rasterTimeMs,
             totalFrameTimeMs: metrics.totalFrameTimeMs,
+            jitterMs: metrics.jitterMs,
+            startupTimeMs:
+                metrics.startupTimeMs ??
+                BenchmarkStorage.getStartupTime(
+                  mode: isCurrentWasm ? 'wasm' : 'js',
+                ),
             stressLevel: stressCtrl.currentLabel,
             nodeCount: stressCtrl.nodeCount,
           );
@@ -437,6 +459,16 @@ class _DualEngineCards extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final wasmStartup = isCurrentWasm
+        ? (liveMetrics.startupTimeMs ??
+              BenchmarkStorage.getStartupTime(mode: 'wasm'))
+        : wasmRun?.startupTimeMs;
+
+    final jsStartup = !isCurrentWasm
+        ? (liveMetrics.startupTimeMs ??
+              BenchmarkStorage.getStartupTime(mode: 'js'))
+        : jsRun?.startupTimeMs;
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -450,6 +482,8 @@ class _DualEngineCards extends StatelessWidget {
             totalMs: isCurrentWasm
                 ? liveMetrics.totalFrameTimeMs
                 : wasmRun?.totalFrameTimeMs,
+            jitterMs: isCurrentWasm ? liveMetrics.jitterMs : wasmRun?.jitterMs,
+            startupMs: wasmStartup,
             buildMs: isCurrentWasm
                 ? liveMetrics.buildTimeMs
                 : wasmRun?.buildTimeMs,
@@ -470,6 +504,8 @@ class _DualEngineCards extends StatelessWidget {
             totalMs: !isCurrentWasm
                 ? liveMetrics.totalFrameTimeMs
                 : jsRun?.totalFrameTimeMs,
+            jitterMs: !isCurrentWasm ? liveMetrics.jitterMs : jsRun?.jitterMs,
+            startupMs: jsStartup,
             buildMs: !isCurrentWasm
                 ? liveMetrics.buildTimeMs
                 : jsRun?.buildTimeMs,
@@ -490,6 +526,8 @@ class _EngineMiniCard extends StatelessWidget {
   final bool isLive;
   final double? fps;
   final double? totalMs;
+  final double? jitterMs;
+  final double? startupMs;
   final double? buildMs;
   final double? rasterMs;
   final double targetHz;
@@ -500,6 +538,8 @@ class _EngineMiniCard extends StatelessWidget {
     required this.isLive,
     required this.fps,
     required this.totalMs,
+    this.jitterMs,
+    this.startupMs,
     required this.buildMs,
     required this.rasterMs,
     required this.targetHz,
@@ -571,6 +611,18 @@ class _EngineMiniCard extends StatelessWidget {
               value: '${totalMs!.toStringAsFixed(1)}ms',
               valueColor: Colors.white,
             ),
+            if (jitterMs != null && jitterMs! > 0.0)
+              _MiniMetricRow(
+                label: 'Jitter',
+                value: '±${jitterMs!.toStringAsFixed(1)}ms',
+                valueColor: _getJitterColor(jitterMs!),
+              ),
+            if (startupMs != null && startupMs! > 0.0)
+              _MiniMetricRow(
+                label: 'Startup',
+                value: '${startupMs!.toStringAsFixed(0)}ms',
+                valueColor: Colors.white70,
+              ),
             _MiniMetricRow(
               label: 'Build',
               value: '${buildMs!.toStringAsFixed(1)}ms',
