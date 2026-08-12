@@ -74,7 +74,6 @@ class RuntimeSelector extends StatelessWidget {
             rasterTimeMs: metrics.rasterTimeMs,
             totalFrameTimeMs: metrics.totalFrameTimeMs,
             jitterMs: metrics.jitterMs,
-            startupTimeMs: metrics.startupTimeMs,
             stressLevel: stressCtrl.currentLabel,
             nodeCount: stressCtrl.nodeCount,
           );

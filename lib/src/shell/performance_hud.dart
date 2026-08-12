@@ -55,43 +55,18 @@ _ComparisonData _evaluateComparison({
       ? currentActive
       : (jsRun != null ? (jsRun.buildTimeMs + jsRun.rasterTimeMs) : 0.0);
 
-  final wasmStartup = isCurrentWasm
-      ? BenchmarkStorage.getStartupTime(mode: 'wasm')
-      : wasmRun?.startupTimeMs;
-  final jsStartup = !isCurrentWasm
-      ? BenchmarkStorage.getStartupTime(mode: 'js')
-      : jsRun?.startupTimeMs;
-
   final hasBoth = wasmActive > 0.1 && jsActive > 0.1;
   final isWasmFaster = hasBoth && wasmActive <= jsActive;
 
   String badge;
   if (hasBoth) {
     final ratio = wasmActive > 0.01 ? (jsActive / wasmActive) : 1.0;
-    final hasStartupCompare =
-        wasmStartup != null &&
-        jsStartup != null &&
-        wasmStartup > 10.0 &&
-        jsStartup > 10.0;
-    final startupRatio = hasStartupCompare ? (jsStartup / wasmStartup) : 1.0;
 
     if (ratio >= 1.05) {
-      if (startupRatio >= 1.2) {
-        badge =
-            '⚡ ${ratio.toStringAsFixed(1)}x Faster Frames • '
-            '${startupRatio.toStringAsFixed(1)}x Faster Startup';
-      } else {
-        badge = '⚡ ${ratio.toStringAsFixed(1)}x Faster Frame Time';
-      }
+      badge = '⚡ ${ratio.toStringAsFixed(1)}x Faster Frame Time';
     } else if (ratio <= 0.95 && jsActive > 0.01) {
       final jsRatio = wasmActive / jsActive;
-      if (startupRatio >= 1.2) {
-        badge =
-            '⚡ JS is ${jsRatio.toStringAsFixed(1)}x Faster Frames • '
-            'Wasm ${startupRatio.toStringAsFixed(1)}x Faster Startup';
-      } else {
-        badge = '⚡ JS is ${jsRatio.toStringAsFixed(1)}x Faster Frame Time';
-      }
+      badge = '⚡ JS is ${jsRatio.toStringAsFixed(1)}x Faster Frame Time';
     } else {
       badge = '⚡ Identical Frame Time (${wasmActive.toStringAsFixed(1)} ms)';
     }
@@ -176,11 +151,6 @@ class _PerformanceHudState extends State<PerformanceHud> {
             rasterTimeMs: metrics.rasterTimeMs,
             totalFrameTimeMs: metrics.totalFrameTimeMs,
             jitterMs: metrics.jitterMs,
-            startupTimeMs:
-                metrics.startupTimeMs ??
-                BenchmarkStorage.getStartupTime(
-                  mode: isCurrentWasm ? 'wasm' : 'js',
-                ),
             stressLevel: stressCtrl.currentLabel,
             nodeCount: stressCtrl.nodeCount,
           );
@@ -477,16 +447,6 @@ class _DualEngineCards extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final wasmStartup = isCurrentWasm
-        ? (liveMetrics.startupTimeMs ??
-              BenchmarkStorage.getStartupTime(mode: 'wasm'))
-        : wasmRun?.startupTimeMs;
-
-    final jsStartup = !isCurrentWasm
-        ? (liveMetrics.startupTimeMs ??
-              BenchmarkStorage.getStartupTime(mode: 'js'))
-        : jsRun?.startupTimeMs;
-
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -501,7 +461,6 @@ class _DualEngineCards extends StatelessWidget {
                 ? liveMetrics.totalFrameTimeMs
                 : wasmRun?.totalFrameTimeMs,
             jitterMs: isCurrentWasm ? liveMetrics.jitterMs : wasmRun?.jitterMs,
-            startupMs: wasmStartup,
             buildMs: isCurrentWasm
                 ? liveMetrics.buildTimeMs
                 : wasmRun?.buildTimeMs,
@@ -523,7 +482,6 @@ class _DualEngineCards extends StatelessWidget {
                 ? liveMetrics.totalFrameTimeMs
                 : jsRun?.totalFrameTimeMs,
             jitterMs: !isCurrentWasm ? liveMetrics.jitterMs : jsRun?.jitterMs,
-            startupMs: jsStartup,
             buildMs: !isCurrentWasm
                 ? liveMetrics.buildTimeMs
                 : jsRun?.buildTimeMs,
@@ -545,7 +503,6 @@ class _EngineMiniCard extends StatelessWidget {
   final double? fps;
   final double? totalMs;
   final double? jitterMs;
-  final double? startupMs;
   final double? buildMs;
   final double? rasterMs;
   final double targetHz;
@@ -557,7 +514,6 @@ class _EngineMiniCard extends StatelessWidget {
     required this.fps,
     required this.totalMs,
     this.jitterMs,
-    this.startupMs,
     required this.buildMs,
     required this.rasterMs,
     required this.targetHz,
@@ -634,12 +590,6 @@ class _EngineMiniCard extends StatelessWidget {
                 label: 'Jitter',
                 value: '±${jitterMs!.toStringAsFixed(1)}ms',
                 valueColor: _getJitterColor(jitterMs!),
-              ),
-            if (startupMs != null && startupMs! > 0.0)
-              _MiniMetricRow(
-                label: 'Startup',
-                value: '${startupMs!.toStringAsFixed(0)}ms',
-                valueColor: Colors.white70,
               ),
             _MiniMetricRow(
               label: 'Build',

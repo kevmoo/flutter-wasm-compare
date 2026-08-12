@@ -6,7 +6,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 
 import '../shell/url_helper.dart';
-import 'startup_metrics.dart';
 
 class FrameTimingMetrics {
   final double fps;
@@ -14,7 +13,6 @@ class FrameTimingMetrics {
   final double rasterTimeMs;
   final double totalFrameTimeMs;
   final double jitterMs;
-  final double? startupTimeMs;
 
   FrameTimingMetrics({
     this.fps = 0.0,
@@ -22,7 +20,6 @@ class FrameTimingMetrics {
     this.rasterTimeMs = 0.0,
     this.totalFrameTimeMs = 0.0,
     this.jitterMs = 0.0,
-    this.startupTimeMs,
   });
 
   /// The active execution time on the critical path determining throughput.
@@ -51,19 +48,8 @@ class FrameTimingService extends ChangeNotifier {
   double _highestFpsSeen = 60.0;
   double get highestFpsSeen => _highestFpsSeen;
 
-  double? _startupTimeMs;
-  double? get startupTimeMs => _startupTimeMs;
-
   FrameTimingService() {
-    _startupTimeMs = getAppStartupTimeMs();
     SchedulerBinding.instance.addTimingsCallback(_onTimings);
-  }
-
-  void recordStartupTime(double ms) {
-    if (_startupTimeMs == null) {
-      _startupTimeMs = ms;
-      _computeMetrics();
-    }
   }
 
   void _onTimings(List<FrameTiming> timings) {
@@ -88,26 +74,17 @@ class FrameTimingService extends ChangeNotifier {
 
   FrameTimingMetrics sampleRecentMetrics({int frameCount = 15}) {
     if (_timingsLog.isEmpty) {
-      return FrameTimingMetrics(
-        fps: 60.0,
-        startupTimeMs: _startupTimeMs ?? getAppStartupTimeMs(),
-      );
+      return FrameTimingMetrics(fps: 60.0);
     }
     final count = math.min(_timingsLog.length, frameCount);
     final recent = _timingsLog.toList().sublist(_timingsLog.length - count);
-    return _calculateMetricsForSlice(
-      recent,
-      startupTimeMs: _startupTimeMs ?? getAppStartupTimeMs(),
-    );
+    return _calculateMetricsForSlice(recent);
   }
 
   void _computeMetrics() {
     if (_timingsLog.isEmpty) return;
 
-    _metrics = _calculateMetricsForSlice(
-      _timingsLog.toList(),
-      startupTimeMs: _startupTimeMs ?? getAppStartupTimeMs(),
-    );
+    _metrics = _calculateMetricsForSlice(_timingsLog.toList());
     if (_metrics.fps > _highestFpsSeen && _metrics.fps < 150.0) {
       _highestFpsSeen = _metrics.fps;
     }
@@ -122,11 +99,10 @@ class FrameTimingService extends ChangeNotifier {
   }
 
   static FrameTimingMetrics _calculateMetricsForSlice(
-    List<FrameTiming> timings, {
-    double? startupTimeMs,
-  }) {
+    List<FrameTiming> timings,
+  ) {
     if (timings.isEmpty) {
-      return FrameTimingMetrics(startupTimeMs: startupTimeMs);
+      return FrameTimingMetrics();
     }
 
     var totalBuild = 0.0;
@@ -168,7 +144,6 @@ class FrameTimingService extends ChangeNotifier {
       rasterTimeMs: totalRaster / count,
       totalFrameTimeMs: meanTotal,
       jitterMs: jitterMs,
-      startupTimeMs: startupTimeMs,
     );
   }
 

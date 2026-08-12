@@ -29,20 +29,7 @@ if (forceCanvasKit) {
   userConfig.enableWimp = true;
 }
 
-const tBootstrap = performance.now();
-window._flutterTimings = {
-  bootstrapStart: tBootstrap,
-  entrypointLoaded: 0,
-  engineInitialized: 0,
-  firstFrame: 0,
-};
-
 _flutter.loader.load({
   config: userConfig,
-  onEntrypointLoaded: async function(engineInitializer) {
-    window._flutterTimings.entrypointLoaded = performance.now();
-    const appRunner = await engineInitializer.initializeEngine();
-    window._flutterTimings.engineInitialized = performance.now();
-    await appRunner.runApp();
-  }
 });
+

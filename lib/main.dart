@@ -1,13 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import 'src/metrics/benchmark_storage.dart';
 import 'src/metrics/frame_timing_service.dart';
-import 'src/metrics/startup_metrics.dart';
 import 'src/scene/adaptive_stress_scene.dart';
 import 'src/scene/stress_controller.dart';
 import 'src/shell/compatibility_shield.dart';
-import 'src/shell/engine_mode.dart';
 import 'src/shell/performance_hud.dart';
 import 'src/shell/runtime_selector.dart';
 
@@ -42,25 +39,8 @@ class WasmCompareApp extends StatelessWidget {
 const double largeScreenMinWidth = 800.0;
 const double compactAppBarBreakpoint = 760.0;
 
-class DemoDashboard extends StatefulWidget {
+class DemoDashboard extends StatelessWidget {
   const DemoDashboard({super.key});
-
-  @override
-  State<DemoDashboard> createState() => _DemoDashboardState();
-}
-
-class _DemoDashboardState extends State<DemoDashboard> {
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final startupMs = getAppStartupTimeMs();
-      if (startupMs != null) {
-        final mode = isCurrentlyWasm() ? 'wasm' : 'js';
-        BenchmarkStorage.saveStartupTime(mode: mode, startupTimeMs: startupMs);
-      }
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
