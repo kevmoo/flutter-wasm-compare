@@ -24,6 +24,21 @@ class FrameTimingMetrics {
     this.jitterMs = 0.0,
     this.startupTimeMs,
   });
+
+  /// The active execution time on the critical path determining throughput.
+  ///
+  /// In pipelined/multithreaded mode (Wasm with dedicated raster worker),
+  /// the UI thread and raster worker execute concurrently, so the throughput
+  /// bottleneck is `max(buildTimeMs, rasterTimeMs)`.
+  /// In single-threaded mode (JS CanvasKit), build and raster execute serially
+  /// on the main thread, so the throughput bottleneck is
+  /// `buildTimeMs + rasterTimeMs`.
+  double activeFrameTimeMs({required bool isPipelined}) {
+    if (isPipelined) {
+      return math.max(buildTimeMs, rasterTimeMs);
+    }
+    return buildTimeMs + rasterTimeMs;
+  }
 }
 
 class FrameTimingService extends ChangeNotifier {

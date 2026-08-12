@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 
 import '../metrics/benchmark_storage.dart';
 import '../metrics/frame_timing_service.dart';
+import '../shell/engine_mode.dart';
 import '../shell/url_helper.dart';
 
 const List<int> kDecadeEngineeringLadder = [
@@ -53,8 +54,9 @@ _TuningState _evaluateAdaptiveStep({
   required double budgetTargetMs,
   required int targetHz,
   required FrameTimingMetrics recentMetrics,
+  required bool isWasm,
 }) {
-  final currentMs = recentMetrics.totalFrameTimeMs;
+  final currentMs = recentMetrics.activeFrameTimeMs(isPipelined: isWasm);
   final currentFps = recentMetrics.fps;
   final msText = currentMs.toStringAsFixed(1);
   final targetMinFps = targetHz == 120 ? 110.0 : 56.0;
@@ -250,6 +252,7 @@ class StressController extends ChangeNotifier {
 
     final targetHz = _targetRefreshRate.toInt();
     final budgetTargetMs = targetHz >= 100 ? 7.1 : 14.2;
+    final isWasm = isCurrentlyWasm();
 
     _autoTuneStatus = 'Calibrating ($targetHz FPS target)...';
     timingService.resetLog();
@@ -267,6 +270,7 @@ class StressController extends ChangeNotifier {
         budgetTargetMs: budgetTargetMs,
         targetHz: targetHz,
         recentMetrics: recent,
+        isWasm: isWasm,
       );
 
       _nodeCount = result.nodeCount;
