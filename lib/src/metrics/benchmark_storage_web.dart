@@ -39,9 +39,61 @@ class BenchmarkStorage {
       storage.setItem('wasm_compare_last_run', jsonStr);
       storage.setItem('$_storagePrefix$stressLevel', jsonStr);
       storage.setItem('${_storagePrefix}nodes_$nodeCount', jsonStr);
+
+      // Store separate mode-specific keys
+      final normMode = mode.toLowerCase();
+      storage.setItem('$_storagePrefix${normMode}_last', jsonStr);
+      storage.setItem('$_storagePrefix${normMode}_nodes_$nodeCount', jsonStr);
     } catch (_) {
       // Ignore
     }
+  }
+
+  static BenchmarkRun? getRunForMode({
+    required String mode,
+    int? nodeCount,
+    String? stressLevel,
+  }) {
+    try {
+      final storage = web.window.localStorage;
+      final normMode = mode.toLowerCase();
+      final nodeKey = '$_storagePrefix${normMode}_nodes_$nodeCount';
+      final stressKey = '$_storagePrefix${normMode}_$stressLevel';
+      final lastKey = '$_storagePrefix${normMode}_last';
+
+      final jsonStr = nodeCount != null
+          ? (storage.getItem(nodeKey) ?? storage.getItem(lastKey))
+          : (stressLevel != null
+                ? (storage.getItem(stressKey) ?? storage.getItem(lastKey))
+                : storage.getItem(lastKey));
+
+      if (jsonStr == null || jsonStr.isEmpty) return null;
+
+      final map = jsonDecode(jsonStr) as Map<String, dynamic>;
+      final runMode = map['mode'] as String?;
+      final fps = (map['fps'] as num?)?.toDouble();
+      final buildTimeMs = (map['buildTimeMs'] as num?)?.toDouble() ?? 0.0;
+      final rasterTimeMs = (map['rasterTimeMs'] as num?)?.toDouble() ?? 0.0;
+      final totalFrameTimeMs =
+          (map['totalFrameTimeMs'] as num?)?.toDouble() ?? 0.0;
+      final stress = (map['stressLevel'] as String?) ?? 'medium';
+      final nodes = (map['nodeCount'] as num?)?.toInt() ?? 500;
+
+      if (runMode != null && fps != null) {
+        return (
+          mode: runMode,
+          fps: fps,
+          buildTimeMs: buildTimeMs,
+          rasterTimeMs: rasterTimeMs,
+          totalFrameTimeMs: totalFrameTimeMs,
+          stressLevel: stress,
+          nodeCount: nodes,
+        );
+      }
+    } catch (_) {
+      // Ignore
+    }
+    return null;
   }
 
   static BenchmarkRun? getLastRun({String? stressLevel, int? nodeCount}) {

@@ -1,13 +1,15 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../metrics/benchmark_storage.dart';
 import '../metrics/frame_timing_service.dart';
 import '../scene/stress_controller.dart';
+import 'url_helper.dart';
 
 typedef _ComparisonData = ({
-  bool hasValidComparison,
-  bool isFaster,
+  bool hasBothRuns,
+  bool isWasmFaster,
   String speedupBadge,
   double budgetRatio,
   String budgetPct,
@@ -16,34 +18,59 @@ typedef _ComparisonData = ({
   Color fpsColor,
 });
 
+bool _isCurrentlyWasm() {
+  if (kIsWeb) {
+    final mode = Uri.base.queryParameters['mode'];
+    if (mode == 'canvaskit') return false;
+    if (mode == 'skwasm') return true;
+    return kIsWasm;
+  }
+  return true;
+}
+
+Color _getFpsColor(double fps, double targetHz) {
+  final ratio = fps / targetHz;
+  if (ratio >= 0.9) return Colors.greenAccent;
+  if (ratio >= 0.7) return Colors.amberAccent;
+  return Colors.redAccent;
+}
+
 _ComparisonData _evaluateComparison({
   required double currentTotal,
   required double currentFps,
   required double targetRefreshRate,
-  required BenchmarkRun? savedBaseline,
+  required BenchmarkRun? wasmRun,
+  required BenchmarkRun? jsRun,
+  required bool isCurrentWasm,
 }) {
   final budgetTargetMs = 1000.0 / targetRefreshRate;
   final budgetLabel =
       '${budgetTargetMs.toStringAsFixed(1)}ms (${targetRefreshRate.toInt()}Hz)';
 
-  final baseTotal = savedBaseline?.totalFrameTimeMs ?? 0.0;
-  final hasValid =
-      savedBaseline != null && baseTotal > 0.1 && currentTotal > 0.1;
-  final isFaster = hasValid && currentTotal < baseTotal;
-  final ratio = hasValid
-      ? (isFaster ? baseTotal / currentTotal : currentTotal / baseTotal)
-      : 1.0;
+  final wasmTotal = isCurrentWasm
+      ? currentTotal
+      : (wasmRun?.totalFrameTimeMs ?? 0.0);
+  final jsTotal = !isCurrentWasm
+      ? currentTotal
+      : (jsRun?.totalFrameTimeMs ?? 0.0);
 
-  final pctDiff = hasValid
-      ? (isFaster
-                ? ((1.0 - (currentTotal / baseTotal)) * 100).clamp(0, 99)
-                : (((currentTotal / baseTotal) - 1.0) * 100))
-            .toStringAsFixed(0)
-      : '0';
+  final hasBoth = wasmTotal > 0.1 && jsTotal > 0.1;
+  final isWasmFaster = hasBoth && wasmTotal <= jsTotal;
 
-  final badge = isFaster
-      ? '⚡ ${ratio.toStringAsFixed(1)}x Faster Frame Time (-$pctDiff%)'
-      : '⚠️ ${ratio.toStringAsFixed(1)}x Slower Frame Time (+$pctDiff%)';
+  String badge;
+  if (hasBoth) {
+    final ratio = wasmTotal > 0.01 ? (jsTotal / wasmTotal) : 1.0;
+    if (ratio >= 1.05) {
+      badge = '⚡ ${ratio.toStringAsFixed(1)}x Faster Frame Time';
+    } else if (ratio <= 0.95 && jsTotal > 0.01) {
+      final jsRatio = wasmTotal / jsTotal;
+      badge = '⚡ JS is ${jsRatio.toStringAsFixed(1)}x Faster Frame Time';
+    } else {
+      badge = '⚡ Identical Frame Time (${wasmTotal.toStringAsFixed(1)} ms)';
+    }
+  } else {
+    badge = '⏳ Switch to ${isCurrentWasm ? 'JS' : 'WASM'} to compare';
+  }
 
   final budgetRatio = (currentTotal / budgetTargetMs).clamp(0.0, 1.0);
   final budgetPct = (currentTotal / budgetTargetMs * 100).toStringAsFixed(0);
@@ -53,16 +80,11 @@ _ComparisonData _evaluateComparison({
     _ => Colors.redAccent,
   };
 
-  final fpsRatio = currentFps / targetRefreshRate;
-  final fpsColor = switch (fpsRatio) {
-    >= 0.9 => Colors.greenAccent,
-    >= 0.7 => Colors.amberAccent,
-    _ => Colors.redAccent,
-  };
+  final fpsColor = _getFpsColor(currentFps, targetRefreshRate);
 
   return (
-    hasValidComparison: hasValid,
-    isFaster: isFaster,
+    hasBothRuns: hasBoth,
+    isWasmFaster: isWasmFaster,
     speedupBadge: badge,
     budgetRatio: budgetRatio,
     budgetPct: budgetPct,
@@ -82,12 +104,25 @@ class PerformanceHud extends StatefulWidget {
 }
 
 class _PerformanceHudState extends State<PerformanceHud> {
-  late bool _isCollapsed = widget.initiallyCollapsed;
+  late bool _isCollapsed;
+
+  @override
+  void initState() {
+    super.initState();
+    final persisted = getPersistedHudCollapsed();
+    _isCollapsed = persisted ?? widget.initiallyCollapsed;
+  }
+
+  void _setCollapsed(bool value) {
+    setState(() => _isCollapsed = value);
+    savePersistedHudCollapsed(value);
+  }
 
   @override
   void didUpdateWidget(PerformanceHud oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.initiallyCollapsed != widget.initiallyCollapsed) {
+    if (getPersistedHudCollapsed() == null &&
+        oldWidget.initiallyCollapsed != widget.initiallyCollapsed) {
       _isCollapsed = widget.initiallyCollapsed;
     }
   }
@@ -97,21 +132,45 @@ class _PerformanceHudState extends State<PerformanceHud> {
     return Consumer2<FrameTimingService, StressController>(
       builder: (context, timingService, stressCtrl, child) {
         final metrics = timingService.metrics;
-        final savedBaseline = BenchmarkStorage.getLastRun(
-          stressLevel: stressCtrl.currentLabel,
+        final isCurrentWasm = _isCurrentlyWasm();
+
+        // Automatically store the latest metrics for the active engine
+        if (metrics.totalFrameTimeMs > 0.1) {
+          BenchmarkStorage.saveRun(
+            mode: isCurrentWasm ? 'wasm' : 'js',
+            fps: metrics.fps,
+            buildTimeMs: metrics.buildTimeMs,
+            rasterTimeMs: metrics.rasterTimeMs,
+            totalFrameTimeMs: metrics.totalFrameTimeMs,
+            stressLevel: stressCtrl.currentLabel,
+            nodeCount: stressCtrl.nodeCount,
+          );
+        }
+
+        final wasmRun = BenchmarkStorage.getRunForMode(
+          mode: 'wasm',
           nodeCount: stressCtrl.nodeCount,
+          stressLevel: stressCtrl.currentLabel,
+        );
+
+        final jsRun = BenchmarkStorage.getRunForMode(
+          mode: 'js',
+          nodeCount: stressCtrl.nodeCount,
+          stressLevel: stressCtrl.currentLabel,
         );
 
         final comparison = _evaluateComparison(
           currentTotal: metrics.totalFrameTimeMs,
           currentFps: metrics.fps,
           targetRefreshRate: stressCtrl.targetRefreshRate,
-          savedBaseline: savedBaseline,
+          wasmRun: wasmRun,
+          jsRun: jsRun,
+          isCurrentWasm: isCurrentWasm,
         );
 
         if (_isCollapsed) {
           return InkWell(
-            onTap: () => setState(() => _isCollapsed = false),
+            onTap: () => _setCollapsed(false),
             borderRadius: BorderRadius.circular(12),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -163,8 +222,8 @@ class _PerformanceHudState extends State<PerformanceHud> {
         }
 
         return Container(
-          constraints: const BoxConstraints(minWidth: 220, maxWidth: 300),
-          padding: const EdgeInsets.all(16),
+          constraints: const BoxConstraints(minWidth: 260, maxWidth: 330),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: Colors.black87,
             borderRadius: BorderRadius.circular(12),
@@ -184,7 +243,7 @@ class _PerformanceHudState extends State<PerformanceHud> {
               _HeaderTitle(
                 label: stressCtrl.currentLabel,
                 nodeCount: stressCtrl.nodeCount,
-                onCollapse: () => setState(() => _isCollapsed = true),
+                onCollapse: () => _setCollapsed(true),
               ),
               if (stressCtrl.autoTuneStatus.isNotEmpty) ...[
                 const SizedBox(height: 6),
@@ -193,12 +252,6 @@ class _PerformanceHudState extends State<PerformanceHud> {
                   isTuning: stressCtrl.isAutoTuning,
                 ),
               ],
-              const SizedBox(height: 12),
-              _LiveMetricsSection(
-                metrics: metrics,
-                nodeCount: stressCtrl.nodeCount,
-                fpsColor: comparison.fpsColor,
-              ),
               const SizedBox(height: 10),
               _BudgetBar(
                 budgetRatio: comparison.budgetRatio,
@@ -206,13 +259,20 @@ class _PerformanceHudState extends State<PerformanceHud> {
                 budgetLabel: comparison.budgetLabel,
                 budgetColor: comparison.budgetColor,
               ),
-              if (savedBaseline != null)
-                _BaselineSection(
-                  savedBaseline: savedBaseline,
-                  hasValidComparison: comparison.hasValidComparison,
-                  isFaster: comparison.isFaster,
-                  speedupBadge: comparison.speedupBadge,
-                ),
+              const SizedBox(height: 12),
+              _DualEngineCards(
+                isCurrentWasm: isCurrentWasm,
+                liveMetrics: metrics,
+                wasmRun: wasmRun,
+                jsRun: jsRun,
+                targetHz: stressCtrl.targetRefreshRate,
+              ),
+              const SizedBox(height: 10),
+              _SpeedupBadge(
+                hasBothRuns: comparison.hasBothRuns,
+                isWasmFaster: comparison.isWasmFaster,
+                badgeText: comparison.speedupBadge,
+              ),
             ],
           ),
         );
@@ -239,10 +299,10 @@ class _HeaderTitle extends StatelessWidget {
       children: [
         Expanded(
           child: Text(
-            'LIVE PERFORMANCE ($label)',
+            'PERFORMANCE ($label • $nodeCount)',
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.labelSmall
-                ?.copyWith(color: Colors.white54, letterSpacing: 1.0),
+                ?.copyWith(color: Colors.white54, letterSpacing: 0.8),
           ),
         ),
         const SizedBox(width: 4),
@@ -310,53 +370,6 @@ class _AutoTuneStatusBanner extends StatelessWidget {
   }
 }
 
-class _LiveMetricsSection extends StatelessWidget {
-  final FrameTimingMetrics metrics;
-  final int nodeCount;
-  final Color fpsColor;
-
-  const _LiveMetricsSection({
-    required this.metrics,
-    required this.nodeCount,
-    required this.fpsColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _MetricRow(
-          label: 'FPS',
-          value: metrics.fps.toStringAsFixed(1),
-          valueColor: fpsColor,
-        ),
-        _MetricRow(
-          label: 'Build Time',
-          value: '${metrics.buildTimeMs.toStringAsFixed(1)} ms',
-          valueColor: Colors.white,
-        ),
-        _MetricRow(
-          label: 'Raster Time',
-          value: '${metrics.rasterTimeMs.toStringAsFixed(1)} ms',
-          valueColor: Colors.white,
-        ),
-        _MetricRow(
-          label: 'Total Frame',
-          value: '${metrics.totalFrameTimeMs.toStringAsFixed(1)} ms',
-          valueColor: Colors.white,
-        ),
-        _MetricRow(
-          label: 'Churn Nodes',
-          value: '$nodeCount',
-          valueColor: Colors.lightBlueAccent,
-        ),
-      ],
-    );
-  }
-}
-
 class _BudgetBar extends StatelessWidget {
   final double budgetRatio;
   final String budgetPct;
@@ -397,7 +410,7 @@ class _BudgetBar extends StatelessWidget {
           borderRadius: BorderRadius.circular(3),
           child: LinearProgressIndicator(
             value: budgetRatio,
-            minHeight: 5,
+            minHeight: 4,
             backgroundColor: Colors.white12,
             valueColor: AlwaysStoppedAnimation<Color>(budgetColor),
           ),
@@ -407,68 +420,248 @@ class _BudgetBar extends StatelessWidget {
   }
 }
 
-class _BaselineSection extends StatelessWidget {
-  final BenchmarkRun savedBaseline;
-  final bool hasValidComparison;
-  final bool isFaster;
-  final String speedupBadge;
+class _DualEngineCards extends StatelessWidget {
+  final bool isCurrentWasm;
+  final FrameTimingMetrics liveMetrics;
+  final BenchmarkRun? wasmRun;
+  final BenchmarkRun? jsRun;
+  final double targetHz;
 
-  const _BaselineSection({
-    required this.savedBaseline,
-    required this.hasValidComparison,
-    required this.isFaster,
-    required this.speedupBadge,
+  const _DualEngineCards({
+    required this.isCurrentWasm,
+    required this.liveMetrics,
+    required this.wasmRun,
+    required this.jsRun,
+    required this.targetHz,
   });
 
   @override
   Widget build(BuildContext context) {
-    final mode = savedBaseline.mode.toUpperCase();
-    final nodes = savedBaseline.nodeCount;
-
-    return Column(
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Divider(height: 24, color: Colors.white24),
-        Text(
-          'BASELINE ($mode • $nodes NODES)',
-          style: Theme.of(context).textTheme.labelSmall
-              ?.copyWith(color: Colors.white54, letterSpacing: 1.0),
+        // Left Card: WASM
+        Expanded(
+          child: _EngineMiniCard(
+            title: '⚡ WASM',
+            titleColor: Colors.lightBlueAccent,
+            isLive: isCurrentWasm,
+            fps: isCurrentWasm ? liveMetrics.fps : wasmRun?.fps,
+            totalMs: isCurrentWasm
+                ? liveMetrics.totalFrameTimeMs
+                : wasmRun?.totalFrameTimeMs,
+            buildMs: isCurrentWasm
+                ? liveMetrics.buildTimeMs
+                : wasmRun?.buildTimeMs,
+            rasterMs: isCurrentWasm
+                ? liveMetrics.rasterTimeMs
+                : wasmRun?.rasterTimeMs,
+            targetHz: targetHz,
+          ),
         ),
-        const SizedBox(height: 8),
-        _MetricRow(
-          label: 'Base Frame',
-          value: '${savedBaseline.totalFrameTimeMs.toStringAsFixed(1)} ms',
-          valueColor: Colors.orangeAccent,
+        const SizedBox(width: 8),
+        // Right Card: JS
+        Expanded(
+          child: _EngineMiniCard(
+            title: '📜 JS',
+            titleColor: const Color(0xFFF1E05A),
+            isLive: !isCurrentWasm,
+            fps: !isCurrentWasm ? liveMetrics.fps : jsRun?.fps,
+            totalMs: !isCurrentWasm
+                ? liveMetrics.totalFrameTimeMs
+                : jsRun?.totalFrameTimeMs,
+            buildMs: !isCurrentWasm
+                ? liveMetrics.buildTimeMs
+                : jsRun?.buildTimeMs,
+            rasterMs: !isCurrentWasm
+                ? liveMetrics.rasterTimeMs
+                : jsRun?.rasterTimeMs,
+            targetHz: targetHz,
+          ),
         ),
-        _MetricRow(
-          label: 'Base Build',
-          value: '${savedBaseline.buildTimeMs.toStringAsFixed(1)} ms',
-          valueColor: Colors.white70,
-        ),
-        _MetricRow(
-          label: 'Base Raster',
-          value: '${savedBaseline.rasterTimeMs.toStringAsFixed(1)} ms',
-          valueColor: Colors.white70,
-        ),
-        if (hasValidComparison) ...[
-          const SizedBox(height: 8),
-          _SpeedupBadge(isFaster: isFaster, badgeText: speedupBadge),
-        ],
       ],
     );
   }
 }
 
-class _SpeedupBadge extends StatelessWidget {
-  final bool isFaster;
-  final String badgeText;
+class _EngineMiniCard extends StatelessWidget {
+  final String title;
+  final Color titleColor;
+  final bool isLive;
+  final double? fps;
+  final double? totalMs;
+  final double? buildMs;
+  final double? rasterMs;
+  final double targetHz;
 
-  const _SpeedupBadge({required this.isFaster, required this.badgeText});
+  const _EngineMiniCard({
+    required this.title,
+    required this.titleColor,
+    required this.isLive,
+    required this.fps,
+    required this.totalMs,
+    required this.buildMs,
+    required this.rasterMs,
+    required this.targetHz,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final baseColor = isFaster ? Colors.green : Colors.red;
-    final accentColor = isFaster ? Colors.greenAccent : Colors.redAccent;
+    final hasData = totalMs != null && totalMs! > 0.0;
+    final borderColor = isLive
+        ? titleColor.withValues(alpha: 0.35)
+        : Colors.white12;
+    final bgColor = isLive
+        ? Colors.white.withValues(alpha: 0.05)
+        : Colors.white.withValues(alpha: 0.02);
+
+    return Container(
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: titleColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 11,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: isLive
+                      ? Colors.green.withValues(alpha: 0.2)
+                      : (hasData ? Colors.white12 : Colors.transparent),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+                child: Text(
+                  isLive ? 'LIVE' : (hasData ? 'SAVED' : 'UNRUN'),
+                  style: TextStyle(
+                    color: isLive
+                        ? Colors.greenAccent
+                        : (hasData ? Colors.white54 : Colors.white24),
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const Divider(height: 10, color: Colors.white10),
+          if (hasData) ...[
+            _MiniMetricRow(
+              label: 'FPS',
+              value: fps!.toStringAsFixed(1),
+              valueColor: _getFpsColor(fps!, targetHz),
+            ),
+            _MiniMetricRow(
+              label: 'Total',
+              value: '${totalMs!.toStringAsFixed(1)}ms',
+              valueColor: Colors.white,
+            ),
+            _MiniMetricRow(
+              label: 'Build',
+              value: '${buildMs!.toStringAsFixed(1)}ms',
+              valueColor: Colors.white70,
+            ),
+            _MiniMetricRow(
+              label: 'Raster',
+              value: '${rasterMs!.toStringAsFixed(1)}ms',
+              valueColor: Colors.white70,
+            ),
+          ] else ...[
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 12.0),
+              child: Center(
+                child: Text(
+                  'Not run yet',
+                  style: TextStyle(
+                    color: Colors.white24,
+                    fontSize: 10,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _MiniMetricRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color valueColor;
+
+  const _MiniMetricRow({
+    required this.label,
+    required this.value,
+    required this.valueColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1.2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white54,
+              fontFamily: 'monospace',
+              fontSize: 10.5,
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              color: valueColor,
+              fontFamily: 'monospace',
+              fontWeight: FontWeight.bold,
+              fontSize: 10.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SpeedupBadge extends StatelessWidget {
+  final bool hasBothRuns;
+  final bool isWasmFaster;
+  final String badgeText;
+
+  const _SpeedupBadge({
+    required this.hasBothRuns,
+    required this.isWasmFaster,
+    required this.badgeText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final baseColor = hasBothRuns
+        ? (isWasmFaster ? Colors.green : Colors.amber)
+        : Colors.grey;
+    final accentColor = hasBothRuns
+        ? (isWasmFaster ? Colors.greenAccent : Colors.amberAccent)
+        : Colors.white54;
 
     return Container(
       width: double.infinity,
@@ -484,49 +677,8 @@ class _SpeedupBadge extends StatelessWidget {
         style: TextStyle(
           color: accentColor,
           fontWeight: FontWeight.bold,
-          fontSize: 12,
+          fontSize: 11.5,
         ),
-      ),
-    );
-  }
-}
-
-class _MetricRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color valueColor;
-
-  const _MetricRow({
-    required this.label,
-    required this.value,
-    required this.valueColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2.5),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white70,
-              fontFamily: 'monospace',
-              fontSize: 12,
-            ),
-          ),
-          Text(
-            value,
-            style: TextStyle(
-              color: valueColor,
-              fontFamily: 'monospace',
-              fontWeight: FontWeight.bold,
-              fontSize: 12,
-            ),
-          ),
-        ],
       ),
     );
   }

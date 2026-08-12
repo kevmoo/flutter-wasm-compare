@@ -12,3 +12,7 @@ Future<double?> requestScreenRefreshRate() async => null;
 void savePersistedRefreshRate(double rate) {}
 
 double? getPersistedRefreshRate() => null;
+
+void savePersistedHudCollapsed(bool collapsed) {}
+
+bool? getPersistedHudCollapsed() => null;

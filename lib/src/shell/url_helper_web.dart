@@ -81,3 +81,28 @@ double? getPersistedRefreshRate() {
   }
   return null;
 }
+
+void savePersistedHudCollapsed(bool collapsed) {
+  try {
+    web.window.localStorage.setItem(
+      'wasm_compare_hud_collapsed',
+      collapsed ? 'true' : 'false',
+    );
+  } catch (_) {
+    // Ignore
+  }
+}
+
+bool? getPersistedHudCollapsed() {
+  try {
+    final stored = web.window.localStorage.getItem(
+      'wasm_compare_hud_collapsed',
+    );
+    if (stored != null && stored.isNotEmpty) {
+      return stored == 'true';
+    }
+  } catch (_) {
+    // Ignore
+  }
+  return null;
+}

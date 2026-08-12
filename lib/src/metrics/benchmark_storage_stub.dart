@@ -19,6 +19,12 @@ class BenchmarkStorage {
     required int nodeCount,
   }) {}
 
+  static BenchmarkRun? getRunForMode({
+    required String mode,
+    String? stressLevel,
+    int? nodeCount,
+  }) => null;
+
   static BenchmarkRun? getLastRun({String? stressLevel, int? nodeCount}) =>
       null;
 }
