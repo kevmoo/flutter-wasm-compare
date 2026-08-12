@@ -18,6 +18,10 @@ class BenchmarkStorage {
 
   static double? getStartupTime({required String mode}) => null;
 
+  static void clearRuns() {}
+
+  static void invalidateIfNodeCountChanged(int currentNodeCount) {}
+
   static void saveRun({
     required String mode,
     required double fps,

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../metrics/benchmark_storage.dart';
 import '../metrics/frame_timing_service.dart';
 import '../shell/url_helper.dart';
 
@@ -138,6 +139,7 @@ class StressController extends ChangeNotifier {
 
   StressController() {
     _parseInitialQuery();
+    BenchmarkStorage.invalidateIfNodeCountChanged(_nodeCount);
   }
 
   void _parseInitialQuery() {
@@ -213,6 +215,7 @@ class StressController extends ChangeNotifier {
     _mode = StressMode.preset;
     _preset = p;
     _nodeCount = p.nodeCount;
+    BenchmarkStorage.invalidateIfNodeCountChanged(_nodeCount);
     updateUrlQueryParam('stress', p.name);
     notifyListeners();
   }
@@ -221,6 +224,7 @@ class StressController extends ChangeNotifier {
     _stopTuning();
     _mode = StressMode.manual;
     _nodeCount = count.clamp(0, 8000);
+    BenchmarkStorage.invalidateIfNodeCountChanged(_nodeCount);
 
     // Check if matching preset exists
     for (final p in StressPreset.values) {

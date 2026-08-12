@@ -96,11 +96,13 @@ _ComparisonData _evaluateComparison({
     badge = '⏳ Switch to $otherEngine to test at $nodeCount nodes';
   }
 
-  final budgetRatio = (currentTotal / budgetTargetMs).clamp(0.0, 1.0);
-  final budgetPct = (currentTotal / budgetTargetMs * 100).toStringAsFixed(0);
-  final budgetColor = switch (budgetRatio) {
+  final rawRatio = budgetTargetMs > 0 ? (currentTotal / budgetTargetMs) : 0.0;
+  final budgetRatio = rawRatio.clamp(0.0, 1.0);
+  final budgetPct = (rawRatio * 100).toStringAsFixed(0);
+  final budgetColor = switch (rawRatio) {
     < 0.80 => Colors.greenAccent,
     < 0.90 => Colors.amberAccent,
+    <= 1.00 => Colors.orangeAccent,
     _ => Colors.redAccent,
   };
 
