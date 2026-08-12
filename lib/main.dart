@@ -39,8 +39,8 @@ class WasmCompareApp extends StatelessWidget {
   }
 }
 
-const double largeScreenMinWidth = 720.0;
-const double compactAppBarBreakpoint = 600.0;
+const double largeScreenMinWidth = 800.0;
+const double compactAppBarBreakpoint = 760.0;
 
 class DemoDashboard extends StatefulWidget {
   const DemoDashboard({super.key});
@@ -70,7 +70,14 @@ class _DemoDashboardState extends State<DemoDashboard> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(isCompactScreen ? 'Wasm vs JS' : 'Wasm vs JS Performance'),
+        titleSpacing: isCompactScreen ? 12.0 : null,
+        title: Text(
+          isCompactScreen ? 'Wasm vs JS' : 'Wasm vs JS Performance',
+          style: TextStyle(
+            fontSize: isCompactScreen ? 16 : 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         actions: [
           _DeviceDetailsButton(
             stressCtrl: stressCtrl,
@@ -195,9 +202,9 @@ class _StressStepperPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4.0),
+      padding: EdgeInsets.symmetric(horizontal: isCompact ? 2.0 : 4.0),
       child: Container(
-        height: 36,
+        height: isCompact ? 30 : 36,
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(20),
@@ -207,10 +214,13 @@ class _StressStepperPill extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             IconButton(
-              iconSize: 16,
+              iconSize: isCompact ? 14 : 16,
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              constraints: BoxConstraints(
+                minWidth: isCompact ? 24 : 32,
+                minHeight: isCompact ? 24 : 32,
+              ),
               icon: const Icon(Icons.remove),
               onPressed: stressCtrl.canStepDown
                   ? () {
@@ -221,23 +231,26 @@ class _StressStepperPill extends StatelessWidget {
               tooltip: 'Decrease Stress',
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6.0),
+              padding: EdgeInsets.symmetric(horizontal: isCompact ? 4.0 : 6.0),
               child: Text(
                 isCompact
                     ? stressCtrl.formattedNodeCount
                     : '${stressCtrl.formattedNodeCount} Nodes',
-                style: const TextStyle(
-                  fontSize: 12,
+                style: TextStyle(
+                  fontSize: isCompact ? 11 : 12,
                   fontWeight: FontWeight.bold,
                   fontFamily: 'monospace',
                 ),
               ),
             ),
             IconButton(
-              iconSize: 16,
+              iconSize: isCompact ? 14 : 16,
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              constraints: BoxConstraints(
+                minWidth: isCompact ? 24 : 32,
+                minHeight: isCompact ? 24 : 32,
+              ),
               icon: const Icon(Icons.add),
               onPressed: stressCtrl.canStepUp
                   ? () {
@@ -265,12 +278,14 @@ class _PresetDropdown extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: isCompact ? 2.0 : 6.0),
       child: DropdownButton<StressPreset>(
+        isDense: isCompact,
+        iconSize: isCompact ? 16 : 24,
         value: stressCtrl.mode == StressMode.preset ? stressCtrl.preset : null,
         hint: Text(
           isCompact
-              ? '${stressCtrl.nodeCount}'
-              : 'Custom (${stressCtrl.nodeCount})',
-          style: TextStyle(fontSize: isCompact ? 12 : 14),
+              ? stressCtrl.formattedNodeCount
+              : 'Custom (${stressCtrl.formattedNodeCount})',
+          style: TextStyle(fontSize: isCompact ? 11 : 14),
         ),
         underline: const SizedBox.shrink(),
         onChanged: (preset) {
