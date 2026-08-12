@@ -32,11 +32,11 @@ class RuntimeSelector extends StatelessWidget {
           ] else ...[
             if (targets.isEmpty || targets.contains('dart2wasm')) ...[
               const SizedBox(width: 8),
-              _buildEngineButton(context, 'WASM', 'skwasm'),
+              _buildEngineButton(context, 'Wasm', 'wasm'),
             ],
             if (targets.isEmpty || targets.contains('dart2js')) ...[
               const SizedBox(width: 8),
-              _buildEngineButton(context, 'JS (CanvasKit)', 'canvaskit'),
+              _buildEngineButton(context, 'JS', 'js'),
             ],
           ],
         ],
@@ -46,9 +46,12 @@ class RuntimeSelector extends StatelessWidget {
 
   Widget _buildEngineButton(BuildContext context, String label, String mode) {
     final searchParams = web.window.location.search;
-    final isCurrent =
-        searchParams.contains('mode=$mode') ||
-        (mode == 'skwasm' && !searchParams.contains('mode='));
+    final isCurrent = mode == 'js'
+        ? (searchParams.contains('mode=js') ||
+              searchParams.contains('mode=canvaskit'))
+        : (searchParams.contains('mode=wasm') ||
+              searchParams.contains('mode=skwasm') ||
+              !searchParams.contains('mode='));
 
     return ChoiceChip(
       label: Text(label),
@@ -58,9 +61,10 @@ class RuntimeSelector extends StatelessWidget {
           // Save baseline metrics before swapping out
           final metrics = context.read<FrameTimingService>().metrics;
           final stressCtrl = context.read<StressController>();
-          final currentMode = searchParams.contains('mode=canvaskit')
-              ? 'js'
-              : 'wasm';
+          final isCurrentJs =
+              searchParams.contains('mode=js') ||
+              searchParams.contains('mode=canvaskit');
+          final currentMode = isCurrentJs ? 'js' : 'wasm';
           final currentUrl = web.URL(web.window.location.href);
 
           BenchmarkStorage.saveRun(

@@ -1,8 +1,7 @@
 # Flutter WebAssembly vs JavaScript Comparison
 
 An interactive, responsive performance benchmark comparing Flutter compiled to
-**WebAssembly** (WasmGC + Skwasm multi-threading) against **JavaScript**
-(CanvasKit / HTML renderer).
+**WebAssembly** against **JavaScript**.
 
 **Live Demo**: [https://flutter-wasm-compare.web.app](https://flutter-wasm-compare.web.app)
 
@@ -12,7 +11,7 @@ An interactive, responsive performance benchmark comparing Flutter compiled to
 
 - **Side-by-Side Performance HUD**: Dedicated dual mini-cards displaying
   real-time metrics (FPS, Total Frame, Build Time, and Raster Time) comparing
-  WASM (left) against JS (right).
+  Wasm (left) against JS (right).
 - **Adaptive Stress Scenes**: Configurable UI load (from 0 to 4,000 animated
   churn nodes) testing widget tree rebuilding, layout recalculation, and raster
   costs.
@@ -25,11 +24,11 @@ An interactive, responsive performance benchmark comparing Flutter compiled to
 
 ---
 
-## Requirements for WebAssembly (Skwasm)
+## Requirements for WebAssembly
 
-Flutter WebAssembly with Skwasm multi-threading requires
-`SharedArrayBuffer` support. Web servers hosting the application must set
-the following HTTP response headers:
+Flutter WebAssembly multi-threading requires `SharedArrayBuffer` support.
+Web servers hosting the application must set the following HTTP response
+headers:
 
 - `Cross-Origin-Opener-Policy: same-origin`
 - `Cross-Origin-Embedder-Policy: require-corp`

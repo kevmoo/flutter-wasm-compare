@@ -36,7 +36,7 @@ class CompatibilityShield extends StatelessWidget {
               TextButton(
                 onPressed: () {
                   final url = web.URL(web.window.location.href);
-                  url.searchParams.set('mode', 'canvaskit');
+                  url.searchParams.set('mode', 'js');
                   web.window.location.href = url.href;
                 },
                 child: const Text('Stay on JS (Safe)'),
@@ -45,7 +45,7 @@ class CompatibilityShield extends StatelessWidget {
                 onPressed: () {
                   final url = web.URL(web.window.location.href);
                   url.searchParams.set('optin', 'true');
-                  url.searchParams.set('mode', 'skwasm');
+                  url.searchParams.set('mode', 'wasm');
                   web.window.location.href = url.href;
                 },
                 child: const Text('Test Wasm Now'),

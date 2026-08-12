@@ -43,7 +43,7 @@ Future<void> main(List<String> args) async {
   final url = 'http://localhost:${server.port}';
 
   print('\n🚀 Serving ${webDir.path} at $url');
-  print('   Headers: COOP & COEP enabled for Skwasm multithreading');
+  print('   Headers: COOP & COEP enabled for WebAssembly multithreading');
   print('   Commands: [r] Rebuild  [o] Open browser  [q] Quit\n');
 
   _handleRequests(server, webDir);

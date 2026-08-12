@@ -21,8 +21,8 @@ typedef _ComparisonData = ({
 bool _isCurrentlyWasm() {
   if (kIsWeb) {
     final mode = Uri.base.queryParameters['mode'];
-    if (mode == 'canvaskit') return false;
-    if (mode == 'skwasm') return true;
+    if (mode == 'js' || mode == 'canvaskit') return false;
+    if (mode == 'wasm' || mode == 'skwasm') return true;
     return kIsWasm;
   }
   return true;
