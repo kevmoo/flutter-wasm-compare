@@ -250,6 +250,7 @@ class _PresetDropdown extends StatelessWidget {
         underline: const SizedBox.shrink(),
         onChanged: (preset) {
           if (preset != null) {
+            context.read<FrameTimingService>().resetLog();
             context.read<StressController>().setPreset(preset);
           }
         },

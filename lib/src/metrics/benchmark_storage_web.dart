@@ -97,9 +97,9 @@ class BenchmarkStorage {
       final lastKey = '$_storagePrefix${normMode}_last';
 
       final jsonStr = nodeCount != null
-          ? (storage.getItem(nodeKey) ?? storage.getItem(lastKey))
+          ? storage.getItem(nodeKey)
           : (stressLevel != null
-                ? (storage.getItem(stressKey) ?? storage.getItem(lastKey))
+                ? storage.getItem(stressKey)
                 : storage.getItem(lastKey));
 
       if (jsonStr == null || jsonStr.isEmpty) return null;

@@ -38,6 +38,7 @@ _ComparisonData _evaluateComparison({
   required BenchmarkRun? wasmRun,
   required BenchmarkRun? jsRun,
   required bool isCurrentWasm,
+  required int nodeCount,
 }) {
   final budgetTargetMs = 1000.0 / targetRefreshRate;
   final budgetLabel =
@@ -85,7 +86,8 @@ _ComparisonData _evaluateComparison({
       badge = '⚡ Identical Frame Time (${wasmTotal.toStringAsFixed(1)} ms)';
     }
   } else {
-    badge = '⏳ Switch to ${isCurrentWasm ? 'JS' : 'WASM'} to compare';
+    final otherEngine = isCurrentWasm ? 'JS' : 'Wasm';
+    badge = '⏳ Switch to $otherEngine to test at $nodeCount nodes';
   }
 
   final budgetRatio = (currentTotal / budgetTargetMs).clamp(0.0, 1.0);
@@ -188,6 +190,7 @@ class _PerformanceHudState extends State<PerformanceHud> {
           wasmRun: wasmRun,
           jsRun: jsRun,
           isCurrentWasm: isCurrentWasm,
+          nodeCount: stressCtrl.nodeCount,
         );
 
         if (_isCollapsed) {
