@@ -5,6 +5,7 @@ void exportMetrics({
   required double buildTimeMs,
   required double rasterTimeMs,
   required double totalFrameTimeMs,
+  double jitterMs = 0.0,
 }) {}
 
 Future<double?> requestScreenRefreshRate() async => null;

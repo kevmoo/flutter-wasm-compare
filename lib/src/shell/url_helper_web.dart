@@ -21,6 +21,7 @@ void exportMetrics({
   required double buildTimeMs,
   required double rasterTimeMs,
   required double totalFrameTimeMs,
+  double jitterMs = 0.0,
 }) {
   try {
     final map = <String, Object?>{
@@ -28,6 +29,7 @@ void exportMetrics({
       'buildTimeMs': buildTimeMs,
       'rasterTimeMs': rasterTimeMs,
       'totalFrameTimeMs': totalFrameTimeMs,
+      'jitterMs': jitterMs,
     };
     _lastFrameMetrics = map.jsify() as JSObject?;
   } catch (_) {

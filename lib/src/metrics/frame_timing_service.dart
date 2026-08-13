@@ -94,9 +94,15 @@ class FrameTimingService extends ChangeNotifier {
       buildTimeMs: _metrics.buildTimeMs,
       rasterTimeMs: _metrics.rasterTimeMs,
       totalFrameTimeMs: _metrics.totalFrameTimeMs,
+      jitterMs: _metrics.jitterMs,
     );
     notifyListeners();
   }
+
+  @visibleForTesting
+  static FrameTimingMetrics calculateMetricsForSliceForTest(
+    List<FrameTiming> timings,
+  ) => _calculateMetricsForSlice(timings);
 
   static FrameTimingMetrics _calculateMetricsForSlice(
     List<FrameTiming> timings,
@@ -118,14 +124,31 @@ class FrameTimingService extends ChangeNotifier {
     final count = timings.length;
     final meanTotal = totalFrame / count;
 
-    var sumSquaredDiffs = 0.0;
-    for (final timing in timings) {
-      final frameMs = timing.totalSpan.inMicroseconds / 1000.0;
-      final diff = frameMs - meanTotal;
-      sumSquaredDiffs += diff * diff;
+    // Calculate frame pacing jitter as the standard deviation of inter-frame
+    // arrival intervals (delta between consecutive buildStart timestamps).
+    final intervals = <double>[];
+    for (var i = 1; i < count; i++) {
+      final deltaMs =
+          (timings[i].timestampInMicroseconds(FramePhase.buildStart) -
+              timings[i - 1].timestampInMicroseconds(FramePhase.buildStart)) /
+          1000.0;
+      // Filter out extreme gaps caused by tab switching / pausing (> 500ms)
+      if (deltaMs > 0 && deltaMs < 500.0) {
+        intervals.add(deltaMs);
+      }
     }
-    final variance = count > 1 ? (sumSquaredDiffs / (count - 1)) : 0.0;
-    final jitterMs = math.sqrt(variance);
+
+    var jitterMs = 0.0;
+    if (intervals.length > 1) {
+      final meanInterval = intervals.reduce((a, b) => a + b) / intervals.length;
+      var sumSquaredDiffs = 0.0;
+      for (final interval in intervals) {
+        final diff = interval - meanInterval;
+        sumSquaredDiffs += diff * diff;
+      }
+      final variance = sumSquaredDiffs / (intervals.length - 1);
+      jitterMs = math.sqrt(variance);
+    }
 
     final first = timings.first;
     final last = timings.last;
