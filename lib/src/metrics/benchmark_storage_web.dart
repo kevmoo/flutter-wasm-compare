@@ -2,6 +2,8 @@ import 'dart:convert';
 
 import 'package:web/web.dart' as web;
 
+import 'frame_timing_service.dart';
+
 typedef BenchmarkRun = ({
   String mode,
   double fps,
@@ -44,6 +46,24 @@ class BenchmarkStorage {
     }
   }
 
+  static void saveMetrics({
+    required String mode,
+    required FrameTimingMetrics metrics,
+    required String stressLevel,
+    required int nodeCount,
+  }) {
+    saveRun(
+      mode: mode,
+      fps: metrics.fps,
+      buildTimeMs: metrics.buildTimeMs,
+      rasterTimeMs: metrics.rasterTimeMs,
+      totalFrameTimeMs: metrics.totalFrameTimeMs,
+      jitterMs: metrics.jitterMs,
+      stressLevel: stressLevel,
+      nodeCount: nodeCount,
+    );
+  }
+
   static void saveRun({
     required String mode,
     required double fps,
@@ -58,13 +78,7 @@ class BenchmarkStorage {
       final storage = web.window.localStorage;
 
       // Invalidate existing runs if nodeCount changed
-      final activeNodesStr = storage.getItem(_activeNodesKey);
-      if (activeNodesStr != null) {
-        final activeNodes = int.tryParse(activeNodesStr);
-        if (activeNodes != null && activeNodes != nodeCount) {
-          clearRuns();
-        }
-      }
+      invalidateIfNodeCountChanged(nodeCount);
 
       // Record new active node count
       storage.setItem(_activeNodesKey, '$nodeCount');

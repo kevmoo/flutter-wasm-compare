@@ -33,6 +33,15 @@ Color _getJitterColor(double jitterMs) {
   return Colors.redAccent;
 }
 
+const _hudDecoration = BoxDecoration(
+  color: Colors.black87,
+  borderRadius: BorderRadius.all(Radius.circular(12)),
+  border: Border.fromBorderSide(BorderSide(color: Colors.white12)),
+  boxShadow: [
+    BoxShadow(color: Colors.black45, blurRadius: 8, offset: Offset(0, 2)),
+  ],
+);
+
 _ComparisonData _evaluateComparison({
   required double currentActive,
   required double currentFps,
@@ -144,13 +153,9 @@ class _PerformanceHudState extends State<PerformanceHud> {
 
         // Automatically store the latest metrics for the active engine
         if (metrics.totalFrameTimeMs > 0.1) {
-          BenchmarkStorage.saveRun(
+          BenchmarkStorage.saveMetrics(
             mode: isCurrentWasm ? 'wasm' : 'js',
-            fps: metrics.fps,
-            buildTimeMs: metrics.buildTimeMs,
-            rasterTimeMs: metrics.rasterTimeMs,
-            totalFrameTimeMs: metrics.totalFrameTimeMs,
-            jitterMs: metrics.jitterMs,
+            metrics: metrics,
             stressLevel: stressCtrl.currentLabel,
             nodeCount: stressCtrl.nodeCount,
           );
@@ -184,18 +189,7 @@ class _PerformanceHudState extends State<PerformanceHud> {
             borderRadius: BorderRadius.circular(12),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.black87,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white12),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Colors.black45,
-                    blurRadius: 8,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-              ),
+              decoration: _hudDecoration,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -234,18 +228,7 @@ class _PerformanceHudState extends State<PerformanceHud> {
         return Container(
           constraints: const BoxConstraints(minWidth: 260, maxWidth: 330),
           padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: Colors.black87,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white12),
-            boxShadow: const [
-              BoxShadow(
-                color: Colors.black45,
-                blurRadius: 10,
-                offset: Offset(0, 4),
-              ),
-            ],
-          ),
+          decoration: _hudDecoration,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,

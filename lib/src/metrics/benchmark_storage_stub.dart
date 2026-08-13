@@ -1,3 +1,5 @@
+import 'frame_timing_service.dart';
+
 typedef BenchmarkRun = ({
   String mode,
   double fps,
@@ -21,6 +23,13 @@ class BenchmarkStorage {
     required double rasterTimeMs,
     required double totalFrameTimeMs,
     double jitterMs = 0.0,
+    required String stressLevel,
+    required int nodeCount,
+  }) {}
+
+  static void saveMetrics({
+    required String mode,
+    required FrameTimingMetrics metrics,
     required String stressLevel,
     required int nodeCount,
   }) {}

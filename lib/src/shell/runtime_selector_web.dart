@@ -67,13 +67,9 @@ class RuntimeSelector extends StatelessWidget {
           final currentMode = isCurrentJs ? 'js' : 'wasm';
           final currentUrl = web.URL(web.window.location.href);
 
-          BenchmarkStorage.saveRun(
+          BenchmarkStorage.saveMetrics(
             mode: currentMode,
-            fps: metrics.fps,
-            buildTimeMs: metrics.buildTimeMs,
-            rasterTimeMs: metrics.rasterTimeMs,
-            totalFrameTimeMs: metrics.totalFrameTimeMs,
-            jitterMs: metrics.jitterMs,
+            metrics: metrics,
             stressLevel: stressCtrl.currentLabel,
             nodeCount: stressCtrl.nodeCount,
           );
