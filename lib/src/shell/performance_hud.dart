@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -9,7 +7,7 @@ import '../scene/stress_controller.dart';
 import 'engine_mode.dart';
 import 'url_helper.dart';
 
-typedef _ComparisonData = ({
+typedef ComparisonData = ({
   bool hasBothRuns,
   bool isWasmFaster,
   String speedupBadge,
@@ -19,6 +17,27 @@ typedef _ComparisonData = ({
   Color budgetColor,
   Color fpsColor,
 });
+
+@visibleForTesting
+ComparisonData evaluateComparisonForTest({
+  required double currentActive,
+  required double currentTotal,
+  required double currentFps,
+  required double targetRefreshRate,
+  required BenchmarkRun? wasmRun,
+  required BenchmarkRun? jsRun,
+  required bool isCurrentWasm,
+  required int nodeCount,
+}) => _evaluateComparison(
+  currentActive: currentActive,
+  currentTotal: currentTotal,
+  currentFps: currentFps,
+  targetRefreshRate: targetRefreshRate,
+  wasmRun: wasmRun,
+  jsRun: jsRun,
+  isCurrentWasm: isCurrentWasm,
+  nodeCount: nodeCount,
+);
 
 Color _getFpsColor(double fps, double targetHz) {
   final ratio = fps / targetHz;
@@ -42,8 +61,9 @@ const _hudDecoration = BoxDecoration(
   ],
 );
 
-_ComparisonData _evaluateComparison({
+ComparisonData _evaluateComparison({
   required double currentActive,
+  required double currentTotal,
   required double currentFps,
   required double targetRefreshRate,
   required BenchmarkRun? wasmRun,
@@ -55,29 +75,27 @@ _ComparisonData _evaluateComparison({
   final budgetLabel =
       '${budgetTargetMs.toStringAsFixed(1)}ms (${targetRefreshRate.toInt()}Hz)';
 
-  final wasmActive = isCurrentWasm
-      ? currentActive
-      : (wasmRun != null
-            ? math.max(wasmRun.buildTimeMs, wasmRun.rasterTimeMs)
-            : 0.0);
-  final jsActive = !isCurrentWasm
-      ? currentActive
-      : (jsRun != null ? (jsRun.buildTimeMs + jsRun.rasterTimeMs) : 0.0);
+  final wasmTotal = isCurrentWasm
+      ? currentTotal
+      : (wasmRun?.totalFrameTimeMs ?? 0.0);
+  final jsTotal = !isCurrentWasm
+      ? currentTotal
+      : (jsRun?.totalFrameTimeMs ?? 0.0);
 
-  final hasBoth = wasmActive > 0.1 && jsActive > 0.1;
-  final isWasmFaster = hasBoth && wasmActive <= jsActive;
+  final hasBoth = wasmTotal > 0.1 && jsTotal > 0.1;
+  final isWasmFaster = hasBoth && wasmTotal <= jsTotal;
 
   String badge;
   if (hasBoth) {
-    final ratio = wasmActive > 0.01 ? (jsActive / wasmActive) : 1.0;
+    final ratio = wasmTotal > 0.01 ? (jsTotal / wasmTotal) : 1.0;
 
     if (ratio >= 1.05) {
       badge = '⚡ ${ratio.toStringAsFixed(1)}x Faster Frame Time';
-    } else if (ratio <= 0.95 && jsActive > 0.01) {
-      final jsRatio = wasmActive / jsActive;
+    } else if (ratio <= 0.95 && jsTotal > 0.01) {
+      final jsRatio = wasmTotal / jsTotal;
       badge = '⚡ JS is ${jsRatio.toStringAsFixed(1)}x Faster Frame Time';
     } else {
-      badge = '⚡ Identical Frame Time (${wasmActive.toStringAsFixed(1)} ms)';
+      badge = '⚡ Identical Frame Time (${wasmTotal.toStringAsFixed(1)} ms)';
     }
   } else {
     final otherEngine = isCurrentWasm ? 'JS' : 'Wasm';
@@ -175,6 +193,7 @@ class _PerformanceHudState extends State<PerformanceHud> {
 
         final comparison = _evaluateComparison(
           currentActive: currentActive,
+          currentTotal: metrics.totalFrameTimeMs,
           currentFps: metrics.fps,
           targetRefreshRate: stressCtrl.targetRefreshRate,
           wasmRun: wasmRun,
