@@ -1,15 +1,5 @@
+import 'benchmark_run.dart';
 import 'frame_timing_service.dart';
-
-typedef BenchmarkRun = ({
-  String mode,
-  double fps,
-  double buildTimeMs,
-  double rasterTimeMs,
-  double totalFrameTimeMs,
-  double jitterMs,
-  String stressLevel,
-  int nodeCount,
-});
 
 class BenchmarkStorage {
   static void clearRuns() {}

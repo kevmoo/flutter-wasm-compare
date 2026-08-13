@@ -2,18 +2,8 @@ import 'dart:convert';
 
 import 'package:web/web.dart' as web;
 
+import 'benchmark_run.dart';
 import 'frame_timing_service.dart';
-
-typedef BenchmarkRun = ({
-  String mode,
-  double fps,
-  double buildTimeMs,
-  double rasterTimeMs,
-  double totalFrameTimeMs,
-  double jitterMs,
-  String stressLevel,
-  int nodeCount,
-});
 
 class BenchmarkStorage {
   static const String _activeNodesKey = 'wasm_compare_active_node_count';
