@@ -250,18 +250,7 @@ class _PerformanceHudState extends State<PerformanceHud> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _HeaderTitle(
-                label: stressCtrl.currentLabel,
-                nodeCount: stressCtrl.nodeCount,
-                onCollapse: () => _setCollapsed(true),
-              ),
-              if (stressCtrl.autoTuneStatus.isNotEmpty) ...[
-                const SizedBox(height: 6),
-                _AutoTuneStatusBanner(
-                  status: stressCtrl.autoTuneStatus,
-                  isTuning: stressCtrl.isAutoTuning,
-                ),
-              ],
+              _HeaderTitle(onCollapse: () => _setCollapsed(true)),
               const SizedBox(height: 10),
               _BudgetBar(
                 budgetRatio: comparison.budgetRatio,
@@ -292,30 +281,23 @@ class _PerformanceHudState extends State<PerformanceHud> {
 }
 
 class _HeaderTitle extends StatelessWidget {
-  final String label;
-  final int nodeCount;
   final VoidCallback onCollapse;
 
-  const _HeaderTitle({
-    required this.label,
-    required this.nodeCount,
-    required this.onCollapse,
-  });
+  const _HeaderTitle({required this.onCollapse});
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Expanded(
-          child: Text(
-            'PERFORMANCE ($label • $nodeCount)',
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.labelSmall
-                ?.copyWith(color: Colors.white54, letterSpacing: 0.8),
+        Text(
+          'PERFORMANCE',
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: Colors.white54,
+            letterSpacing: 0.8,
+            fontWeight: FontWeight.bold,
           ),
         ),
-        const SizedBox(width: 4),
         InkWell(
           onTap: onCollapse,
           borderRadius: BorderRadius.circular(4),
@@ -325,57 +307,6 @@ class _HeaderTitle extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _AutoTuneStatusBanner extends StatelessWidget {
-  final String status;
-  final bool isTuning;
-
-  const _AutoTuneStatusBanner({required this.status, required this.isTuning});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      decoration: BoxDecoration(
-        color: isTuning
-            ? Colors.blue.withValues(alpha: 0.2)
-            : Colors.green.withValues(alpha: 0.2),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(
-          color: isTuning ? Colors.blueAccent : Colors.greenAccent,
-          width: 0.8,
-        ),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (isTuning)
-            const Padding(
-              padding: EdgeInsets.only(right: 6),
-              child: SizedBox(
-                width: 10,
-                height: 10,
-                child: CircularProgressIndicator(
-                  strokeWidth: 1.5,
-                  color: Colors.blueAccent,
-                ),
-              ),
-            ),
-          Flexible(
-            child: Text(
-              status,
-              style: TextStyle(
-                color: isTuning ? Colors.blueAccent : Colors.greenAccent,
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
