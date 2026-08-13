@@ -54,8 +54,11 @@ Future<bool> _buildWeb() async {
   print('🔨 Building Flutter Web (Wasm + JS fallback)...');
   final stopwatch = Stopwatch()..start();
 
+  final fvmFlutter = File('.fvm/flutter_sdk/bin/flutter');
+  final executable = fvmFlutter.existsSync() ? fvmFlutter.path : 'flutter';
+
   final process = await Process.start(
-    'flutter',
+    executable,
     ['build', 'web', '--wasm'],
     mode: ProcessStartMode.inheritStdio,
     runInShell: true,
