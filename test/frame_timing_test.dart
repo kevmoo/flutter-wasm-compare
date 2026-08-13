@@ -116,11 +116,13 @@ void main() {
       nodeCount: 200,
     );
 
-    test('computes speedup multiplier comparing totalFrameTimeMs', () {
-      // Live WASM (total: 16.0ms) vs Saved JS (total: 33.6ms) -> 33.6 / 16.0 = 2.1x
+    test('generates both speed and jitter benefit badges when Wasm leads', () {
+      // Live WASM (total: 16.0ms, jitter: 0.3ms) vs
+      // Saved JS (total: 33.6ms, jitter: 5.2ms)
       final comparison = evaluateComparisonForTest(
         currentActive: 11.0,
         currentTotal: 16.0,
+        currentJitter: 0.3,
         currentFps: 60.0,
         targetRefreshRate: 60.0,
         wasmRun: wasmSavedRun,
@@ -130,73 +132,83 @@ void main() {
       );
 
       expect(comparison.hasBothRuns, isTrue);
-      expect(comparison.isWasmFaster, isTrue);
-      expect(comparison.speedupBadge, equals('⚡ 2.1x Faster Frame Time'));
+      expect(comparison.speedBadge, isNotNull);
+      expect(comparison.speedBadge?.title, equals('⚡ Wasm 2.1x Faster'));
+      expect(comparison.speedBadge?.detail, equals('16.0ms vs 33.6ms'));
+
+      expect(comparison.jitterBadge, isNotNull);
+      expect(comparison.jitterBadge?.title, equals('🎯 Wasm 17x Smoother'));
+      expect(comparison.jitterBadge?.detail, equals('±0.3ms vs ±5.2ms'));
+
+      expect(comparison.promptBadge, isNull);
       expect(comparison.budgetPct, equals('66')); // 11.0 / 16.666ms = 66%
     });
 
-    test('identifies when JS totalFrameTimeMs is faster', () {
-      const slowerWasmRun = (
-        mode: 'wasm',
-        fps: 30.0,
-        buildTimeMs: 25.0,
-        rasterTimeMs: 5.0,
-        totalFrameTimeMs: 30.0,
-        jitterMs: 1.0,
-        stressLevel: 'Manual (200)',
-        nodeCount: 200,
-      );
-
-      final comparison = evaluateComparisonForTest(
-        currentActive: 12.0,
-        currentTotal: 15.0,
-        currentFps: 60.0,
-        targetRefreshRate: 60.0,
-        wasmRun: slowerWasmRun,
-        jsRun: null,
-        isCurrentWasm: false,
-        nodeCount: 200,
-      );
-
-      expect(comparison.hasBothRuns, isTrue);
-      expect(comparison.isWasmFaster, isFalse);
-      expect(comparison.speedupBadge, equals('⚡ JS is 2.0x Faster Frame Time'));
-    });
-
-    test('reports identical frame time when within 5% ratio', () {
-      const similarJsRun = (
+    test('does not show badges when Wasm is worse or same', () {
+      const fasterJsRun = (
         mode: 'js',
         fps: 60.0,
-        buildTimeMs: 10.0,
+        buildTimeMs: 8.0,
         rasterTimeMs: 4.0,
-        totalFrameTimeMs: 16.2,
-        jitterMs: 0.5,
+        totalFrameTimeMs: 13.0,
+        jitterMs: 0.2,
         stressLevel: 'Manual (200)',
         nodeCount: 200,
       );
 
       final comparison = evaluateComparisonForTest(
-        currentActive: 10.0,
-        currentTotal: 16.0,
-        currentFps: 60.0,
+        currentActive: 15.0,
+        currentTotal: 18.0,
+        currentJitter: 1.5,
+        currentFps: 50.0,
         targetRefreshRate: 60.0,
         wasmRun: null,
-        jsRun: similarJsRun,
+        jsRun: fasterJsRun,
         isCurrentWasm: true,
         nodeCount: 200,
       );
 
       expect(comparison.hasBothRuns, isTrue);
-      expect(
-        comparison.speedupBadge,
-        equals('⚡ Identical Frame Time (16.0 ms)'),
+      expect(comparison.speedBadge, isNull);
+      expect(comparison.jitterBadge, isNull);
+      expect(comparison.promptBadge, isNull);
+    });
+
+    test('shows only speed badge when jitter is not significantly better', () {
+      const similarJitterJsRun = (
+        mode: 'js',
+        fps: 30.0,
+        buildTimeMs: 25.0,
+        rasterTimeMs: 5.0,
+        totalFrameTimeMs: 32.0,
+        jitterMs: 0.35,
+        stressLevel: 'Manual (200)',
+        nodeCount: 200,
       );
+
+      final comparison = evaluateComparisonForTest(
+        currentActive: 11.0,
+        currentTotal: 16.0,
+        currentJitter: 0.32,
+        currentFps: 60.0,
+        targetRefreshRate: 60.0,
+        wasmRun: wasmSavedRun,
+        jsRun: similarJitterJsRun,
+        isCurrentWasm: true,
+        nodeCount: 200,
+      );
+
+      expect(comparison.hasBothRuns, isTrue);
+      expect(comparison.speedBadge, isNotNull);
+      expect(comparison.speedBadge?.title, equals('⚡ Wasm 2.0x Faster'));
+      expect(comparison.jitterBadge, isNull);
     });
 
     test('prompts to switch engines when other run is missing', () {
       final comparison = evaluateComparisonForTest(
         currentActive: 11.0,
         currentTotal: 16.0,
+        currentJitter: 0.3,
         currentFps: 60.0,
         targetRefreshRate: 60.0,
         wasmRun: null,
@@ -206,8 +218,10 @@ void main() {
       );
 
       expect(comparison.hasBothRuns, isFalse);
+      expect(comparison.speedBadge, isNull);
+      expect(comparison.jitterBadge, isNull);
       expect(
-        comparison.speedupBadge,
+        comparison.promptBadge,
         equals('⏳ Switch to JS to test at 200 nodes'),
       );
     });

@@ -7,10 +7,13 @@ import '../scene/stress_controller.dart';
 import 'engine_mode.dart';
 import 'url_helper.dart';
 
+typedef BenefitBadge = ({String title, String detail});
+
 typedef ComparisonData = ({
   bool hasBothRuns,
-  bool isWasmFaster,
-  String speedupBadge,
+  BenefitBadge? speedBadge,
+  BenefitBadge? jitterBadge,
+  String? promptBadge,
   double budgetRatio,
   String budgetPct,
   String budgetLabel,
@@ -22,6 +25,7 @@ typedef ComparisonData = ({
 ComparisonData evaluateComparisonForTest({
   required double currentActive,
   required double currentTotal,
+  required double currentJitter,
   required double currentFps,
   required double targetRefreshRate,
   required BenchmarkRun? wasmRun,
@@ -31,6 +35,7 @@ ComparisonData evaluateComparisonForTest({
 }) => _evaluateComparison(
   currentActive: currentActive,
   currentTotal: currentTotal,
+  currentJitter: currentJitter,
   currentFps: currentFps,
   targetRefreshRate: targetRefreshRate,
   wasmRun: wasmRun,
@@ -64,6 +69,7 @@ const _hudDecoration = BoxDecoration(
 ComparisonData _evaluateComparison({
   required double currentActive,
   required double currentTotal,
+  required double currentJitter,
   required double currentFps,
   required double targetRefreshRate,
   required BenchmarkRun? wasmRun,
@@ -82,24 +88,42 @@ ComparisonData _evaluateComparison({
       ? currentTotal
       : (jsRun?.totalFrameTimeMs ?? 0.0);
 
+  final wasmJitter = isCurrentWasm ? currentJitter : (wasmRun?.jitterMs ?? 0.0);
+  final jsJitter = !isCurrentWasm ? currentJitter : (jsRun?.jitterMs ?? 0.0);
+
   final hasBoth = wasmTotal > 0.1 && jsTotal > 0.1;
-  final isWasmFaster = hasBoth && wasmTotal <= jsTotal;
 
-  String badge;
+  BenefitBadge? speedBadge;
+  BenefitBadge? jitterBadge;
+  String? promptBadge;
+
   if (hasBoth) {
-    final ratio = wasmTotal > 0.01 ? (jsTotal / wasmTotal) : 1.0;
+    if (wasmTotal > 0.01 && (jsTotal / wasmTotal) >= 1.05) {
+      final ratio = jsTotal / wasmTotal;
+      speedBadge = (
+        title: '⚡ Wasm ${ratio.toStringAsFixed(1)}x Faster',
+        detail:
+            '${wasmTotal.toStringAsFixed(1)}ms '
+            'vs ${jsTotal.toStringAsFixed(1)}ms',
+      );
+    }
 
-    if (ratio >= 1.05) {
-      badge = '⚡ ${ratio.toStringAsFixed(1)}x Faster Frame Time';
-    } else if (ratio <= 0.95 && jsTotal > 0.01) {
-      final jsRatio = wasmTotal / jsTotal;
-      badge = '⚡ JS is ${jsRatio.toStringAsFixed(1)}x Faster Frame Time';
-    } else {
-      badge = '⚡ Identical Frame Time (${wasmTotal.toStringAsFixed(1)} ms)';
+    final baselineWasmJitter = wasmJitter > 0.01 ? wasmJitter : 0.1;
+    if (jsJitter > 0.05 && (jsJitter / baselineWasmJitter) >= 1.15) {
+      final jitterRatio = jsJitter / baselineWasmJitter;
+      final ratioText = jitterRatio >= 10
+          ? '${jitterRatio.toStringAsFixed(0)}x'
+          : '${jitterRatio.toStringAsFixed(1)}x';
+      jitterBadge = (
+        title: '🎯 Wasm $ratioText Smoother',
+        detail:
+            '±${wasmJitter.toStringAsFixed(1)}ms '
+            'vs ±${jsJitter.toStringAsFixed(1)}ms',
+      );
     }
   } else {
     final otherEngine = isCurrentWasm ? 'JS' : 'Wasm';
-    badge = '⏳ Switch to $otherEngine to test at $nodeCount nodes';
+    promptBadge = '⏳ Switch to $otherEngine to test at $nodeCount nodes';
   }
 
   final rawRatio = budgetTargetMs > 0 ? (currentActive / budgetTargetMs) : 0.0;
@@ -116,8 +140,9 @@ ComparisonData _evaluateComparison({
 
   return (
     hasBothRuns: hasBoth,
-    isWasmFaster: isWasmFaster,
-    speedupBadge: badge,
+    speedBadge: speedBadge,
+    jitterBadge: jitterBadge,
+    promptBadge: promptBadge,
     budgetRatio: budgetRatio,
     budgetPct: budgetPct,
     budgetLabel: budgetLabel,
@@ -194,6 +219,7 @@ class _PerformanceHudState extends State<PerformanceHud> {
         final comparison = _evaluateComparison(
           currentActive: currentActive,
           currentTotal: metrics.totalFrameTimeMs,
+          currentJitter: metrics.jitterMs,
           currentFps: metrics.fps,
           targetRefreshRate: stressCtrl.targetRefreshRate,
           wasmRun: wasmRun,
@@ -269,10 +295,10 @@ class _PerformanceHudState extends State<PerformanceHud> {
                 targetHz: stressCtrl.targetRefreshRate,
               ),
               const SizedBox(height: 10),
-              _SpeedupBadge(
-                hasBothRuns: comparison.hasBothRuns,
-                isWasmFaster: comparison.isWasmFaster,
-                badgeText: comparison.speedupBadge,
+              _BenefitBadges(
+                speedBadge: comparison.speedBadge,
+                jitterBadge: comparison.jitterBadge,
+                promptBadge: comparison.promptBadge,
               ),
             ],
           ),
@@ -596,42 +622,93 @@ class _MiniMetricRow extends StatelessWidget {
   }
 }
 
-class _SpeedupBadge extends StatelessWidget {
-  final bool hasBothRuns;
-  final bool isWasmFaster;
-  final String badgeText;
+class _BenefitBadges extends StatelessWidget {
+  final BenefitBadge? speedBadge;
+  final BenefitBadge? jitterBadge;
+  final String? promptBadge;
 
-  const _SpeedupBadge({
-    required this.hasBothRuns,
-    required this.isWasmFaster,
-    required this.badgeText,
+  const _BenefitBadges({
+    required this.speedBadge,
+    required this.jitterBadge,
+    this.promptBadge,
   });
 
   @override
   Widget build(BuildContext context) {
-    final baseColor = hasBothRuns
-        ? (isWasmFaster ? Colors.green : Colors.amber)
-        : Colors.grey;
-    final accentColor = hasBothRuns
-        ? (isWasmFaster ? Colors.greenAccent : Colors.amberAccent)
-        : Colors.white54;
+    if (promptBadge != null) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: Colors.white24),
+        ),
+        child: Text(
+          promptBadge!,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: Colors.white54,
+            fontWeight: FontWeight.bold,
+            fontSize: 11,
+          ),
+        ),
+      );
+    }
 
+    final badges = [?speedBadge, ?jitterBadge];
+
+    if (badges.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < badges.length; i++) ...[
+          if (i > 0) const SizedBox(height: 6),
+          _BenefitPill(badge: badges[i]),
+        ],
+      ],
+    );
+  }
+}
+
+class _BenefitPill extends StatelessWidget {
+  final BenefitBadge badge;
+
+  const _BenefitPill({required this.badge});
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+      padding: const EdgeInsets.symmetric(vertical: 5, horizontal: 8),
       decoration: BoxDecoration(
-        color: baseColor.withValues(alpha: 0.15),
+        color: Colors.green.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: accentColor.withValues(alpha: 0.3)),
+        border: Border.all(color: Colors.greenAccent.withValues(alpha: 0.35)),
       ),
-      child: Text(
-        badgeText,
-        textAlign: TextAlign.center,
-        style: TextStyle(
-          color: accentColor,
-          fontWeight: FontWeight.bold,
-          fontSize: 11.5,
-        ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            badge.title,
+            style: const TextStyle(
+              color: Colors.greenAccent,
+              fontWeight: FontWeight.bold,
+              fontSize: 11,
+            ),
+          ),
+          Text(
+            badge.detail,
+            style: const TextStyle(
+              color: Colors.white70,
+              fontFamily: 'monospace',
+              fontSize: 10,
+            ),
+          ),
+        ],
       ),
     );
   }
