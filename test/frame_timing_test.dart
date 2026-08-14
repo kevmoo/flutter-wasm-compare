@@ -91,6 +91,29 @@ void main() {
         expect(metrics.jitterMs, greaterThan(5.0));
       },
     );
+
+    test('ignores pause gaps from tab switching or backgrounding '
+        'in FPS calculation', () {
+      // 5 frames at 60 FPS (16.6ms intervals), then a 5-second tab blur pause,
+      // then 5 frames at 60 FPS.
+      final timings = <FrameTiming>[];
+      var currentUs = 0;
+      for (var i = 0; i < 5; i++) {
+        timings.add(_makeTiming(buildStartUs: currentUs));
+        currentUs += 16666;
+      }
+      // 5 second pause (5000000us)
+      currentUs += 5000000;
+      for (var i = 0; i < 5; i++) {
+        timings.add(_makeTiming(buildStartUs: currentUs));
+        currentUs += 16666;
+      }
+
+      final metrics = FrameTimingService.calculateMetricsForSliceForTest(
+        timings,
+      );
+      expect(metrics.fps, closeTo(60.0, 0.5));
+    });
   });
 
   group('PerformanceHud evaluateComparisonForTest', () {

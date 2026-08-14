@@ -134,6 +134,11 @@ class BenchmarkStorage {
         return null;
       }
 
+      if (stressLevel != null &&
+          stress.toLowerCase() != stressLevel.toLowerCase()) {
+        return null;
+      }
+
       if (runMode != null && fps != null) {
         return (
           mode: runMode,
@@ -150,18 +155,5 @@ class BenchmarkStorage {
       // Ignore
     }
     return null;
-  }
-
-  static BenchmarkRun? getLastRun({String? stressLevel, int? nodeCount}) {
-    return getRunForMode(
-          mode: 'wasm',
-          nodeCount: nodeCount,
-          stressLevel: stressLevel,
-        ) ??
-        getRunForMode(
-          mode: 'js',
-          nodeCount: nodeCount,
-          stressLevel: stressLevel,
-        );
   }
 }
