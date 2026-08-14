@@ -108,3 +108,11 @@ bool? getPersistedHudCollapsed() {
   }
   return null;
 }
+
+void openExternalUrl(String url) {
+  try {
+    web.window.open(url, '_blank');
+  } catch (_) {
+    // Ignore
+  }
+}

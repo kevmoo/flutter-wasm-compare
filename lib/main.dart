@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'src/metrics/frame_timing_service.dart';
 import 'src/scene/adaptive_stress_scene.dart';
 import 'src/scene/stress_controller.dart';
+import 'src/shell/build_info.dart';
 import 'src/shell/compatibility_shield.dart';
 import 'src/shell/performance_hud.dart';
 import 'src/shell/runtime_selector.dart';
@@ -59,6 +60,7 @@ class DemoDashboard extends StatelessWidget {
           ),
         ),
         actions: [
+          BuildInfoButton(isCompact: isCompactScreen),
           _DeviceDetailsButton(
             stressCtrl: stressCtrl,
             isCompact: isCompactScreen,

@@ -1,6 +1,6 @@
 {
   "hosting": {
-    "predeploy": "flutter build web --wasm --source-maps --dump-info",
+    "predeploy": "dart run tool/build.dart --deploy --source-maps --dump-info",
     "site": "flutter-wasm-compare",
     "public": "build/web",
     "ignore": [

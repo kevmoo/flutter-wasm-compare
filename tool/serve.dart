@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'build.dart';
+
 const _defaultPort = 8080;
 
 final _mimeTypes = <String, String>{
@@ -32,7 +34,7 @@ Future<void> main(List<String> args) async {
   final webDir = Directory('build/web');
 
   if (!noBuild || !webDir.existsSync()) {
-    final success = await _buildWeb();
+    final success = await buildWeb();
     if (!success) {
       exitCode = 1;
       return;
@@ -48,32 +50,6 @@ Future<void> main(List<String> args) async {
 
   _handleRequests(server, webDir);
   _handleTerminalInput(url);
-}
-
-Future<bool> _buildWeb() async {
-  print('🔨 Building Flutter Web (Wasm + JS fallback)...');
-  final stopwatch = Stopwatch()..start();
-
-  final fvmFlutter = File('.fvm/flutter_sdk/bin/flutter');
-  final executable = fvmFlutter.existsSync() ? fvmFlutter.path : 'flutter';
-
-  final process = await Process.start(
-    executable,
-    ['build', 'web', '--wasm'],
-    mode: ProcessStartMode.inheritStdio,
-    runInShell: true,
-  );
-
-  final exit = await process.exitCode;
-  stopwatch.stop();
-
-  if (exit == 0) {
-    print('✅ Build complete in ${stopwatch.elapsed.inSeconds}s.\n');
-    return true;
-  } else {
-    print('❌ Build failed with exit code $exit.\n');
-    return false;
-  }
 }
 
 void _handleRequests(HttpServer server, Directory webDir) {
@@ -150,7 +126,7 @@ Future<bool> _processKey(int char, String url, bool isBuilding) async {
         print('⏳ Build already in progress...');
         return true;
       }
-      await _buildWeb();
+      await buildWeb();
       return false;
     case 'o':
       _openBrowser(url);

@@ -66,4 +66,31 @@ void main() {
       expect(find.byIcon(Icons.expand_less), findsOneWidget);
     },
   );
+
+  testWidgets('Opens BuildInfoDialog when info button is tapped', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const WasmCompareApp());
+    await tester.pump();
+
+    final infoButton = find.byIcon(Icons.info_outline);
+    expect(infoButton, findsOneWidget);
+
+    await tester.tap(infoButton);
+    await tester.pumpAndSettle();
+
+    expect(find.text('About & Build Info'), findsOneWidget);
+    expect(
+      find.text('Flutter Wasm vs JS Performance Comparison Benchmark'),
+      findsOneWidget,
+    );
+    expect(find.text('Commit'), findsOneWidget);
+    expect(find.text('Active Engine'), findsOneWidget);
+
+    // Dismiss dialog
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('About & Build Info'), findsNothing);
+  });
 }
