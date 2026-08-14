@@ -162,6 +162,7 @@ class PerformanceHud extends StatefulWidget {
 
 class _PerformanceHudState extends State<PerformanceHud> {
   late bool _isCollapsed;
+  DateTime _lastSaved = DateTime.fromMillisecondsSinceEpoch(0);
 
   @override
   void initState() {
@@ -193,6 +194,21 @@ class _PerformanceHudState extends State<PerformanceHud> {
         final currentActive = metrics.activeFrameTimeMs(
           isPipelined: isCurrentWasm,
         );
+
+        // Throttle benchmark storage writes to at most once per 1000ms
+        // to avoid frame stalls while ensuring localStorage stays fresh.
+        if (metrics.totalFrameTimeMs > 0.1) {
+          final now = DateTime.now();
+          if (now.difference(_lastSaved).inMilliseconds >= 1000) {
+            _lastSaved = now;
+            BenchmarkStorage.saveMetrics(
+              mode: isCurrentWasm ? 'wasm' : 'js',
+              metrics: metrics,
+              stressLevel: stressCtrl.currentLabel,
+              nodeCount: stressCtrl.nodeCount,
+            );
+          }
+        }
 
         final wasmRun = BenchmarkStorage.getRunForMode(
           mode: 'wasm',
@@ -486,7 +502,7 @@ class _EngineMiniCard extends StatelessWidget {
         border: Border.all(color: borderColor),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
           Row(

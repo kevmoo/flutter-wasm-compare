@@ -37,8 +37,8 @@ class WasmCompareApp extends StatelessWidget {
   }
 }
 
-const double largeScreenMinWidth = 800.0;
-const double compactAppBarBreakpoint = 760.0;
+const double largeScreenMinWidth = 768.0;
+const double compactAppBarBreakpoint = 768.0;
 
 class DemoDashboard extends StatelessWidget {
   const DemoDashboard({super.key});
@@ -133,7 +133,6 @@ class _DeviceDetailsButton extends StatelessWidget {
                     color: Colors.greenAccent,
                   ),
                   onPressed: stressCtrl.allowDeviceDetails,
-                  tooltip: stressCtrl.deviceDetailsLabel ?? '60 Hz Display',
                 )
               : ActionChip(
                   visualDensity: VisualDensity.compact,
@@ -160,7 +159,6 @@ class _DeviceDetailsButton extends StatelessWidget {
             ? IconButton(
                 onPressed: stressCtrl.allowDeviceDetails,
                 icon: const Icon(Icons.display_settings, size: 18),
-                tooltip: 'Device details',
               )
             : OutlinedButton.icon(
                 onPressed: stressCtrl.allowDeviceDetails,

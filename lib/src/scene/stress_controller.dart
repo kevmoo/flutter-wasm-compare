@@ -1,10 +1,6 @@
-import 'dart:async';
-
 import 'package:flutter/foundation.dart';
 
 import '../metrics/benchmark_storage.dart';
-import '../metrics/frame_timing_service.dart';
-import '../shell/engine_mode.dart';
 import '../shell/url_helper.dart';
 
 const List<int> kDecadeEngineeringLadder = [
@@ -37,74 +33,12 @@ enum StressPreset {
   const StressPreset(this.nodeCount, this.label);
 }
 
-enum StressMode { preset, float, manual }
-
-enum _TuningPhase { ramping, backingOff, settled }
-
-typedef _TuningState = ({
-  int nodeCount,
-  _TuningPhase phase,
-  String status,
-  bool isFinished,
-});
-
-_TuningState _evaluateAdaptiveStep({
-  required int nodeCount,
-  required _TuningPhase phase,
-  required double budgetTargetMs,
-  required int targetHz,
-  required FrameTimingMetrics recentMetrics,
-  required bool isWasm,
-}) {
-  final currentMs = recentMetrics.activeFrameTimeMs(isPipelined: isWasm);
-  final currentFps = recentMetrics.fps;
-  final msText = currentMs.toStringAsFixed(1);
-  final targetMinFps = targetHz == 120 ? 110.0 : 56.0;
-
-  if (phase == _TuningPhase.backingOff) {
-    return (
-      nodeCount: nodeCount,
-      phase: _TuningPhase.settled,
-      status: 'Locked: $nodeCount nodes at $targetHz FPS ($msText ms)',
-      isFinished: true,
-    );
-  }
-
-  final isWithinBudget =
-      currentMs < budgetTargetMs && currentFps >= targetMinFps;
-
-  if (isWithinBudget) {
-    final step = switch (currentMs / budgetTargetMs) {
-      < 0.5 => 300,
-      < 0.75 => 150,
-      < 0.9 => 50,
-      _ => 25,
-    };
-    final nextNodes = nodeCount + step;
-    return (
-      nodeCount: nextNodes,
-      phase: _TuningPhase.ramping,
-      status: 'Tuning: $nextNodes nodes ($msText ms)',
-      isFinished: false,
-    );
-  }
-
-  final backedOffNodes = (nodeCount * 0.88).toInt().clamp(50, 8000);
-  return (
-    nodeCount: backedOffNodes,
-    phase: _TuningPhase.backingOff,
-    status: 'Settling at $backedOffNodes nodes ($msText ms)...',
-    isFinished: false,
-  );
-}
+enum StressMode { preset, manual }
 
 class StressController extends ChangeNotifier {
   StressMode _mode = StressMode.preset;
   StressPreset _preset = StressPreset.medium;
   int _nodeCount = StressPreset.medium.nodeCount;
-  bool _isAutoTuning = false;
-  String _autoTuneStatus = '';
-  Timer? _tuningTimer;
 
   double _targetRefreshRate = 60.0;
   bool _hasAllowedDeviceDetails = false;
@@ -113,8 +47,6 @@ class StressController extends ChangeNotifier {
   StressMode get mode => _mode;
   StressPreset get preset => _preset;
   int get nodeCount => _nodeCount;
-  bool get isAutoTuning => _isAutoTuning;
-  String get autoTuneStatus => _autoTuneStatus;
 
   double get targetRefreshRate => _targetRefreshRate;
   bool get hasAllowedDeviceDetails => _hasAllowedDeviceDetails;
@@ -135,7 +67,6 @@ class StressController extends ChangeNotifier {
 
   String get currentLabel => switch (_mode) {
     StressMode.preset => _preset.name.toUpperCase(),
-    StressMode.float => 'FLOAT ($formattedNodeCount)',
     StressMode.manual => 'MANUAL ($formattedNodeCount)',
   };
 
@@ -156,11 +87,7 @@ class StressController extends ChangeNotifier {
     final stressParam = params['stress']?.toLowerCase();
     final nodesParam = int.tryParse(params['nodes'] ?? '');
 
-    if (stressParam == 'float') {
-      _mode = StressMode.float;
-      _nodeCount = nodesParam ?? 1000;
-      _autoTuneStatus = 'Capacity: $_nodeCount nodes';
-    } else if (stressParam == 'manual' && nodesParam != null) {
+    if (stressParam == 'manual' && nodesParam != null) {
       _mode = StressMode.manual;
       _nodeCount = nodesParam.clamp(0, 8000);
     } else if (stressParam != null) {
@@ -213,17 +140,16 @@ class StressController extends ChangeNotifier {
   }
 
   void setPreset(StressPreset p) {
-    _stopTuning();
     _mode = StressMode.preset;
     _preset = p;
     _nodeCount = p.nodeCount;
     BenchmarkStorage.invalidateIfNodeCountChanged(_nodeCount);
     updateUrlQueryParam('stress', p.name);
+    updateUrlQueryParam('nodes', '');
     notifyListeners();
   }
 
   void setManualNodes(int count) {
-    _stopTuning();
     _mode = StressMode.manual;
     _nodeCount = count.clamp(0, 8000);
     BenchmarkStorage.invalidateIfNodeCountChanged(_nodeCount);
@@ -234,6 +160,7 @@ class StressController extends ChangeNotifier {
         _preset = p;
         _mode = StressMode.preset;
         updateUrlQueryParam('stress', p.name);
+        updateUrlQueryParam('nodes', '');
         notifyListeners();
         return;
       }
@@ -242,59 +169,5 @@ class StressController extends ChangeNotifier {
     updateUrlQueryParam('stress', 'manual');
     updateUrlQueryParam('nodes', '$_nodeCount');
     notifyListeners();
-  }
-
-  void startAutoTune(FrameTimingService timingService) {
-    _stopTuning();
-    _mode = StressMode.float;
-    _isAutoTuning = true;
-    _nodeCount = 100;
-
-    final targetHz = _targetRefreshRate.toInt();
-    final budgetTargetMs = targetHz >= 100 ? 7.1 : 14.2;
-    final isWasm = isCurrentlyWasm();
-
-    _autoTuneStatus = 'Calibrating ($targetHz FPS target)...';
-    timingService.resetLog();
-    notifyListeners();
-
-    var currentPhase = _TuningPhase.ramping;
-
-    _tuningTimer = Timer.periodic(const Duration(milliseconds: 300), (timer) {
-      final recent = timingService.sampleRecentMetrics(frameCount: 12);
-      if (recent.totalFrameTimeMs <= 0.1) return;
-
-      final result = _evaluateAdaptiveStep(
-        nodeCount: _nodeCount,
-        phase: currentPhase,
-        budgetTargetMs: budgetTargetMs,
-        targetHz: targetHz,
-        recentMetrics: recent,
-        isWasm: isWasm,
-      );
-
-      _nodeCount = result.nodeCount;
-      currentPhase = result.phase;
-      _autoTuneStatus = result.status;
-
-      if (result.isFinished) {
-        _stopTuning();
-        updateUrlQueryParam('stress', 'float');
-        updateUrlQueryParam('nodes', '$_nodeCount');
-      }
-      notifyListeners();
-    });
-  }
-
-  void _stopTuning() {
-    _isAutoTuning = false;
-    _tuningTimer?.cancel();
-    _tuningTimer = null;
-  }
-
-  @override
-  void dispose() {
-    _stopTuning();
-    super.dispose();
   }
 }

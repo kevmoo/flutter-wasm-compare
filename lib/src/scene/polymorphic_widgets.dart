@@ -36,7 +36,7 @@ class PolymorphicCard extends StatelessWidget {
           width: 0.5,
         ),
       ),
-      clipBehavior: Clip.antiAlias,
+      clipBehavior: Clip.none,
       child: FittedBox(
         fit: BoxFit.scaleDown,
         alignment: Alignment.center,
@@ -181,24 +181,35 @@ class PolymorphicCard extends StatelessWidget {
   Widget _buildChipCard(BuildContext context) {
     final isOdd = index.isOdd;
     return Center(
-      child: ActionChip(
-        visualDensity: VisualDensity.compact,
-        padding: EdgeInsets.zero,
-        labelPadding: const EdgeInsets.symmetric(horizontal: 4),
-        avatar: Icon(
-          isOdd ? Icons.bolt : Icons.auto_awesome,
-          size: 12,
-          color: Colors.amberAccent,
-        ),
-        label: Text(
-          'Node $index',
-          style: const TextStyle(
-            fontSize: 9,
-            color: Colors.amberAccent,
-            fontWeight: FontWeight.bold,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+        decoration: BoxDecoration(
+          color: Colors.amber.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: Colors.amberAccent.withValues(alpha: 0.3),
+            width: 0.5,
           ),
         ),
-        onPressed: () {},
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              isOdd ? Icons.bolt : Icons.auto_awesome,
+              size: 11,
+              color: Colors.amberAccent,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              'Node $index',
+              style: const TextStyle(
+                fontSize: 9,
+                color: Colors.amberAccent,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
