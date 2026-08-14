@@ -6,6 +6,7 @@ import '../metrics/benchmark_storage.dart';
 import '../metrics/frame_timing_service.dart';
 import '../scene/stress_controller.dart';
 import 'build_config_web.dart';
+import 'engine_mode.dart';
 
 class RuntimeSelector extends StatelessWidget {
   const RuntimeSelector({super.key});
@@ -45,13 +46,10 @@ class RuntimeSelector extends StatelessWidget {
   }
 
   Widget _buildEngineButton(BuildContext context, String label, String mode) {
-    final searchParams = web.window.location.search;
+    final queryMode = Uri.base.queryParameters['mode']?.toLowerCase();
     final isCurrent = mode == 'js'
-        ? (searchParams.contains('mode=js') ||
-              searchParams.contains('mode=canvaskit'))
-        : (searchParams.contains('mode=wasm') ||
-              searchParams.contains('mode=skwasm') ||
-              !searchParams.contains('mode='));
+        ? (queryMode == 'js' || queryMode == 'canvaskit')
+        : (queryMode == 'wasm' || queryMode == 'skwasm' || queryMode == null);
 
     return ChoiceChip(
       label: Text(label),
@@ -61,10 +59,7 @@ class RuntimeSelector extends StatelessWidget {
           // Save baseline metrics before swapping out
           final metrics = context.read<FrameTimingService>().metrics;
           final stressCtrl = context.read<StressController>();
-          final isCurrentJs =
-              searchParams.contains('mode=js') ||
-              searchParams.contains('mode=canvaskit');
-          final currentMode = isCurrentJs ? 'js' : 'wasm';
+          final currentMode = isCurrentlyWasm() ? 'wasm' : 'js';
           final currentUrl = web.URL(web.window.location.href);
 
           BenchmarkStorage.saveMetrics(

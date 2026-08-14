@@ -1,5 +1,4 @@
 import 'dart:js_interop';
-import 'dart:js_interop_unsafe';
 
 import 'package:web/web.dart' as web;
 
@@ -38,22 +37,8 @@ void exportMetrics({
 }
 
 Future<double?> requestScreenRefreshRate() async {
-  try {
-    final win = web.window as JSObject;
-    if (win.hasProperty('getScreenDetails'.toJS).toDart) {
-      final promise = win.callMethod<JSPromise<JSObject>>(
-        'getScreenDetails'.toJS,
-      );
-      final details = await promise.toDart;
-      final currentScreen = details.getProperty<JSObject>('currentScreen'.toJS);
-      final rate = currentScreen
-          .getProperty<JSNumber?>('refreshRate'.toJS)
-          ?.toDartDouble;
-      if (rate != null && rate > 0) return rate;
-    }
-  } catch (_) {
-    // Permission denied or unsupported
-  }
+  // Screen refresh rate detection via getScreenDetails requires explicit
+  // multi-screen browser permissions in Chromium. Return null safely.
   return null;
 }
 
