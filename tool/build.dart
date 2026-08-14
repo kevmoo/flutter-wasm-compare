@@ -36,7 +36,7 @@ Future<bool> buildWeb({
 
   final isClean = _isWorkingTreeClean();
   final gitSha = _runGit(['rev-parse', 'HEAD']);
-  final dartVersion = Platform.version.split(' ').first;
+  final dartVersion = _getDartVersion();
   final flutterVersion = _getFlutterVersion();
 
   print('🔨 Building Flutter Web (Wasm + JS fallback)...');
@@ -100,7 +100,45 @@ String _runGit(List<String> args) {
 
 bool _isWorkingTreeClean() => _runGit(['status', '--porcelain']).isEmpty;
 
+String _getDartVersion() {
+  final fvmVersionJson = File(
+    '.fvm/flutter_sdk/bin/cache/flutter.version.json',
+  );
+  if (fvmVersionJson.existsSync()) {
+    try {
+      final json =
+          jsonDecode(fvmVersionJson.readAsStringSync()) as Map<String, dynamic>;
+      if (json['dartSdkVersion'] != null) {
+        final ver = json['dartSdkVersion'] as String;
+        return ver.split(' ').first;
+      }
+    } catch (_) {}
+  }
+
+  final fvmDartSdk = File('.fvm/flutter_sdk/bin/cache/dart-sdk/version');
+  if (fvmDartSdk.existsSync()) {
+    try {
+      return fvmDartSdk.readAsStringSync().trim().split(' ').first;
+    } catch (_) {}
+  }
+
+  return Platform.version.split(' ').first;
+}
+
 String _getFlutterVersion() {
+  final fvmVersionJson = File(
+    '.fvm/flutter_sdk/bin/cache/flutter.version.json',
+  );
+  if (fvmVersionJson.existsSync()) {
+    try {
+      final json =
+          jsonDecode(fvmVersionJson.readAsStringSync()) as Map<String, dynamic>;
+      if (json['flutterVersion'] != null) {
+        return json['flutterVersion'] as String;
+      }
+    } catch (_) {}
+  }
+
   final fvmrc = File('.fvmrc');
   if (fvmrc.existsSync()) {
     try {
@@ -110,5 +148,6 @@ String _getFlutterVersion() {
       }
     } catch (_) {}
   }
+
   return '3.47.0';
 }
