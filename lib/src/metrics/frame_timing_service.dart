@@ -45,9 +45,6 @@ class FrameTimingService extends ChangeNotifier {
   FrameTimingMetrics _metrics = FrameTimingMetrics();
   FrameTimingMetrics get metrics => _metrics;
 
-  double _highestFpsSeen = 60.0;
-  double get highestFpsSeen => _highestFpsSeen;
-
   FrameTimingService() {
     SchedulerBinding.instance.addTimingsCallback(_onTimings);
   }
@@ -85,9 +82,6 @@ class FrameTimingService extends ChangeNotifier {
     if (_timingsLog.isEmpty) return;
 
     _metrics = _calculateMetricsForSlice(_timingsLog.toList());
-    if (_metrics.fps > _highestFpsSeen && _metrics.fps < 150.0) {
-      _highestFpsSeen = _metrics.fps;
-    }
 
     exportMetrics(
       fps: _metrics.fps,
@@ -150,15 +144,9 @@ class FrameTimingService extends ChangeNotifier {
       jitterMs = math.sqrt(variance);
     }
 
-    final first = timings.first;
-    final last = timings.last;
-
-    final elapsedMs =
-        last.timestampInMicroseconds(FramePhase.buildStart) / 1000.0 -
-        first.timestampInMicroseconds(FramePhase.buildStart) / 1000.0;
-
-    final fps = (elapsedMs > 0 && count > 1)
-        ? (count - 1) * 1000.0 / elapsedMs
+    final activeElapsedMs = intervals.fold<double>(0.0, (sum, i) => sum + i);
+    final fps = (activeElapsedMs > 0 && intervals.isNotEmpty)
+        ? intervals.length * 1000.0 / activeElapsedMs
         : 60.0;
 
     return FrameTimingMetrics(

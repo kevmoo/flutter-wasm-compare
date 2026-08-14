@@ -29,7 +29,4 @@ class BenchmarkStorage {
     String? stressLevel,
     int? nodeCount,
   }) => null;
-
-  static BenchmarkRun? getLastRun({String? stressLevel, int? nodeCount}) =>
-      null;
 }
