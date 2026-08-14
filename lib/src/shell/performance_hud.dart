@@ -194,16 +194,6 @@ class _PerformanceHudState extends State<PerformanceHud> {
           isPipelined: isCurrentWasm,
         );
 
-        // Automatically store the latest metrics for the active engine
-        if (metrics.totalFrameTimeMs > 0.1) {
-          BenchmarkStorage.saveMetrics(
-            mode: isCurrentWasm ? 'wasm' : 'js',
-            metrics: metrics,
-            stressLevel: stressCtrl.currentLabel,
-            nodeCount: stressCtrl.nodeCount,
-          );
-        }
-
         final wasmRun = BenchmarkStorage.getRunForMode(
           mode: 'wasm',
           nodeCount: stressCtrl.nodeCount,
