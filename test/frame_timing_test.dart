@@ -140,11 +140,10 @@ void main() {
     );
 
     test('generates both speed and jitter benefit badges when Wasm leads', () {
-      // Live WASM (total: 16.0ms, jitter: 0.3ms) vs
-      // Saved JS (total: 33.6ms, jitter: 5.2ms)
+      // Live WASM (active: 11.0ms, jitter: 0.3ms) vs
+      // Saved JS (active: 32.0ms, jitter: 5.2ms)
       final comparison = evaluateComparisonForTest(
         currentActive: 11.0,
-        currentTotal: 16.0,
         currentJitter: 0.3,
         currentFps: 60.0,
         targetRefreshRate: 60.0,
@@ -156,8 +155,8 @@ void main() {
 
       expect(comparison.hasBothRuns, isTrue);
       expect(comparison.speedBadge, isNotNull);
-      expect(comparison.speedBadge?.title, equals('⚡ Wasm 2.1x Faster'));
-      expect(comparison.speedBadge?.detail, equals('16.0ms vs 33.6ms'));
+      expect(comparison.speedBadge?.title, equals('⚡ Wasm 2.9x Faster'));
+      expect(comparison.speedBadge?.detail, equals('11.0ms vs 32.0ms'));
 
       expect(comparison.jitterBadge, isNotNull);
       expect(comparison.jitterBadge?.title, equals('🎯 Wasm 17x Smoother'));
@@ -181,7 +180,6 @@ void main() {
 
       final comparison = evaluateComparisonForTest(
         currentActive: 15.0,
-        currentTotal: 18.0,
         currentJitter: 1.5,
         currentFps: 50.0,
         targetRefreshRate: 60.0,
@@ -211,7 +209,6 @@ void main() {
 
       final comparison = evaluateComparisonForTest(
         currentActive: 11.0,
-        currentTotal: 16.0,
         currentJitter: 0.32,
         currentFps: 60.0,
         targetRefreshRate: 60.0,
@@ -223,14 +220,14 @@ void main() {
 
       expect(comparison.hasBothRuns, isTrue);
       expect(comparison.speedBadge, isNotNull);
-      expect(comparison.speedBadge?.title, equals('⚡ Wasm 2.0x Faster'));
+      expect(comparison.speedBadge?.title, equals('⚡ Wasm 2.7x Faster'));
+      expect(comparison.speedBadge?.detail, equals('11.0ms vs 30.0ms'));
       expect(comparison.jitterBadge, isNull);
     });
 
     test('prompts to switch engines when other run is missing', () {
       final comparison = evaluateComparisonForTest(
         currentActive: 11.0,
-        currentTotal: 16.0,
         currentJitter: 0.3,
         currentFps: 60.0,
         targetRefreshRate: 60.0,
