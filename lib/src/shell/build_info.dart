@@ -218,7 +218,10 @@ class _BuildInfoRow extends StatelessWidget {
           label,
           style: const TextStyle(color: Colors.white54, fontSize: 13),
         ),
-        child,
+        const SizedBox(width: 8),
+        Flexible(
+          child: Align(alignment: Alignment.centerRight, child: child),
+        ),
       ],
     );
   }

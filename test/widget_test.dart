@@ -77,7 +77,7 @@ void main() {
     expect(infoButton, findsOneWidget);
 
     await tester.tap(infoButton);
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('About & Build Info'), findsOneWidget);
     expect(
@@ -89,7 +89,7 @@ void main() {
 
     // Dismiss dialog
     await tester.tap(find.text('Close'));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('About & Build Info'), findsNothing);
   });
