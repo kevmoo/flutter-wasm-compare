@@ -248,57 +248,74 @@ class _PerformanceHudState extends State<PerformanceHud> {
         );
 
         if (_isCollapsed) {
-          return InkWell(
-            onTap: () => _setCollapsed(false),
-            borderRadius: BorderRadius.circular(12),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: _hudDecoration,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.speed, size: 16, color: comparison.fpsColor),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${metrics.fps.toStringAsFixed(1)} FPS',
-                    style: TextStyle(
-                      color: comparison.fpsColor,
-                      fontFamily: 'monospace',
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
+          return Container(
+            decoration: _hudDecoration,
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _EngineTogglePill(isCurrentWasm: isCurrentWasm),
+                const SizedBox(width: 6),
+                Container(width: 1, height: 18, color: Colors.white12),
+                const SizedBox(width: 4),
+                InkWell(
+                  onTap: () => _setCollapsed(false),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 4,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.speed, size: 15, color: comparison.fpsColor),
+                        const SizedBox(width: 5),
+                        Text(
+                          '${metrics.fps.toStringAsFixed(1)} FPS',
+                          style: TextStyle(
+                            color: comparison.fpsColor,
+                            fontFamily: 'monospace',
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          '${currentActive.toStringAsFixed(1)}ms',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontFamily: 'monospace',
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(width: 4),
+                        const Icon(
+                          Icons.expand_more,
+                          size: 16,
+                          color: Colors.white54,
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${currentActive.toStringAsFixed(1)}ms',
-                    style: const TextStyle(
-                      color: Colors.white70,
-                      fontFamily: 'monospace',
-                      fontSize: 12,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Icon(
-                    Icons.expand_more,
-                    size: 16,
-                    color: Colors.white54,
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           );
         }
 
         return Container(
-          constraints: const BoxConstraints(minWidth: 260, maxWidth: 330),
+          constraints: const BoxConstraints(minWidth: 280, maxWidth: 340),
           padding: const EdgeInsets.all(14),
           decoration: _hudDecoration,
+
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _HeaderTitle(onCollapse: () => _setCollapsed(true)),
               const SizedBox(height: 10),
+
               _BudgetBar(
                 budgetRatio: comparison.budgetRatio,
                 budgetPct: comparison.budgetPct,
@@ -331,6 +348,92 @@ class _PerformanceHudState extends State<PerformanceHud> {
   }
 }
 
+class _EngineTogglePill extends StatelessWidget {
+  final bool isCurrentWasm;
+
+  const _EngineTogglePill({required this.isCurrentWasm});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white12),
+      ),
+      padding: const EdgeInsets.all(2),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _EnginePillButton(
+            label: '⚡ Wasm',
+            isSelected: isCurrentWasm,
+            selectedColor: Colors.lightBlueAccent,
+            onTap: isCurrentWasm
+                ? null
+                : () => switchEngineMode(context, mode: 'wasm'),
+          ),
+          const SizedBox(width: 2),
+          _EnginePillButton(
+            label: '📜 JS',
+            isSelected: !isCurrentWasm,
+            selectedColor: const Color(0xFFF1E05A),
+            onTap: !isCurrentWasm
+                ? null
+                : () => switchEngineMode(context, mode: 'js'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EnginePillButton extends StatelessWidget {
+  final String label;
+  final bool isSelected;
+  final Color selectedColor;
+  final VoidCallback? onTap;
+
+  const _EnginePillButton({
+    required this.label,
+    required this.isSelected,
+    required this.selectedColor,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final bgColor = isSelected
+        ? selectedColor.withValues(alpha: 0.25)
+        : Colors.transparent;
+    final textColor = isSelected ? selectedColor : Colors.white54;
+    final fontWeight = isSelected ? FontWeight.bold : FontWeight.normal;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: textColor,
+              fontSize: 11,
+              fontWeight: fontWeight,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _HeaderTitle extends StatelessWidget {
   final VoidCallback onCollapse;
 
@@ -341,20 +444,31 @@ class _HeaderTitle extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(
-          'PERFORMANCE',
-          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: Colors.white54,
-            letterSpacing: 0.8,
-            fontWeight: FontWeight.bold,
-          ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.analytics_outlined,
+              size: 14,
+              color: Colors.white54,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              'PERFORMANCE HUD',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: Colors.white70,
+                letterSpacing: 0.8,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
         ),
         InkWell(
           onTap: onCollapse,
           borderRadius: BorderRadius.circular(4),
           child: const Padding(
-            padding: EdgeInsets.all(2.0),
-            child: Icon(Icons.expand_less, size: 16, color: Colors.white54),
+            padding: EdgeInsets.all(4.0),
+            child: Icon(Icons.expand_less, size: 18, color: Colors.white54),
           ),
         ),
       ],
@@ -555,11 +669,11 @@ class _EngineMiniCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final hasData = activeMs != null && activeMs! > 0.0;
     final borderColor = isLive
-        ? titleColor.withValues(alpha: 0.35)
-        : Colors.white12;
+        ? titleColor.withValues(alpha: 0.65)
+        : Colors.white.withValues(alpha: 0.20);
     final bgColor = isLive
-        ? Colors.white.withValues(alpha: 0.05)
-        : Colors.white.withValues(alpha: 0.02);
+        ? titleColor.withValues(alpha: 0.10)
+        : Colors.white.withValues(alpha: 0.04);
 
     final isWasmCard = title.contains('WASM');
     final targetEngine = isWasmCard ? 'Wasm (Skwasm)' : 'JS (CanvasKit)';
@@ -568,11 +682,11 @@ class _EngineMiniCard extends StatelessWidget {
         : 'Click to switch to $targetEngine';
 
     final cardContent = Container(
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
       decoration: BoxDecoration(
         color: bgColor,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: borderColor),
+        border: Border.all(color: borderColor, width: isLive ? 1.5 : 1.0),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -589,7 +703,11 @@ class _EngineMiniCard extends StatelessWidget {
                   fontSize: 11,
                 ),
               ),
-              _EngineStatusBadge(isLive: isLive, hasData: hasData),
+              _EngineStatusBadge(
+                isLive: isLive,
+                hasData: hasData,
+                titleColor: titleColor,
+              ),
             ],
           ),
           const Divider(height: 10, color: Colors.white10),
@@ -616,15 +734,15 @@ class _EngineMiniCard extends StatelessWidget {
 
     return Tooltip(
       message: tooltipMessage,
-      waitDuration: const Duration(milliseconds: 300),
+      waitDuration: const Duration(milliseconds: 200),
       child: Material(
         type: MaterialType.transparency,
         child: InkWell(
           onTap: onTap,
           borderRadius: BorderRadius.circular(8),
-          hoverColor: titleColor.withValues(alpha: 0.08),
-          splashColor: titleColor.withValues(alpha: 0.15),
-          highlightColor: titleColor.withValues(alpha: 0.05),
+          hoverColor: titleColor.withValues(alpha: 0.12),
+          splashColor: titleColor.withValues(alpha: 0.20),
+          highlightColor: titleColor.withValues(alpha: 0.08),
           mouseCursor: SystemMouseCursors.click,
           child: cardContent,
         ),
@@ -636,33 +754,65 @@ class _EngineMiniCard extends StatelessWidget {
 class _EngineStatusBadge extends StatelessWidget {
   final bool isLive;
   final bool hasData;
+  final Color titleColor;
 
-  const _EngineStatusBadge({required this.isLive, required this.hasData});
+  const _EngineStatusBadge({
+    required this.isLive,
+    required this.hasData,
+    required this.titleColor,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final label = isLive ? 'LIVE' : (hasData ? 'SAVED' : 'UNRUN');
-    final textColor = isLive
-        ? Colors.greenAccent
-        : (hasData ? Colors.white54 : Colors.white24);
-    final bgColor = isLive
-        ? Colors.green.withValues(alpha: 0.2)
-        : (hasData ? Colors.white12 : Colors.transparent);
+    if (isLive) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
+        decoration: BoxDecoration(
+          color: Colors.greenAccent.withValues(alpha: 0.2),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(
+            color: Colors.greenAccent.withValues(alpha: 0.4),
+            width: 0.5,
+          ),
+        ),
+        child: const Text(
+          'LIVE',
+          style: TextStyle(
+            color: Colors.greenAccent,
+            fontSize: 8.5,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'monospace',
+            letterSpacing: 0.5,
+          ),
+        ),
+      );
+    }
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1.5),
       decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(3),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: textColor,
-          fontSize: 9,
-          fontWeight: FontWeight.bold,
-          fontFamily: 'monospace',
+        color: titleColor.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: titleColor.withValues(alpha: 0.4),
+          width: 0.5,
         ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.touch_app, size: 8.5, color: titleColor),
+          const SizedBox(width: 2),
+          Text(
+            'SWITCH',
+            style: TextStyle(
+              color: titleColor,
+              fontSize: 8.0,
+              fontWeight: FontWeight.bold,
+              fontFamily: 'monospace',
+            ),
+          ),
+        ],
       ),
     );
   }

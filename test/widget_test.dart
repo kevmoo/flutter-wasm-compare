@@ -35,10 +35,12 @@ void main() {
 
     // Verify PerformanceHud is collapsed on compact screens initially
     expect(find.byType(PerformanceHud), findsOneWidget);
+    expect(find.text('⚡ Wasm'), findsOneWidget);
+    expect(find.text('📜 JS'), findsOneWidget);
     expect(find.byIcon(Icons.expand_more), findsOneWidget);
 
     // Expand HUD
-    await tester.tap(find.byType(PerformanceHud));
+    await tester.tap(find.byIcon(Icons.expand_more));
     await tester.pump();
     expect(find.byIcon(Icons.expand_less), findsOneWidget);
   });
@@ -105,7 +107,7 @@ void main() {
     await tester.pumpWidget(const WasmCompareApp());
     await tester.pump();
 
-    // Verify WASM and JS mini-cards are rendered
+    // Verify WASM and JS mini-cards are rendered in expanded HUD
     expect(find.text('⚡ WASM'), findsOneWidget);
     expect(find.text('📜 JS'), findsOneWidget);
 

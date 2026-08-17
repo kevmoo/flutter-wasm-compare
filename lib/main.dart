@@ -7,7 +7,6 @@ import 'src/scene/stress_controller.dart';
 import 'src/shell/build_info.dart';
 import 'src/shell/compatibility_shield.dart';
 import 'src/shell/performance_hud.dart';
-import 'src/shell/runtime_selector.dart';
 
 void main() {
   runApp(const WasmCompareApp());
@@ -88,12 +87,6 @@ class DemoDashboard extends StatelessWidget {
                 left: isLargeScreen ? 20 : 16,
                 bottom: isLargeScreen ? null : 16,
                 child: PerformanceHud(initiallyCollapsed: !isLargeScreen),
-              ),
-              Positioned(
-                key: const ValueKey('runtime_selector'),
-                top: isLargeScreen ? 20 : 12,
-                right: isLargeScreen ? 20 : 12,
-                child: const RuntimeSelector(),
               ),
             ],
           );
