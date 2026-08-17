@@ -193,22 +193,16 @@ class _StressStepperPill extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            IconButton(
-              iconSize: isCompact ? 14 : 16,
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
-              constraints: BoxConstraints(
-                minWidth: isCompact ? 24 : 32,
-                minHeight: isCompact ? 24 : 32,
-              ),
-              icon: const Icon(Icons.remove),
+            _StepperButton(
+              icon: Icons.remove,
+              isCompact: isCompact,
+              tooltip: 'Decrease Stress',
               onPressed: stressCtrl.canStepDown
                   ? () {
                       context.read<FrameTimingService>().resetLog();
                       context.read<StressController>().stepDown();
                     }
                   : null,
-              tooltip: 'Decrease Stress',
             ),
             Padding(
               padding: EdgeInsets.symmetric(horizontal: isCompact ? 4.0 : 6.0),
@@ -223,26 +217,48 @@ class _StressStepperPill extends StatelessWidget {
                 ),
               ),
             ),
-            IconButton(
-              iconSize: isCompact ? 14 : 16,
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
-              constraints: BoxConstraints(
-                minWidth: isCompact ? 24 : 32,
-                minHeight: isCompact ? 24 : 32,
-              ),
-              icon: const Icon(Icons.add),
+            _StepperButton(
+              icon: Icons.add,
+              isCompact: isCompact,
+              tooltip: 'Increase Stress',
               onPressed: stressCtrl.canStepUp
                   ? () {
                       context.read<FrameTimingService>().resetLog();
                       context.read<StressController>().stepUp();
                     }
                   : null,
-              tooltip: 'Increase Stress',
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _StepperButton extends StatelessWidget {
+  final IconData icon;
+  final bool isCompact;
+  final String tooltip;
+  final VoidCallback? onPressed;
+
+  const _StepperButton({
+    required this.icon,
+    required this.isCompact,
+    required this.tooltip,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final size = isCompact ? 24.0 : 32.0;
+    return IconButton(
+      iconSize: isCompact ? 14 : 16,
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: BoxConstraints(minWidth: size, minHeight: size),
+      icon: Icon(icon),
+      onPressed: onPressed,
+      tooltip: tooltip,
     );
   }
 }

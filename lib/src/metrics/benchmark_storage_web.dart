@@ -103,57 +103,59 @@ class BenchmarkStorage {
   }) {
     try {
       final storage = web.window.localStorage;
-
-      // Ensure active node count matches
-      final activeNodesStr = storage.getItem(_activeNodesKey);
-      if (nodeCount != null && activeNodesStr != null) {
-        final activeNodes = int.tryParse(activeNodesStr);
-        if (activeNodes != null && activeNodes != nodeCount) {
-          return null;
-        }
-      }
+      if (!_matchesActiveNodes(storage, nodeCount)) return null;
 
       final normMode = mode.toLowerCase();
       final key = (normMode == 'wasm') ? _wasmRunKey : _jsRunKey;
       final jsonStr = storage.getItem(key);
-
       if (jsonStr == null || jsonStr.isEmpty) return null;
 
       final map = jsonDecode(jsonStr) as Map<String, dynamic>;
-      final runMode = map['mode'] as String?;
-      final fps = (map['fps'] as num?)?.toDouble();
-      final buildTimeMs = (map['buildTimeMs'] as num?)?.toDouble() ?? 0.0;
-      final rasterTimeMs = (map['rasterTimeMs'] as num?)?.toDouble() ?? 0.0;
-      final totalFrameTimeMs =
-          (map['totalFrameTimeMs'] as num?)?.toDouble() ?? 0.0;
-      final jitterMs = (map['jitterMs'] as num?)?.toDouble() ?? 0.0;
-      final stress = (map['stressLevel'] as String?) ?? 'medium';
-      final nodes = (map['nodeCount'] as num?)?.toInt() ?? 500;
-
-      if (nodeCount != null && nodes != nodeCount) {
-        return null;
-      }
-
-      if (stressLevel != null &&
-          stress.toLowerCase() != stressLevel.toLowerCase()) {
-        return null;
-      }
-
-      if (runMode != null && fps != null) {
-        return (
-          mode: runMode,
-          fps: fps,
-          buildTimeMs: buildTimeMs,
-          rasterTimeMs: rasterTimeMs,
-          totalFrameTimeMs: totalFrameTimeMs,
-          jitterMs: jitterMs,
-          stressLevel: stress,
-          nodeCount: nodes,
-        );
-      }
+      return _parseBenchmarkRun(
+        map,
+        expectedNodeCount: nodeCount,
+        expectedStressLevel: stressLevel,
+      );
     } catch (_) {
-      // Ignore
+      return null;
     }
-    return null;
+  }
+
+  static bool _matchesActiveNodes(web.Storage storage, int? expectedNodeCount) {
+    if (expectedNodeCount == null) return true;
+    final activeNodesStr = storage.getItem(_activeNodesKey);
+    if (activeNodesStr == null) return true;
+    final activeNodes = int.tryParse(activeNodesStr);
+    return activeNodes == null || activeNodes == expectedNodeCount;
+  }
+
+  static BenchmarkRun? _parseBenchmarkRun(
+    Map<String, dynamic> map, {
+    int? expectedNodeCount,
+    String? expectedStressLevel,
+  }) {
+    final nodes = (map['nodeCount'] as num?)?.toInt() ?? 500;
+    if (expectedNodeCount != null && nodes != expectedNodeCount) return null;
+
+    final stress = (map['stressLevel'] as String?) ?? 'medium';
+    if (expectedStressLevel != null &&
+        stress.toLowerCase() != expectedStressLevel.toLowerCase()) {
+      return null;
+    }
+
+    final runMode = map['mode'] as String?;
+    final fps = (map['fps'] as num?)?.toDouble();
+    if (runMode == null || fps == null) return null;
+
+    return (
+      mode: runMode,
+      fps: fps,
+      buildTimeMs: (map['buildTimeMs'] as num?)?.toDouble() ?? 0.0,
+      rasterTimeMs: (map['rasterTimeMs'] as num?)?.toDouble() ?? 0.0,
+      totalFrameTimeMs: (map['totalFrameTimeMs'] as num?)?.toDouble() ?? 0.0,
+      jitterMs: (map['jitterMs'] as num?)?.toDouble() ?? 0.0,
+      stressLevel: stress,
+      nodeCount: nodes,
+    );
   }
 }

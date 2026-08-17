@@ -98,16 +98,18 @@ void main() {
       // then 5 frames at 60 FPS.
       final timings = <FrameTiming>[];
       var currentUs = 0;
-      for (var i = 0; i < 5; i++) {
-        timings.add(_makeTiming(buildStartUs: currentUs));
-        currentUs += 16666;
+
+      void addFrames(int count) {
+        for (var i = 0; i < count; i++) {
+          timings.add(_makeTiming(buildStartUs: currentUs));
+          currentUs += 16666;
+        }
       }
+
+      addFrames(5);
       // 5 second pause (5000000us)
       currentUs += 5000000;
-      for (var i = 0; i < 5; i++) {
-        timings.add(_makeTiming(buildStartUs: currentUs));
-        currentUs += 16666;
-      }
+      addFrames(5);
 
       final metrics = FrameTimingService.calculateMetricsForSliceForTest(
         timings,

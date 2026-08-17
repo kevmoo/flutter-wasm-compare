@@ -66,6 +66,45 @@ const _hudDecoration = BoxDecoration(
   ],
 );
 
+double _activeTimeForRun(BenchmarkRun? run, {required bool isPipelined}) {
+  if (run == null) return 0.0;
+  return isPipelined
+      ? math.max(run.buildTimeMs, run.rasterTimeMs)
+      : (run.buildTimeMs + run.rasterTimeMs);
+}
+
+BenefitBadge? _computeSpeedBadge({
+  required double wasmActive,
+  required double jsActive,
+}) {
+  if (wasmActive <= 0.01 || (jsActive / wasmActive) < 1.05) return null;
+  final ratio = jsActive / wasmActive;
+  return (
+    title: '⚡ Wasm ${ratio.toStringAsFixed(1)}x Faster',
+    detail:
+        '${wasmActive.toStringAsFixed(1)}ms '
+        'vs ${jsActive.toStringAsFixed(1)}ms',
+  );
+}
+
+BenefitBadge? _computeJitterBadge({
+  required double wasmJitter,
+  required double jsJitter,
+}) {
+  final baseline = wasmJitter > 0.01 ? wasmJitter : 0.1;
+  if (jsJitter <= 0.05 || (jsJitter / baseline) < 1.15) return null;
+  final ratio = jsJitter / baseline;
+  final ratioText = ratio >= 10
+      ? '${ratio.toStringAsFixed(0)}x'
+      : '${ratio.toStringAsFixed(1)}x';
+  return (
+    title: '🎯 Wasm $ratioText Smoother',
+    detail:
+        '±${wasmJitter.toStringAsFixed(1)}ms '
+        'vs ±${jsJitter.toStringAsFixed(1)}ms',
+  );
+}
+
 ComparisonData _evaluateComparison({
   required double currentActive,
   required double currentJitter,
@@ -82,50 +121,24 @@ ComparisonData _evaluateComparison({
 
   final wasmActive = isCurrentWasm
       ? currentActive
-      : (wasmRun != null
-            ? math.max(wasmRun.buildTimeMs, wasmRun.rasterTimeMs)
-            : 0.0);
+      : _activeTimeForRun(wasmRun, isPipelined: true);
   final jsActive = !isCurrentWasm
       ? currentActive
-      : (jsRun != null ? (jsRun.buildTimeMs + jsRun.rasterTimeMs) : 0.0);
+      : _activeTimeForRun(jsRun, isPipelined: false);
 
   final wasmJitter = isCurrentWasm ? currentJitter : (wasmRun?.jitterMs ?? 0.0);
   final jsJitter = !isCurrentWasm ? currentJitter : (jsRun?.jitterMs ?? 0.0);
 
   final hasBoth = wasmActive > 0.1 && jsActive > 0.1;
+  final otherEngine = isCurrentWasm ? 'JS' : 'Wasm';
 
-  BenefitBadge? speedBadge;
-  BenefitBadge? jitterBadge;
-  String? promptBadge;
-
-  if (hasBoth) {
-    if (wasmActive > 0.01 && (jsActive / wasmActive) >= 1.05) {
-      final ratio = jsActive / wasmActive;
-      speedBadge = (
-        title: '⚡ Wasm ${ratio.toStringAsFixed(1)}x Faster',
-        detail:
-            '${wasmActive.toStringAsFixed(1)}ms '
-            'vs ${jsActive.toStringAsFixed(1)}ms',
-      );
-    }
-
-    final baselineWasmJitter = wasmJitter > 0.01 ? wasmJitter : 0.1;
-    if (jsJitter > 0.05 && (jsJitter / baselineWasmJitter) >= 1.15) {
-      final jitterRatio = jsJitter / baselineWasmJitter;
-      final ratioText = jitterRatio >= 10
-          ? '${jitterRatio.toStringAsFixed(0)}x'
-          : '${jitterRatio.toStringAsFixed(1)}x';
-      jitterBadge = (
-        title: '🎯 Wasm $ratioText Smoother',
-        detail:
-            '±${wasmJitter.toStringAsFixed(1)}ms '
-            'vs ±${jsJitter.toStringAsFixed(1)}ms',
-      );
-    }
-  } else {
-    final otherEngine = isCurrentWasm ? 'JS' : 'Wasm';
-    promptBadge = '⏳ Switch to $otherEngine to test at $nodeCount nodes';
-  }
+  final (speedBadge, jitterBadge, promptBadge) = hasBoth
+      ? (
+          _computeSpeedBadge(wasmActive: wasmActive, jsActive: jsActive),
+          _computeJitterBadge(wasmJitter: wasmJitter, jsJitter: jsJitter),
+          null,
+        )
+      : (null, null, '⏳ Switch to $otherEngine to test at $nodeCount nodes');
 
   final rawRatio = budgetTargetMs > 0 ? (currentActive / budgetTargetMs) : 0.0;
   final budgetRatio = rawRatio.clamp(0.0, 1.0);
@@ -137,8 +150,6 @@ ComparisonData _evaluateComparison({
     _ => Colors.redAccent,
   };
 
-  final fpsColor = _getFpsColor(currentFps, targetRefreshRate);
-
   return (
     hasBothRuns: hasBoth,
     speedBadge: speedBadge,
@@ -148,7 +159,7 @@ ComparisonData _evaluateComparison({
     budgetPct: budgetPct,
     budgetLabel: budgetLabel,
     budgetColor: budgetColor,
-    fpsColor: fpsColor,
+    fpsColor: _getFpsColor(currentFps, targetRefreshRate),
   );
 }
 
@@ -416,8 +427,18 @@ class _DualEngineCards extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final wasm = wasmRun;
-    final js = jsRun;
+    final wasmMetrics = _resolveCardMetrics(
+      isLive: isCurrentWasm,
+      liveMetrics: liveMetrics,
+      savedRun: wasmRun,
+      isPipelined: true,
+    );
+    final jsMetrics = _resolveCardMetrics(
+      isLive: !isCurrentWasm,
+      liveMetrics: liveMetrics,
+      savedRun: jsRun,
+      isPipelined: false,
+    );
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -428,19 +449,11 @@ class _DualEngineCards extends StatelessWidget {
             title: '⚡ WASM',
             titleColor: Colors.lightBlueAccent,
             isLive: isCurrentWasm,
-            fps: isCurrentWasm ? liveMetrics.fps : wasm?.fps,
-            activeMs: isCurrentWasm
-                ? liveMetrics.activeFrameTimeMs(isPipelined: true)
-                : (wasm != null
-                      ? math.max(wasm.buildTimeMs, wasm.rasterTimeMs)
-                      : null),
-            jitterMs: isCurrentWasm ? liveMetrics.jitterMs : wasm?.jitterMs,
-            buildMs: isCurrentWasm
-                ? liveMetrics.buildTimeMs
-                : wasm?.buildTimeMs,
-            rasterMs: isCurrentWasm
-                ? liveMetrics.rasterTimeMs
-                : wasm?.rasterTimeMs,
+            fps: wasmMetrics.fps,
+            activeMs: wasmMetrics.activeMs,
+            jitterMs: wasmMetrics.jitterMs,
+            buildMs: wasmMetrics.buildMs,
+            rasterMs: wasmMetrics.rasterMs,
             targetHz: targetHz,
             onTap: isCurrentWasm
                 ? null
@@ -454,15 +467,11 @@ class _DualEngineCards extends StatelessWidget {
             title: '📜 JS',
             titleColor: const Color(0xFFF1E05A),
             isLive: !isCurrentWasm,
-            fps: !isCurrentWasm ? liveMetrics.fps : js?.fps,
-            activeMs: !isCurrentWasm
-                ? liveMetrics.activeFrameTimeMs(isPipelined: false)
-                : (js != null ? js.buildTimeMs + js.rasterTimeMs : null),
-            jitterMs: !isCurrentWasm ? liveMetrics.jitterMs : js?.jitterMs,
-            buildMs: !isCurrentWasm ? liveMetrics.buildTimeMs : js?.buildTimeMs,
-            rasterMs: !isCurrentWasm
-                ? liveMetrics.rasterTimeMs
-                : js?.rasterTimeMs,
+            fps: jsMetrics.fps,
+            activeMs: jsMetrics.activeMs,
+            jitterMs: jsMetrics.jitterMs,
+            buildMs: jsMetrics.buildMs,
+            rasterMs: jsMetrics.rasterMs,
             targetHz: targetHz,
             onTap: !isCurrentWasm
                 ? null
@@ -472,6 +481,47 @@ class _DualEngineCards extends StatelessWidget {
       ],
     );
   }
+}
+
+typedef _CardMetrics = ({
+  double? fps,
+  double? activeMs,
+  double? jitterMs,
+  double? buildMs,
+  double? rasterMs,
+});
+
+_CardMetrics _resolveCardMetrics({
+  required bool isLive,
+  required FrameTimingMetrics liveMetrics,
+  required BenchmarkRun? savedRun,
+  required bool isPipelined,
+}) {
+  if (isLive) {
+    return (
+      fps: liveMetrics.fps,
+      activeMs: liveMetrics.activeFrameTimeMs(isPipelined: isPipelined),
+      jitterMs: liveMetrics.jitterMs,
+      buildMs: liveMetrics.buildTimeMs,
+      rasterMs: liveMetrics.rasterTimeMs,
+    );
+  }
+  if (savedRun != null) {
+    return (
+      fps: savedRun.fps,
+      activeMs: _activeTimeForRun(savedRun, isPipelined: isPipelined),
+      jitterMs: savedRun.jitterMs,
+      buildMs: savedRun.buildTimeMs,
+      rasterMs: savedRun.rasterTimeMs,
+    );
+  }
+  return (
+    fps: null,
+    activeMs: null,
+    jitterMs: null,
+    buildMs: null,
+    rasterMs: null,
+  );
 }
 
 class _EngineMiniCard extends StatelessWidget {
@@ -537,71 +587,19 @@ class _EngineMiniCard extends StatelessWidget {
                   fontSize: 11,
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                decoration: BoxDecoration(
-                  color: isLive
-                      ? Colors.green.withValues(alpha: 0.2)
-                      : (hasData ? Colors.white12 : Colors.transparent),
-                  borderRadius: BorderRadius.circular(3),
-                ),
-                child: Text(
-                  isLive ? 'LIVE' : (hasData ? 'SAVED' : 'UNRUN'),
-                  style: TextStyle(
-                    color: isLive
-                        ? Colors.greenAccent
-                        : (hasData ? Colors.white54 : Colors.white24),
-                    fontSize: 9,
-                    fontWeight: FontWeight.bold,
-                    fontFamily: 'monospace',
-                  ),
-                ),
-              ),
+              _EngineStatusBadge(isLive: isLive, hasData: hasData),
             ],
           ),
           const Divider(height: 10, color: Colors.white10),
-          if (hasData) ...[
-            _MiniMetricRow(
-              label: 'FPS',
-              value: fps!.toStringAsFixed(1),
-              valueColor: _getFpsColor(fps!, targetHz),
-            ),
-            _MiniMetricRow(
-              label: 'Active',
-              value: '${activeMs!.toStringAsFixed(1)}ms',
-              valueColor: Colors.white,
-            ),
-            if (jitterMs != null && jitterMs! > 0.0)
-              _MiniMetricRow(
-                label: 'Jitter',
-                value: '±${jitterMs!.toStringAsFixed(1)}ms',
-                valueColor: _getJitterColor(jitterMs!),
-              ),
-            _MiniMetricRow(
-              label: 'Build',
-              value: '${buildMs!.toStringAsFixed(1)}ms',
-              valueColor: Colors.white70,
-            ),
-            _MiniMetricRow(
-              label: 'Raster',
-              value: '${rasterMs!.toStringAsFixed(1)}ms',
-              valueColor: Colors.white70,
-            ),
-          ] else ...[
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 12.0),
-              child: Center(
-                child: Text(
-                  'Not run yet',
-                  style: TextStyle(
-                    color: Colors.white24,
-                    fontSize: 10,
-                    fontStyle: FontStyle.italic,
-                  ),
-                ),
-              ),
-            ),
-          ],
+          _EngineMetricsContent(
+            hasData: hasData,
+            fps: fps,
+            activeMs: activeMs,
+            jitterMs: jitterMs,
+            buildMs: buildMs,
+            rasterMs: rasterMs,
+            targetHz: targetHz,
+          ),
         ],
       ),
     );
@@ -629,6 +627,113 @@ class _EngineMiniCard extends StatelessWidget {
           child: cardContent,
         ),
       ),
+    );
+  }
+}
+
+class _EngineStatusBadge extends StatelessWidget {
+  final bool isLive;
+  final bool hasData;
+
+  const _EngineStatusBadge({required this.isLive, required this.hasData});
+
+  @override
+  Widget build(BuildContext context) {
+    final label = isLive ? 'LIVE' : (hasData ? 'SAVED' : 'UNRUN');
+    final textColor = isLive
+        ? Colors.greenAccent
+        : (hasData ? Colors.white54 : Colors.white24);
+    final bgColor = isLive
+        ? Colors.green.withValues(alpha: 0.2)
+        : (hasData ? Colors.white12 : Colors.transparent);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+      decoration: BoxDecoration(
+        color: bgColor,
+        borderRadius: BorderRadius.circular(3),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: textColor,
+          fontSize: 9,
+          fontWeight: FontWeight.bold,
+          fontFamily: 'monospace',
+        ),
+      ),
+    );
+  }
+}
+
+class _EngineMetricsContent extends StatelessWidget {
+  final bool hasData;
+  final double? fps;
+  final double? activeMs;
+  final double? jitterMs;
+  final double? buildMs;
+  final double? rasterMs;
+  final double targetHz;
+
+  const _EngineMetricsContent({
+    required this.hasData,
+    required this.fps,
+    required this.activeMs,
+    required this.jitterMs,
+    required this.buildMs,
+    required this.rasterMs,
+    required this.targetHz,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (!hasData) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12.0),
+        child: Center(
+          child: Text(
+            'Not run yet',
+            style: TextStyle(
+              color: Colors.white24,
+              fontSize: 10,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ),
+      );
+    }
+
+    final jitter = jitterMs;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _MiniMetricRow(
+          label: 'FPS',
+          value: fps!.toStringAsFixed(1),
+          valueColor: _getFpsColor(fps!, targetHz),
+        ),
+        _MiniMetricRow(
+          label: 'Active',
+          value: '${activeMs!.toStringAsFixed(1)}ms',
+          valueColor: Colors.white,
+        ),
+        if (jitter != null && jitter > 0.0)
+          _MiniMetricRow(
+            label: 'Jitter',
+            value: '±${jitter.toStringAsFixed(1)}ms',
+            valueColor: _getJitterColor(jitter),
+          ),
+        _MiniMetricRow(
+          label: 'Build',
+          value: '${buildMs!.toStringAsFixed(1)}ms',
+          valueColor: Colors.white70,
+        ),
+        _MiniMetricRow(
+          label: 'Raster',
+          value: '${rasterMs!.toStringAsFixed(1)}ms',
+          valueColor: Colors.white70,
+        ),
+      ],
     );
   }
 }

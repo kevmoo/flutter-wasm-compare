@@ -15,23 +15,8 @@ Future<bool> buildWeb({
   bool isDeploy = false,
   List<String> extraArgs = const [],
 }) async {
-  if (isDeploy) {
-    if (!_isWorkingTreeClean()) {
-      stderr.writeln(
-        '❌ Deploy build failed: Working tree is dirty. '
-        'Commit all changes before deploying.',
-      );
-      return false;
-    }
-
-    final branch = _runGit(['branch', '--show-current']);
-    if (branch != 'main') {
-      stderr.writeln(
-        '❌ Deploy build failed: Current branch is "$branch" '
-        '(expected "main").',
-      );
-      return false;
-    }
+  if (isDeploy && !_validateDeployPrerequisites()) {
+    return false;
   }
 
   final isClean = _isWorkingTreeClean();
@@ -39,19 +24,14 @@ Future<bool> buildWeb({
   final dartVersion = _getDartVersion();
   final flutterVersion = _getFlutterVersion();
 
-  print('🔨 Building Flutter Web (Wasm + JS fallback)...');
-  if (gitSha.isNotEmpty) {
-    final shortSha = gitSha.length >= 7 ? gitSha.substring(0, 7) : gitSha;
-    print('   Git Commit: $shortSha (clean: $isClean)');
-  }
-  if (dartVersion.isNotEmpty) {
-    print('   Dart SDK:   $dartVersion');
-  }
-  if (flutterVersion.isNotEmpty) {
-    print('   Flutter:    $flutterVersion');
-  }
-  final stopwatch = Stopwatch()..start();
+  _printBuildHeader(
+    gitSha: gitSha,
+    isClean: isClean,
+    dartVersion: dartVersion,
+    flutterVersion: flutterVersion,
+  );
 
+  final stopwatch = Stopwatch()..start();
   final fvmFlutter = File('.fvm/flutter_sdk/bin/flutter');
   final executable = fvmFlutter.existsSync() ? fvmFlutter.path : 'flutter';
 
@@ -83,6 +63,45 @@ Future<bool> buildWeb({
   } else {
     print('❌ Build failed with exit code $exit.\n');
     return false;
+  }
+}
+
+bool _validateDeployPrerequisites() {
+  if (!_isWorkingTreeClean()) {
+    stderr.writeln(
+      '❌ Deploy build failed: Working tree is dirty. '
+      'Commit all changes before deploying.',
+    );
+    return false;
+  }
+
+  final branch = _runGit(['branch', '--show-current']);
+  if (branch != 'main') {
+    stderr.writeln(
+      '❌ Deploy build failed: Current branch is "$branch" (expected "main").',
+    );
+    return false;
+  }
+
+  return true;
+}
+
+void _printBuildHeader({
+  required String gitSha,
+  required bool isClean,
+  required String dartVersion,
+  required String flutterVersion,
+}) {
+  print('🔨 Building Flutter Web (Wasm + JS fallback)...');
+  if (gitSha.isNotEmpty) {
+    final shortSha = gitSha.length >= 7 ? gitSha.substring(0, 7) : gitSha;
+    print('   Git Commit: $shortSha (clean: $isClean)');
+  }
+  if (dartVersion.isNotEmpty) {
+    print('   Dart SDK:   $dartVersion');
+  }
+  if (flutterVersion.isNotEmpty) {
+    print('   Flutter:    $flutterVersion');
   }
 }
 
