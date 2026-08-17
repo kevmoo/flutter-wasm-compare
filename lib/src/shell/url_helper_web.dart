@@ -101,3 +101,13 @@ void openExternalUrl(String url) {
     // Ignore
   }
 }
+
+void navigateToEngineMode(String mode) {
+  try {
+    final currentUrl = web.URL(web.window.location.href);
+    currentUrl.searchParams.set('mode', mode);
+    web.window.location.href = currentUrl.href;
+  } catch (_) {
+    // Ignore
+  }
+}

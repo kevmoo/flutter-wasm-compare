@@ -1,10 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:web/web.dart' as web;
 
-import '../metrics/benchmark_storage.dart';
-import '../metrics/frame_timing_service.dart';
-import '../scene/stress_controller.dart';
 import 'build_config_web.dart';
 import 'engine_mode.dart';
 
@@ -56,21 +51,7 @@ class RuntimeSelector extends StatelessWidget {
       selected: isCurrent,
       onSelected: (selected) {
         if (selected && !isCurrent) {
-          // Save baseline metrics before swapping out
-          final metrics = context.read<FrameTimingService>().metrics;
-          final stressCtrl = context.read<StressController>();
-          final currentMode = isCurrentlyWasm() ? 'wasm' : 'js';
-          final currentUrl = web.URL(web.window.location.href);
-
-          BenchmarkStorage.saveMetrics(
-            mode: currentMode,
-            metrics: metrics,
-            stressLevel: stressCtrl.currentLabel,
-            nodeCount: stressCtrl.nodeCount,
-          );
-
-          currentUrl.searchParams.set('mode', mode);
-          web.window.location.href = currentUrl.href;
+          switchEngineMode(context, mode: mode);
         }
       },
     );

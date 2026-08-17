@@ -93,4 +93,29 @@ void main() {
 
     expect(find.text('About & Build Info'), findsNothing);
   });
+
+  testWidgets('PerformanceHud mini-cards and prompt badge are interactive', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(const WasmCompareApp());
+    await tester.pump();
+
+    // Verify WASM and JS mini-cards are rendered
+    expect(find.text('⚡ WASM'), findsOneWidget);
+    expect(find.text('📜 JS'), findsOneWidget);
+
+    // In non-wasm context, WASM card has an interactive InkWell
+    final wasmCard = find.text('⚡ WASM');
+    expect(wasmCard, findsOneWidget);
+    await tester.tap(wasmCard);
+    await tester.pump();
+
+    // Verify prompt badge or card tooltips exist
+    expect(find.byType(Tooltip), findsWidgets);
+  });
 }

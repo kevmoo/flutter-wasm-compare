@@ -305,6 +305,10 @@ class _PerformanceHudState extends State<PerformanceHud> {
                 speedBadge: comparison.speedBadge,
                 jitterBadge: comparison.jitterBadge,
                 promptBadge: comparison.promptBadge,
+                onPromptTap: () => switchEngineMode(
+                  context,
+                  mode: isCurrentWasm ? 'js' : 'wasm',
+                ),
               ),
             ],
           ),
@@ -438,6 +442,9 @@ class _DualEngineCards extends StatelessWidget {
                 ? liveMetrics.rasterTimeMs
                 : wasm?.rasterTimeMs,
             targetHz: targetHz,
+            onTap: isCurrentWasm
+                ? null
+                : () => switchEngineMode(context, mode: 'wasm'),
           ),
         ),
         const SizedBox(width: 8),
@@ -457,6 +464,9 @@ class _DualEngineCards extends StatelessWidget {
                 ? liveMetrics.rasterTimeMs
                 : js?.rasterTimeMs,
             targetHz: targetHz,
+            onTap: !isCurrentWasm
+                ? null
+                : () => switchEngineMode(context, mode: 'js'),
           ),
         ),
       ],
@@ -474,6 +484,7 @@ class _EngineMiniCard extends StatelessWidget {
   final double? buildMs;
   final double? rasterMs;
   final double targetHz;
+  final VoidCallback? onTap;
 
   const _EngineMiniCard({
     required this.title,
@@ -485,6 +496,7 @@ class _EngineMiniCard extends StatelessWidget {
     required this.buildMs,
     required this.rasterMs,
     required this.targetHz,
+    this.onTap,
   });
 
   @override
@@ -497,7 +509,13 @@ class _EngineMiniCard extends StatelessWidget {
         ? Colors.white.withValues(alpha: 0.05)
         : Colors.white.withValues(alpha: 0.02);
 
-    return Container(
+    final isWasmCard = title.contains('WASM');
+    final targetEngine = isWasmCard ? 'Wasm (Skwasm)' : 'JS (CanvasKit)';
+    final tooltipMessage = isLive
+        ? 'Currently active runtime engine'
+        : 'Click to switch to $targetEngine';
+
+    final cardContent = Container(
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: bgColor,
@@ -587,6 +605,31 @@ class _EngineMiniCard extends StatelessWidget {
         ],
       ),
     );
+
+    if (onTap == null) {
+      return Tooltip(
+        message: tooltipMessage,
+        waitDuration: const Duration(milliseconds: 500),
+        child: cardContent,
+      );
+    }
+
+    return Tooltip(
+      message: tooltipMessage,
+      waitDuration: const Duration(milliseconds: 300),
+      child: Material(
+        type: MaterialType.transparency,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          hoverColor: titleColor.withValues(alpha: 0.08),
+          splashColor: titleColor.withValues(alpha: 0.15),
+          highlightColor: titleColor.withValues(alpha: 0.05),
+          mouseCursor: SystemMouseCursors.click,
+          child: cardContent,
+        ),
+      ),
+    );
   }
 }
 
@@ -635,17 +678,19 @@ class _BenefitBadges extends StatelessWidget {
   final BenefitBadge? speedBadge;
   final BenefitBadge? jitterBadge;
   final String? promptBadge;
+  final VoidCallback? onPromptTap;
 
   const _BenefitBadges({
     required this.speedBadge,
     required this.jitterBadge,
     this.promptBadge,
+    this.onPromptTap,
   });
 
   @override
   Widget build(BuildContext context) {
     if (promptBadge != null) {
-      return Container(
+      final promptWidget = Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
         decoration: BoxDecoration(
@@ -663,6 +708,25 @@ class _BenefitBadges extends StatelessWidget {
           ),
         ),
       );
+
+      if (onPromptTap != null) {
+        return Tooltip(
+          message: 'Click to switch engine',
+          waitDuration: const Duration(milliseconds: 300),
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: onPromptTap,
+              borderRadius: BorderRadius.circular(6),
+              hoverColor: Colors.white.withValues(alpha: 0.08),
+              mouseCursor: SystemMouseCursors.click,
+              child: promptWidget,
+            ),
+          ),
+        );
+      }
+
+      return promptWidget;
     }
 
     final badges = [?speedBadge, ?jitterBadge];

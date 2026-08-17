@@ -19,3 +19,5 @@ void savePersistedHudCollapsed(bool collapsed) {}
 bool? getPersistedHudCollapsed() => null;
 
 void openExternalUrl(String url) {}
+
+void navigateToEngineMode(String mode) {}
