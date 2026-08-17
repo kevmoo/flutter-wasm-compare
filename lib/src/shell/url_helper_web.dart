@@ -102,11 +102,13 @@ void openExternalUrl(String url) {
   }
 }
 
-void navigateToEngineMode(String mode) {
+void reloadWithQueryParams(Map<String, String> params) {
   try {
-    final currentUrl = web.URL(web.window.location.href);
-    currentUrl.searchParams.set('mode', mode);
-    web.window.location.href = currentUrl.href;
+    final url = web.URL(web.window.location.href);
+    for (final entry in params.entries) {
+      url.searchParams.set(entry.key, entry.value);
+    }
+    web.window.location.href = url.href;
   } catch (_) {
     // Ignore
   }

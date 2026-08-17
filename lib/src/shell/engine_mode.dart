@@ -23,5 +23,5 @@ void switchEngineMode(BuildContext context, {required String mode}) {
     nodeCount: stressCtrl.nodeCount,
   );
 
-  navigateToEngineMode(mode);
+  reloadWithQueryParams({'mode': mode});
 }

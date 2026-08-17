@@ -1,7 +1,8 @@
 import 'dart:js_interop';
 
 import 'package:flutter/material.dart';
-import 'package:web/web.dart' as web;
+
+import 'url_helper.dart';
 
 @JS('window.experimentallyBlocked')
 external bool? get _experimentallyBlocked;
@@ -34,20 +35,12 @@ class CompatibilityShield extends StatelessWidget {
             ),
             actions: [
               TextButton(
-                onPressed: () {
-                  final url = web.URL(web.window.location.href);
-                  url.searchParams.set('mode', 'js');
-                  web.window.location.href = url.href;
-                },
+                onPressed: () => reloadWithQueryParams({'mode': 'js'}),
                 child: const Text('Stay on JS (Safe)'),
               ),
               ElevatedButton(
-                onPressed: () {
-                  final url = web.URL(web.window.location.href);
-                  url.searchParams.set('optin', 'true');
-                  url.searchParams.set('mode', 'wasm');
-                  web.window.location.href = url.href;
-                },
+                onPressed: () =>
+                    reloadWithQueryParams({'optin': 'true', 'mode': 'wasm'}),
                 child: const Text('Test Wasm Now'),
               ),
             ],
