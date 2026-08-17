@@ -213,12 +213,14 @@ class _PerformanceHudState extends State<PerformanceHud> {
           final now = DateTime.now();
           if (now.difference(_lastSaved).inMilliseconds >= 1000) {
             _lastSaved = now;
-            BenchmarkStorage.saveMetrics(
-              mode: isCurrentWasm ? 'wasm' : 'js',
-              metrics: metrics,
-              stressLevel: stressCtrl.currentLabel,
-              nodeCount: stressCtrl.nodeCount,
-            );
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              BenchmarkStorage.saveMetrics(
+                mode: isCurrentWasm ? 'wasm' : 'js',
+                metrics: metrics,
+                stressLevel: stressCtrl.currentLabel,
+                nodeCount: stressCtrl.nodeCount,
+              );
+            });
           }
         }
 

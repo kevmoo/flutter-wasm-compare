@@ -10,7 +10,44 @@ class BenchmarkStorage {
   static const String _wasmRunKey = 'wasm_compare_last_wasm_run';
   static const String _jsRunKey = 'wasm_compare_last_js_run';
 
+  static int? _cachedActiveNodes;
+  static BenchmarkRun? _cachedWasmRun;
+  static BenchmarkRun? _cachedJsRun;
+  static bool _cacheLoaded = false;
+
+  static void _ensureCacheLoaded() {
+    if (_cacheLoaded) return;
+    _cacheLoaded = true;
+    try {
+      final storage = web.window.localStorage;
+      final activeNodesStr = storage.getItem(_activeNodesKey);
+      _cachedActiveNodes = activeNodesStr != null
+          ? int.tryParse(activeNodesStr)
+          : null;
+
+      final wasmStr = storage.getItem(_wasmRunKey);
+      if (wasmStr != null && wasmStr.isNotEmpty) {
+        _cachedWasmRun = _parseBenchmarkRun(
+          jsonDecode(wasmStr) as Map<String, dynamic>,
+        );
+      }
+
+      final jsStr = storage.getItem(_jsRunKey);
+      if (jsStr != null && jsStr.isNotEmpty) {
+        _cachedJsRun = _parseBenchmarkRun(
+          jsonDecode(jsStr) as Map<String, dynamic>,
+        );
+      }
+    } catch (_) {
+      // Ignore
+    }
+  }
+
   static void clearRuns() {
+    _cachedActiveNodes = null;
+    _cachedWasmRun = null;
+    _cachedJsRun = null;
+    _cacheLoaded = true;
     try {
       final storage = web.window.localStorage;
       storage.removeItem(_activeNodesKey);
@@ -22,17 +59,9 @@ class BenchmarkStorage {
   }
 
   static void invalidateIfNodeCountChanged(int currentNodeCount) {
-    try {
-      final storage = web.window.localStorage;
-      final activeNodesStr = storage.getItem(_activeNodesKey);
-      if (activeNodesStr != null) {
-        final activeNodes = int.tryParse(activeNodesStr);
-        if (activeNodes != null && activeNodes != currentNodeCount) {
-          clearRuns();
-        }
-      }
-    } catch (_) {
-      // Ignore
+    _ensureCacheLoaded();
+    if (_cachedActiveNodes != null && _cachedActiveNodes != currentNodeCount) {
+      clearRuns();
     }
   }
 
@@ -64,13 +93,29 @@ class BenchmarkStorage {
     required String stressLevel,
     required int nodeCount,
   }) {
+    invalidateIfNodeCountChanged(nodeCount);
+    _cachedActiveNodes = nodeCount;
+
+    final run = (
+      mode: mode,
+      fps: fps,
+      buildTimeMs: buildTimeMs,
+      rasterTimeMs: rasterTimeMs,
+      totalFrameTimeMs: totalFrameTimeMs,
+      jitterMs: jitterMs,
+      stressLevel: stressLevel,
+      nodeCount: nodeCount,
+    );
+
+    final normMode = mode.toLowerCase();
+    if (normMode == 'wasm') {
+      _cachedWasmRun = run;
+    } else {
+      _cachedJsRun = run;
+    }
+
     try {
       final storage = web.window.localStorage;
-
-      // Invalidate existing runs if nodeCount changed
-      invalidateIfNodeCountChanged(nodeCount);
-
-      // Record new active node count
       storage.setItem(_activeNodesKey, '$nodeCount');
 
       final data = {
@@ -84,13 +129,7 @@ class BenchmarkStorage {
         'nodeCount': nodeCount,
       };
       final jsonStr = jsonEncode(data);
-
-      final normMode = mode.toLowerCase();
-      if (normMode == 'wasm') {
-        storage.setItem(_wasmRunKey, jsonStr);
-      } else {
-        storage.setItem(_jsRunKey, jsonStr);
-      }
+      storage.setItem(normMode == 'wasm' ? _wasmRunKey : _jsRunKey, jsonStr);
     } catch (_) {
       // Ignore
     }
@@ -101,32 +140,25 @@ class BenchmarkStorage {
     int? nodeCount,
     String? stressLevel,
   }) {
-    try {
-      final storage = web.window.localStorage;
-      if (!_matchesActiveNodes(storage, nodeCount)) return null;
+    _ensureCacheLoaded();
 
-      final normMode = mode.toLowerCase();
-      final key = (normMode == 'wasm') ? _wasmRunKey : _jsRunKey;
-      final jsonStr = storage.getItem(key);
-      if (jsonStr == null || jsonStr.isEmpty) return null;
-
-      final map = jsonDecode(jsonStr) as Map<String, dynamic>;
-      return _parseBenchmarkRun(
-        map,
-        expectedNodeCount: nodeCount,
-        expectedStressLevel: stressLevel,
-      );
-    } catch (_) {
+    if (nodeCount != null &&
+        _cachedActiveNodes != null &&
+        _cachedActiveNodes != nodeCount) {
       return null;
     }
-  }
 
-  static bool _matchesActiveNodes(web.Storage storage, int? expectedNodeCount) {
-    if (expectedNodeCount == null) return true;
-    final activeNodesStr = storage.getItem(_activeNodesKey);
-    if (activeNodesStr == null) return true;
-    final activeNodes = int.tryParse(activeNodesStr);
-    return activeNodes == null || activeNodes == expectedNodeCount;
+    final normMode = mode.toLowerCase();
+    final run = (normMode == 'wasm') ? _cachedWasmRun : _cachedJsRun;
+    if (run == null) return null;
+
+    if (nodeCount != null && run.nodeCount != nodeCount) return null;
+    if (stressLevel != null &&
+        run.stressLevel.toLowerCase() != stressLevel.toLowerCase()) {
+      return null;
+    }
+
+    return run;
   }
 
   static BenchmarkRun? _parseBenchmarkRun(

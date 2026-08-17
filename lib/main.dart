@@ -76,28 +76,24 @@ class DemoDashboard extends StatelessWidget {
         builder: (context, constraints) {
           final isLargeScreen = constraints.maxWidth >= largeScreenMinWidth;
 
-          if (isLargeScreen) {
-            return Stack(
-              children: [
-                Positioned.fill(
-                  child: AdaptiveStressScene(nodeCount: stressCtrl.nodeCount),
-                ),
-                const Positioned(top: 20, left: 20, child: PerformanceHud()),
-                const Positioned(top: 20, right: 20, child: RuntimeSelector()),
-              ],
-            );
-          }
-
           return Stack(
             children: [
               Positioned.fill(
+                key: const ValueKey('stress_scene'),
                 child: AdaptiveStressScene(nodeCount: stressCtrl.nodeCount),
               ),
-              const Positioned(top: 12, right: 12, child: RuntimeSelector()),
-              const Positioned(
-                bottom: 16,
-                left: 16,
-                child: PerformanceHud(initiallyCollapsed: true),
+              Positioned(
+                key: const ValueKey('perf_hud'),
+                top: isLargeScreen ? 20 : null,
+                left: isLargeScreen ? 20 : 16,
+                bottom: isLargeScreen ? null : 16,
+                child: PerformanceHud(initiallyCollapsed: !isLargeScreen),
+              ),
+              Positioned(
+                key: const ValueKey('runtime_selector'),
+                top: isLargeScreen ? 20 : 12,
+                right: isLargeScreen ? 20 : 12,
+                child: const RuntimeSelector(),
               ),
             ],
           );
