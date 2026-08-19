@@ -128,6 +128,7 @@ void main() {
       jitterMs: 5.2,
       stressLevel: 'Manual (200)',
       nodeCount: 200,
+      isPipelined: false,
     );
 
     const wasmSavedRun = (
@@ -139,6 +140,7 @@ void main() {
       jitterMs: 0.3,
       stressLevel: 'Manual (200)',
       nodeCount: 200,
+      isPipelined: true,
     );
 
     test('generates both speed and jitter benefit badges when Wasm leads', () {
@@ -168,6 +170,26 @@ void main() {
       expect(comparison.budgetPct, equals('66')); // 11.0 / 16.666ms = 66%
     });
 
+    test('generates speed badge with (ST) tag when Wasm is in '
+        'single-threaded mode', () {
+      final comparison = evaluateComparisonForTest(
+        currentActive: 18.0,
+        currentJitter: 0.4,
+        currentFps: 55.0,
+        targetRefreshRate: 60.0,
+        wasmRun: wasmSavedRun,
+        jsRun: jsSavedRun,
+        isCurrentWasm: true,
+        nodeCount: 200,
+        isSingleThreaded: true,
+      );
+
+      expect(comparison.hasBothRuns, isTrue);
+      expect(comparison.speedBadge, isNotNull);
+      expect(comparison.speedBadge?.title, equals('⚡ Wasm (ST) 1.8x Faster'));
+      expect(comparison.speedBadge?.detail, equals('18.0ms vs 32.0ms'));
+    });
+
     test('does not show badges when Wasm is worse or same', () {
       const fasterJsRun = (
         mode: 'js',
@@ -178,6 +200,7 @@ void main() {
         jitterMs: 0.2,
         stressLevel: 'Manual (200)',
         nodeCount: 200,
+        isPipelined: false,
       );
 
       final comparison = evaluateComparisonForTest(
@@ -207,6 +230,7 @@ void main() {
         jitterMs: 0.35,
         stressLevel: 'Manual (200)',
         nodeCount: 200,
+        isPipelined: false,
       );
 
       final comparison = evaluateComparisonForTest(

@@ -42,8 +42,13 @@ compilation to modern web browsers:
   from quick presets (Light, Medium, Heavy, Max).
 - **Responsive Layout**: Adapts between compact single-column mobile viewports
   and widescreen multi-column desktop grids.
+- **Single-Threaded Mode Toggle**: Easily test and compare serial Wasm execution:
+  - **Hotkey**: Press `Ctrl+Shift+S` (or `⌘+Shift+S` on macOS) to instantly toggle between Multithreaded and Single-threaded Wasm modes.
+  - **UI Indicators & Actions**: Click the WASM card in the HUD or the AppBar Threading Pill to toggle.
+  - **Sticky Preferences**: Persists across engine switches (`localStorage` + `?st=1`).
 - **Persisted State**: Benchmark measurements and HUD preferences persist
   across runtime engine reloads.
+
 
 ---
 

@@ -33,6 +33,7 @@ ComparisonData evaluateComparisonForTest({
   required BenchmarkRun? jsRun,
   required bool isCurrentWasm,
   required int nodeCount,
+  bool isSingleThreaded = false,
 }) => _evaluateComparison(
   currentActive: currentActive,
   currentJitter: currentJitter,
@@ -42,6 +43,7 @@ ComparisonData evaluateComparisonForTest({
   jsRun: jsRun,
   isCurrentWasm: isCurrentWasm,
   nodeCount: nodeCount,
+  isSingleThreaded: isSingleThreaded,
 );
 
 Color _getFpsColor(double fps, double targetHz) {
@@ -66,9 +68,10 @@ const _hudDecoration = BoxDecoration(
   ],
 );
 
-double _activeTimeForRun(BenchmarkRun? run, {required bool isPipelined}) {
+double _activeTimeForRun(BenchmarkRun? run, {bool? isPipelined}) {
   if (run == null) return 0.0;
-  return isPipelined
+  final pipelined = isPipelined ?? run.isPipelined;
+  return pipelined
       ? math.max(run.buildTimeMs, run.rasterTimeMs)
       : (run.buildTimeMs + run.rasterTimeMs);
 }
@@ -76,11 +79,13 @@ double _activeTimeForRun(BenchmarkRun? run, {required bool isPipelined}) {
 BenefitBadge? _computeSpeedBadge({
   required double wasmActive,
   required double jsActive,
+  bool isWasmSingleThreaded = false,
 }) {
   if (wasmActive <= 0.01 || (jsActive / wasmActive) < 1.05) return null;
   final ratio = jsActive / wasmActive;
+  final modeLabel = isWasmSingleThreaded ? ' (ST)' : '';
   return (
-    title: '⚡ Wasm ${ratio.toStringAsFixed(1)}x Faster',
+    title: '⚡ Wasm$modeLabel ${ratio.toStringAsFixed(1)}x Faster',
     detail:
         '${wasmActive.toStringAsFixed(1)}ms '
         'vs ${jsActive.toStringAsFixed(1)}ms',
@@ -114,14 +119,18 @@ ComparisonData _evaluateComparison({
   required BenchmarkRun? jsRun,
   required bool isCurrentWasm,
   required int nodeCount,
+  bool isSingleThreaded = false,
 }) {
   final budgetTargetMs = 1000.0 / targetRefreshRate;
   final budgetLabel =
       '${budgetTargetMs.toStringAsFixed(1)}ms (${targetRefreshRate.toInt()}Hz)';
 
+  final isWasmST = isCurrentWasm
+      ? isSingleThreaded
+      : !(wasmRun?.isPipelined ?? true);
   final wasmActive = isCurrentWasm
       ? currentActive
-      : _activeTimeForRun(wasmRun, isPipelined: true);
+      : _activeTimeForRun(wasmRun, isPipelined: !isWasmST);
   final jsActive = !isCurrentWasm
       ? currentActive
       : _activeTimeForRun(jsRun, isPipelined: false);
@@ -134,7 +143,11 @@ ComparisonData _evaluateComparison({
 
   final (speedBadge, jitterBadge, promptBadge) = hasBoth
       ? (
-          _computeSpeedBadge(wasmActive: wasmActive, jsActive: jsActive),
+          _computeSpeedBadge(
+            wasmActive: wasmActive,
+            jsActive: jsActive,
+            isWasmSingleThreaded: isWasmST,
+          ),
           _computeJitterBadge(wasmJitter: wasmJitter, jsJitter: jsJitter),
           null,
         )
@@ -203,8 +216,10 @@ class _PerformanceHudState extends State<PerformanceHud> {
       builder: (context, timingService, stressCtrl, child) {
         final metrics = timingService.metrics;
         final isCurrentWasm = isCurrentlyWasm();
+        final isCurrentST = isCurrentlySingleThreaded();
+        final isCurrentPipelined = isCurrentlyPipelined();
         final currentActive = metrics.activeFrameTimeMs(
-          isPipelined: isCurrentWasm,
+          isPipelined: isCurrentPipelined,
         );
 
         // Throttle benchmark storage writes to at most once per 1000ms
@@ -219,6 +234,7 @@ class _PerformanceHudState extends State<PerformanceHud> {
                 metrics: metrics,
                 stressLevel: stressCtrl.currentLabel,
                 nodeCount: stressCtrl.nodeCount,
+                isPipelined: isCurrentPipelined,
               );
             });
           }
@@ -245,6 +261,7 @@ class _PerformanceHudState extends State<PerformanceHud> {
           jsRun: jsRun,
           isCurrentWasm: isCurrentWasm,
           nodeCount: stressCtrl.nodeCount,
+          isSingleThreaded: isCurrentST,
         );
 
         if (_isCollapsed) {
@@ -254,7 +271,10 @@ class _PerformanceHudState extends State<PerformanceHud> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                _EngineTogglePill(isCurrentWasm: isCurrentWasm),
+                _EngineTogglePill(
+                  isCurrentWasm: isCurrentWasm,
+                  isSingleThreaded: isCurrentST,
+                ),
                 const SizedBox(width: 6),
                 Container(width: 1, height: 18, color: Colors.white12),
                 const SizedBox(width: 4),
@@ -325,6 +345,7 @@ class _PerformanceHudState extends State<PerformanceHud> {
               const SizedBox(height: 12),
               _DualEngineCards(
                 isCurrentWasm: isCurrentWasm,
+                isCurrentST: isCurrentST,
                 liveMetrics: metrics,
                 wasmRun: wasmRun,
                 jsRun: jsRun,
@@ -350,11 +371,16 @@ class _PerformanceHudState extends State<PerformanceHud> {
 
 class _EngineTogglePill extends StatelessWidget {
   final bool isCurrentWasm;
+  final bool isSingleThreaded;
 
-  const _EngineTogglePill({required this.isCurrentWasm});
+  const _EngineTogglePill({
+    required this.isCurrentWasm,
+    this.isSingleThreaded = false,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final wasmLabel = isSingleThreaded ? '⚡ Wasm (ST)' : '⚡ Wasm';
     return Container(
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.08),
@@ -366,12 +392,17 @@ class _EngineTogglePill extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           _EnginePillButton(
-            label: '⚡ Wasm',
+            label: wasmLabel,
             isSelected: isCurrentWasm,
             selectedColor: Colors.lightBlueAccent,
             onTap: isCurrentWasm
-                ? null
+                ? () => toggleSingleThreadedMode(context)
                 : () => switchEngineMode(context, mode: 'wasm'),
+            tooltip: isCurrentWasm
+                ? (isSingleThreaded
+                      ? 'Wasm (Single-threaded) • Tap or Ctrl+Shift+S to toggle'
+                      : 'Wasm (Multi-threaded) • Tap or Ctrl+Shift+S to toggle')
+                : 'Switch to WebAssembly',
           ),
           const SizedBox(width: 2),
           _EnginePillButton(
@@ -381,6 +412,9 @@ class _EngineTogglePill extends StatelessWidget {
             onTap: !isCurrentWasm
                 ? null
                 : () => switchEngineMode(context, mode: 'js'),
+            tooltip: !isCurrentWasm
+                ? 'Running JavaScript (CanvasKit)'
+                : 'Switch to JavaScript',
           ),
         ],
       ),
@@ -393,12 +427,14 @@ class _EnginePillButton extends StatelessWidget {
   final bool isSelected;
   final Color selectedColor;
   final VoidCallback? onTap;
+  final String? tooltip;
 
   const _EnginePillButton({
     required this.label,
     required this.isSelected,
     required this.selectedColor,
     required this.onTap,
+    this.tooltip,
   });
 
   @override
@@ -409,7 +445,7 @@ class _EnginePillButton extends StatelessWidget {
     final textColor = isSelected ? selectedColor : Colors.white54;
     final fontWeight = isSelected ? FontWeight.bold : FontWeight.normal;
 
-    return Material(
+    final button = Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
@@ -431,6 +467,16 @@ class _EnginePillButton extends StatelessWidget {
         ),
       ),
     );
+
+    if (tooltip != null) {
+      return Tooltip(
+        message: tooltip!,
+        waitDuration: const Duration(milliseconds: 300),
+        child: button,
+      );
+    }
+
+    return button;
   }
 }
 
@@ -528,6 +574,7 @@ class _BudgetBar extends StatelessWidget {
 
 class _DualEngineCards extends StatelessWidget {
   final bool isCurrentWasm;
+  final bool isCurrentST;
   final FrameTimingMetrics liveMetrics;
   final BenchmarkRun? wasmRun;
   final BenchmarkRun? jsRun;
@@ -535,6 +582,7 @@ class _DualEngineCards extends StatelessWidget {
 
   const _DualEngineCards({
     required this.isCurrentWasm,
+    required this.isCurrentST,
     required this.liveMetrics,
     required this.wasmRun,
     required this.jsRun,
@@ -543,11 +591,15 @@ class _DualEngineCards extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isWasmST = isCurrentWasm
+        ? isCurrentST
+        : !(wasmRun?.isPipelined ?? true);
+
     final wasmMetrics = _resolveCardMetrics(
       isLive: isCurrentWasm,
       liveMetrics: liveMetrics,
       savedRun: wasmRun,
-      isPipelined: true,
+      isPipelined: !isWasmST,
     );
     final jsMetrics = _resolveCardMetrics(
       isLive: !isCurrentWasm,
@@ -562,7 +614,9 @@ class _DualEngineCards extends StatelessWidget {
         // Left Card: WASM
         Expanded(
           child: _EngineMiniCard(
-            title: '⚡ WASM',
+            title: isWasmST ? '⚡ WASM (ST)' : '⚡ WASM',
+            subtitle: isWasmST ? 'Single-threaded' : null,
+
             titleColor: Colors.lightBlueAccent,
             isLive: isCurrentWasm,
             fps: wasmMetrics.fps,
@@ -571,8 +625,9 @@ class _DualEngineCards extends StatelessWidget {
             buildMs: wasmMetrics.buildMs,
             rasterMs: wasmMetrics.rasterMs,
             targetHz: targetHz,
+            isSingleThreaded: isWasmST,
             onTap: isCurrentWasm
-                ? null
+                ? () => toggleSingleThreadedMode(context)
                 : () => switchEngineMode(context, mode: 'wasm'),
           ),
         ),
@@ -581,6 +636,7 @@ class _DualEngineCards extends StatelessWidget {
         Expanded(
           child: _EngineMiniCard(
             title: '📜 JS',
+            subtitle: 'CanvasKit (Serial)',
             titleColor: const Color(0xFFF1E05A),
             isLive: !isCurrentWasm,
             fps: jsMetrics.fps,
@@ -642,6 +698,7 @@ _CardMetrics _resolveCardMetrics({
 
 class _EngineMiniCard extends StatelessWidget {
   final String title;
+  final String? subtitle;
   final Color titleColor;
   final bool isLive;
   final double? fps;
@@ -650,10 +707,12 @@ class _EngineMiniCard extends StatelessWidget {
   final double? buildMs;
   final double? rasterMs;
   final double targetHz;
+  final bool isSingleThreaded;
   final VoidCallback? onTap;
 
   const _EngineMiniCard({
     required this.title,
+    this.subtitle,
     required this.titleColor,
     required this.isLive,
     required this.fps,
@@ -662,6 +721,7 @@ class _EngineMiniCard extends StatelessWidget {
     required this.buildMs,
     required this.rasterMs,
     required this.targetHz,
+    this.isSingleThreaded = false,
     this.onTap,
   });
 
@@ -678,7 +738,11 @@ class _EngineMiniCard extends StatelessWidget {
     final isWasmCard = title.contains('WASM');
     final targetEngine = isWasmCard ? 'Wasm (Skwasm)' : 'JS (CanvasKit)';
     final tooltipMessage = isLive
-        ? 'Currently active runtime engine'
+        ? (isWasmCard
+              ? (isSingleThreaded
+                    ? 'Active: Single-threaded • Tap or Ctrl+Shift+S to toggle'
+                    : 'Active: Multi-threaded • Tap or Ctrl+Shift+S to toggle')
+              : 'Currently active runtime engine')
         : 'Click to switch to $targetEngine';
 
     final cardContent = Container(
@@ -695,18 +759,39 @@ class _EngineMiniCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
-                title,
-                style: TextStyle(
-                  color: titleColor,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 11,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: titleColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (subtitle != null)
+                      Text(
+                        subtitle!,
+                        style: TextStyle(
+                          color: isLive ? Colors.white70 : Colors.white38,
+                          fontSize: 8.5,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
                 ),
               ),
               _EngineStatusBadge(
                 isLive: isLive,
                 hasData: hasData,
                 titleColor: titleColor,
+                liveLabel: isWasmCard && isSingleThreaded
+                    ? 'LIVE (ST)'
+                    : 'LIVE',
               ),
             ],
           ),
@@ -755,11 +840,13 @@ class _EngineStatusBadge extends StatelessWidget {
   final bool isLive;
   final bool hasData;
   final Color titleColor;
+  final String liveLabel;
 
   const _EngineStatusBadge({
     required this.isLive,
     required this.hasData,
     required this.titleColor,
+    this.liveLabel = 'LIVE',
   });
 
   @override
@@ -775,9 +862,9 @@ class _EngineStatusBadge extends StatelessWidget {
             width: 0.5,
           ),
         ),
-        child: const Text(
-          'LIVE',
-          style: TextStyle(
+        child: Text(
+          liveLabel,
+          style: const TextStyle(
             color: Colors.greenAccent,
             fontSize: 8.5,
             fontWeight: FontWeight.bold,

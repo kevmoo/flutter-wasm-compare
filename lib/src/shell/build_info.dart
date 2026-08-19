@@ -147,7 +147,11 @@ class BuildInfoDialog extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    isWasm ? '⚡ WASM (Skwasm)' : '📜 JS (CanvasKit)',
+                    isWasm
+                        ? (isCurrentlySingleThreaded()
+                              ? '⚡ WASM (Single-threaded)'
+                              : '⚡ WASM (Multi-threaded)')
+                        : '📜 JS (CanvasKit)',
                     style: TextStyle(
                       color: isWasm
                           ? Colors.lightBlueAccent
@@ -159,7 +163,31 @@ class BuildInfoDialog extends StatelessWidget {
                 ],
               ),
             ),
+            if (isWasm) ...[
+              const SizedBox(height: 8),
+              _BuildInfoRow(
+                label: 'Threading',
+                child: Tooltip(
+                  message: 'Press Ctrl+Shift+S (or ⌘+Shift+S) to toggle',
+                  child: ActionChip(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    label: Text(
+                      isCurrentlySingleThreaded()
+                          ? 'Single-threaded (Toggle)'
+                          : 'Multi-threaded (Toggle)',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      toggleSingleThreadedMode(context);
+                    },
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 8),
+
             _BuildInfoRow(
               label: 'Repository',
               child: InkWell(

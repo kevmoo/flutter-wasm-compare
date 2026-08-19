@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:wasm_compare/main.dart';
@@ -108,16 +109,34 @@ void main() {
     await tester.pump();
 
     // Verify WASM and JS mini-cards are rendered in expanded HUD
-    expect(find.text('⚡ WASM'), findsOneWidget);
+    expect(find.textContaining('⚡ WASM'), findsOneWidget);
     expect(find.text('📜 JS'), findsOneWidget);
 
     // In non-wasm context, WASM card has an interactive InkWell
-    final wasmCard = find.text('⚡ WASM');
+    final wasmCard = find.textContaining('⚡ WASM');
     expect(wasmCard, findsOneWidget);
     await tester.tap(wasmCard);
     await tester.pump();
 
     // Verify prompt badge or card tooltips exist
     expect(find.byType(Tooltip), findsWidgets);
+  });
+
+  testWidgets('Responds to Ctrl+Shift+S / Cmd+Shift+S keyboard shortcut', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const WasmCompareApp());
+    await tester.pump();
+
+    // Simulate pressing Ctrl+Shift+S
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyS);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pump();
+
+    // Verify app handles the shortcut without error
+    expect(find.byType(DemoDashboard), findsOneWidget);
   });
 }

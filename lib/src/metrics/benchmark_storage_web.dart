@@ -70,6 +70,7 @@ class BenchmarkStorage {
     required FrameTimingMetrics metrics,
     required String stressLevel,
     required int nodeCount,
+    bool? isPipelined,
   }) {
     saveRun(
       mode: mode,
@@ -80,6 +81,7 @@ class BenchmarkStorage {
       jitterMs: metrics.jitterMs,
       stressLevel: stressLevel,
       nodeCount: nodeCount,
+      isPipelined: isPipelined ?? (mode.toLowerCase() == 'wasm'),
     );
   }
 
@@ -92,6 +94,7 @@ class BenchmarkStorage {
     double jitterMs = 0.0,
     required String stressLevel,
     required int nodeCount,
+    bool isPipelined = false,
   }) {
     invalidateIfNodeCountChanged(nodeCount);
     _cachedActiveNodes = nodeCount;
@@ -105,6 +108,7 @@ class BenchmarkStorage {
       jitterMs: jitterMs,
       stressLevel: stressLevel,
       nodeCount: nodeCount,
+      isPipelined: isPipelined,
     );
 
     final normMode = mode.toLowerCase();
@@ -127,6 +131,7 @@ class BenchmarkStorage {
         'jitterMs': jitterMs,
         'stressLevel': stressLevel,
         'nodeCount': nodeCount,
+        'isPipelined': isPipelined,
       };
       final jsonStr = jsonEncode(data);
       storage.setItem(normMode == 'wasm' ? _wasmRunKey : _jsRunKey, jsonStr);
@@ -179,6 +184,9 @@ class BenchmarkStorage {
     final fps = (map['fps'] as num?)?.toDouble();
     if (runMode == null || fps == null) return null;
 
+    final isPipelined =
+        (map['isPipelined'] as bool?) ?? (runMode.toLowerCase() == 'wasm');
+
     return (
       mode: runMode,
       fps: fps,
@@ -188,6 +196,7 @@ class BenchmarkStorage {
       jitterMs: (map['jitterMs'] as num?)?.toDouble() ?? 0.0,
       stressLevel: stress,
       nodeCount: nodes,
+      isPipelined: isPipelined,
     );
   }
 }

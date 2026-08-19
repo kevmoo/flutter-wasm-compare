@@ -94,6 +94,41 @@ bool? getPersistedHudCollapsed() {
   return null;
 }
 
+void savePersistedSingleThreaded(bool singleThreaded) {
+  try {
+    web.window.localStorage.setItem(
+      'wasm_compare_single_threaded',
+      singleThreaded ? 'true' : 'false',
+    );
+  } catch (_) {
+    // Ignore
+  }
+}
+
+bool isSingleThreaded() {
+  try {
+    final stParam =
+        Uri.base.queryParameters['st'] ??
+        Uri.base.queryParameters['single_threaded'];
+    if (stParam == '1' || stParam == 'true') return true;
+    if (stParam == '0' || stParam == 'false') return false;
+
+    final modeParam = Uri.base.queryParameters['mode'];
+    if (modeParam == 'skwasm-st') return true;
+    if (modeParam == 'skwasm-mt') return false;
+
+    final stored = web.window.localStorage.getItem(
+      'wasm_compare_single_threaded',
+    );
+    if (stored != null && stored.isNotEmpty) {
+      return stored == 'true';
+    }
+  } catch (_) {
+    // Ignore
+  }
+  return false;
+}
+
 void openExternalUrl(String url) {
   try {
     web.window.open(url, '_blank');

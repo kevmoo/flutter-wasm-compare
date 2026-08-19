@@ -15,6 +15,7 @@ class BenchmarkStorage {
     double jitterMs = 0.0,
     required String stressLevel,
     required int nodeCount,
+    bool isPipelined = false,
   }) {}
 
   static void saveMetrics({
@@ -22,6 +23,7 @@ class BenchmarkStorage {
     required FrameTimingMetrics metrics,
     required String stressLevel,
     required int nodeCount,
+    bool? isPipelined,
   }) {}
 
   static BenchmarkRun? getRunForMode({

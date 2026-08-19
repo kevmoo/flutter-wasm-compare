@@ -18,6 +18,10 @@ void savePersistedHudCollapsed(bool collapsed) {}
 
 bool? getPersistedHudCollapsed() => null;
 
+void savePersistedSingleThreaded(bool singleThreaded) {}
+
+bool isSingleThreaded() => false;
+
 void openExternalUrl(String url) {}
 
 void reloadWithQueryParams(Map<String, String> params) {}

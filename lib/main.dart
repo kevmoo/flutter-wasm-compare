@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'src/metrics/frame_timing_service.dart';
@@ -6,6 +7,7 @@ import 'src/scene/adaptive_stress_scene.dart';
 import 'src/scene/stress_controller.dart';
 import 'src/shell/build_info.dart';
 import 'src/shell/compatibility_shield.dart';
+import 'src/shell/engine_mode.dart';
 import 'src/shell/performance_hud.dart';
 
 void main() {
@@ -48,49 +50,136 @@ class DemoDashboard extends StatelessWidget {
     final isCompactScreen =
         MediaQuery.sizeOf(context).width < compactAppBarBreakpoint;
 
-    return Scaffold(
-      appBar: AppBar(
-        titleSpacing: isCompactScreen ? 12.0 : null,
-        title: Text(
-          isCompactScreen ? 'Wasm vs JS' : 'Wasm vs JS Performance',
-          style: TextStyle(
-            fontSize: isCompactScreen ? 16 : 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        actions: [
-          BuildInfoButton(isCompact: isCompactScreen),
-          _DeviceDetailsButton(
-            stressCtrl: stressCtrl,
-            isCompact: isCompactScreen,
-          ),
-          _StressStepperPill(
-            stressCtrl: stressCtrl,
-            isCompact: isCompactScreen,
-          ),
-          _PresetDropdown(stressCtrl: stressCtrl, isCompact: isCompactScreen),
-        ],
-      ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          final isLargeScreen = constraints.maxWidth >= largeScreenMinWidth;
-
-          return Stack(
-            children: [
-              Positioned.fill(
-                key: const ValueKey('stress_scene'),
-                child: AdaptiveStressScene(nodeCount: stressCtrl.nodeCount),
+    return CallbackShortcuts(
+      bindings: <ShortcutActivator, VoidCallback>{
+        const SingleActivator(
+          LogicalKeyboardKey.keyS,
+          control: true,
+          shift: true,
+        ): () =>
+            toggleSingleThreadedMode(context),
+        const SingleActivator(
+          LogicalKeyboardKey.keyS,
+          meta: true,
+          shift: true,
+        ): () =>
+            toggleSingleThreadedMode(context),
+      },
+      child: Focus(
+        autofocus: true,
+        child: Scaffold(
+          appBar: AppBar(
+            titleSpacing: isCompactScreen ? 12.0 : null,
+            title: Text(
+              isCompactScreen ? 'Wasm vs JS' : 'Wasm vs JS Performance',
+              style: TextStyle(
+                fontSize: isCompactScreen ? 16 : 20,
+                fontWeight: FontWeight.bold,
               ),
-              Positioned(
-                key: const ValueKey('perf_hud'),
-                top: isLargeScreen ? 20 : null,
-                left: isLargeScreen ? 20 : 16,
-                bottom: isLargeScreen ? null : 16,
-                child: PerformanceHud(initiallyCollapsed: !isLargeScreen),
+            ),
+            actions: [
+              BuildInfoButton(isCompact: isCompactScreen),
+              if (isCurrentlySingleThreaded())
+                _ThreadingModeButton(isCompact: isCompactScreen),
+              _DeviceDetailsButton(
+                stressCtrl: stressCtrl,
+                isCompact: isCompactScreen,
+              ),
+              _StressStepperPill(
+                stressCtrl: stressCtrl,
+                isCompact: isCompactScreen,
+              ),
+              _PresetDropdown(
+                stressCtrl: stressCtrl,
+                isCompact: isCompactScreen,
               ),
             ],
-          );
-        },
+          ),
+          body: LayoutBuilder(
+            builder: (context, constraints) {
+              final isLargeScreen = constraints.maxWidth >= largeScreenMinWidth;
+
+              return Stack(
+                children: [
+                  Positioned.fill(
+                    key: const ValueKey('stress_scene'),
+                    child: AdaptiveStressScene(nodeCount: stressCtrl.nodeCount),
+                  ),
+                  Positioned(
+                    key: const ValueKey('perf_hud'),
+                    top: isLargeScreen ? 20 : null,
+                    left: isLargeScreen ? 20 : 16,
+                    bottom: isLargeScreen ? null : 16,
+                    child: PerformanceHud(initiallyCollapsed: !isLargeScreen),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ThreadingModeButton extends StatelessWidget {
+  final bool isCompact;
+
+  const _ThreadingModeButton({this.isCompact = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final isSt = isCurrentlySingleThreaded();
+    final tooltip = isSt
+        ? 'Wasm Single-threaded (Serial) • Tap or Ctrl+Shift+S to toggle'
+        : 'Wasm Multi-threaded (Worker) • Tap or Ctrl+Shift+S to toggle';
+    final color = isSt ? Colors.amberAccent : Colors.lightBlueAccent;
+    final label = isSt ? 'Single-threaded' : 'Multi-threaded';
+
+    final iconWidget = isSt
+        ? const Icon(Icons.trending_flat, size: 14, color: Colors.amberAccent)
+        : const Icon(Icons.call_split, size: 14, color: Colors.lightBlueAccent);
+
+    final compactIconWidget = isSt
+        ? const Icon(Icons.trending_flat, size: 18, color: Colors.amberAccent)
+        : const Icon(Icons.call_split, size: 18, color: Colors.lightBlueAccent);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2.0),
+      child: Tooltip(
+        message: tooltip,
+        child: isCompact
+            ? IconButton(
+                icon: compactIconWidget,
+                onPressed: () => toggleSingleThreadedMode(context),
+              )
+            : OutlinedButton.icon(
+                onPressed: () => toggleSingleThreadedMode(context),
+                icon: iconWidget,
+                label: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
+                ),
+                style: OutlinedButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  side: BorderSide(
+                    color: color.withValues(alpha: 0.45),
+                    width: 1.0,
+                  ),
+                  backgroundColor: color.withValues(alpha: 0.10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+              ),
       ),
     );
   }
