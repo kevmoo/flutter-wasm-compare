@@ -186,7 +186,8 @@ String _formatMarkdownReport({
     buffer.writeln();
     buffer.writeln('<!-- mdformat off -->');
     buffer.writeln(
-      '| Browser | Cross-Origin Isolated | Wasm JS-String Supported | User Agent |',
+      '| Browser | Cross-Origin Isolated | Wasm JS-String Supported | '
+      'User Agent |',
     );
     buffer.writeln('| :--- | :---: | :---: | :--- |');
     for (final entry in capabilities.entries) {
@@ -298,7 +299,7 @@ class _ReportColumn {
   String get header => '${browser.label} ${mode.shortLabel}';
 }
 
-const _capabilityProbeScript = """(() => {
+const _capabilityProbeScript = '''(() => {
   const opts = { builtins: ["js-string"] };
   const invalidBytes = new Uint8Array([
     0,97,115,109,1,0,0,0,1,4,1,96,0,0,2,23,1,14,
@@ -314,7 +315,7 @@ const _capabilityProbeScript = """(() => {
     optValidate: optValidate,
     invertedProbe: !optValidate
   });
-})()""";
+})()''';
 
 enum BrowserType {
   chrome('Chrome'),
@@ -375,7 +376,8 @@ class BenchmarkRecord {
     );
   }
 
-  /// Calculates true throughput if the HUD's tab-pause filter fallback occurred.
+  /// Calculates true throughput if the HUD's tab-pause filter fallback
+  /// occurred.
   double get effectiveFps {
     if (fps == 60.0 && totalFrameTimeMs > 500.0) {
       final active = isPipelined
@@ -698,7 +700,8 @@ class _SafariWebDriver implements BrowserDriver {
   }
 }
 
-/// Drives Firefox via `geckodriver` (W3C WebDriver HTTP API) with unthrottled prefs.
+/// Drives Firefox via `geckodriver` (W3C WebDriver HTTP API) with
+/// unthrottled prefs.
 class _FirefoxWebDriver implements BrowserDriver {
   Process? _driverProcess;
   int? _port;
