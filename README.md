@@ -90,12 +90,14 @@ multi-sample statistical modeling (powered by `package:bench_press`):
 # Run full benchmark matrix across all installed browsers
 dart tool/benchmark.dart
 
-# Run on specific browsers or presets
-dart tool/benchmark.dart --browser=chrome,safari --nodes=1000
+# Run on specific browsers with a convenience preset
+dart tool/benchmark.dart --browser=chrome,safari --preset=medium
 
-# Benchmark with JSON telemetry output and Markdown reporting
+# Benchmark with JSON telemetry output and custom sampling options
 dart tool/benchmark.dart \
   --browser=all \
+  --samples=5 \
+  --sample-interval=1200 \
   --output=doc/benchmarks.md \
   --json-output=doc/benchmarks.json
 ```
