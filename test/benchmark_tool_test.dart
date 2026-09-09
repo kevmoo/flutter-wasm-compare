@@ -134,7 +134,7 @@ void main() {
     });
 
     test('fiellerToJson sanitizes unbounded Infinity to null', () {
-      final unbounded = FiellerInterval(
+      const unbounded = FiellerInterval(
         ratio: 2.5,
         lowerBound: double.negativeInfinity,
         upperBound: double.infinity,
@@ -160,7 +160,7 @@ void main() {
     });
 
     test('fiellerToJson sanitizes NaN ratio to null', () {
-      final nanFieller = FiellerInterval(
+      const nanFieller = FiellerInterval(
         ratio: double.nan,
         lowerBound: double.nan,
         upperBound: double.nan,
@@ -182,7 +182,7 @@ void main() {
     });
 
     test('formatFieller handles edge cases gracefully', () {
-      final valid = FiellerInterval(
+      const valid = FiellerInterval(
         ratio: 2.5,
         lowerBound: 2.1,
         upperBound: 2.9,
@@ -192,7 +192,7 @@ void main() {
       );
       expect(formatFieller(valid), equals('2.50x [2.10x, 2.90x] (95% CI)'));
 
-      final unbounded = FiellerInterval(
+      const unbounded = FiellerInterval(
         ratio: 2.5,
         lowerBound: double.negativeInfinity,
         upperBound: double.infinity,
@@ -202,7 +202,7 @@ void main() {
       );
       expect(formatFieller(unbounded), equals('2.50x'));
 
-      final nanInterval = FiellerInterval(
+      const nanInterval = FiellerInterval(
         ratio: double.nan,
         lowerBound: double.nan,
         upperBound: double.nan,
