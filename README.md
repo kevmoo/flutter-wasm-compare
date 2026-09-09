@@ -81,8 +81,25 @@ dart run tool/serve.dart --port 8088
 flutter build web --wasm --source-maps --dump-info
 ```
 
+### Automated Browser Benchmarks
+
+Run automated empirical benchmarks across Chrome, Safari, and Firefox with zero
+external dependencies:
+
+```bash
+# Run full benchmark matrix across all installed browsers
+dart tool/benchmark.dart
+
+# Run on specific browsers or presets
+dart tool/benchmark.dart --browser=chrome,safari --nodes=1000
+
+# Benchmark against local development server
+dart tool/benchmark.dart --url=http://localhost:8088 --output=doc/benchmarks.md
+```
+
 ### Deploy to Firebase Hosting
 
 ```bash
 firebase deploy --only hosting
 ```
+
