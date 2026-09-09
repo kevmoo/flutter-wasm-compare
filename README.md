@@ -83,8 +83,8 @@ flutter build web --wasm --source-maps --dump-info
 
 ### Automated Browser Benchmarks
 
-Run automated empirical benchmarks across Chrome, Safari, and Firefox with zero
-external dependencies:
+Run automated empirical benchmarks across Chrome, Safari, and Firefox with
+multi-sample statistical modeling (powered by `package:bench_press`):
 
 ```bash
 # Run full benchmark matrix across all installed browsers
@@ -93,8 +93,11 @@ dart tool/benchmark.dart
 # Run on specific browsers or presets
 dart tool/benchmark.dart --browser=chrome,safari --nodes=1000
 
-# Benchmark against local development server
-dart tool/benchmark.dart --url=http://localhost:8088 --output=doc/benchmarks.md
+# Benchmark with JSON telemetry output and Markdown reporting
+dart tool/benchmark.dart \
+  --browser=all \
+  --output=doc/benchmarks.md \
+  --json-output=doc/benchmarks.json
 ```
 
 ### Deploy to Firebase Hosting

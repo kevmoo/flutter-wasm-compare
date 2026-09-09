@@ -2,11 +2,12 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:bench_press/bench_press.dart';
+
 /// Automated browser benchmark driver for `flutter-wasm-compare`.
 ///
-/// Supports Chrome, Safari, and Firefox on macOS/Linux with zero external
-/// dependencies, using standard W3C WebDriver (Safari/Firefox) and Chrome
-/// DevTools Protocol (CDP over WebSocket).
+/// Supports Chrome, Safari, and Firefox on macOS/Linux with statistical
+/// sampling and telemetry powered by `package:bench_press`.
 Future<void> main(List<String> rawArgs) async {
   final args = _BenchmarkArgs.parse(rawArgs);
   if (args.showHelp) {
@@ -22,11 +23,15 @@ Future<void> main(List<String> rawArgs) async {
   print('Modes:           ${args.modes.map((m) => m.label).join(', ')}');
   print('Nodes:           ${args.nodeCounts.join(', ')}');
   print('Viewport:        ${args.viewportWidth}x${args.viewportHeight} px');
-  print('Settle Duration: ${args.settleSeconds}s per run');
+  print(
+    'Settle Duration: ${args.settleSeconds}s initial, '
+    '${args.samples} samples per run',
+  );
   print('=' * 63);
   print('');
 
-  final benchmarkResults = <BrowserType, Map<BenchmarkKey, BenchmarkRecord>>{};
+  final benchmarkResults =
+      <BrowserType, Map<BenchmarkKey, MultiSampleRecord>>{};
   final capabilityResults = <BrowserType, CapabilityRecord>{};
 
   for (final browserType in args.browsers) {
@@ -68,35 +73,62 @@ Future<void> main(List<String> rawArgs) async {
         }
       }
 
-      final browserMap = <BenchmarkKey, BenchmarkRecord>{};
+      final browserMap = <BenchmarkKey, MultiSampleRecord>{};
       for (final mode in args.modes) {
         for (final nodes in args.nodeCounts) {
           final url = _buildUrl(args.baseUrl, mode, nodes);
-          stdout.write('  • [${mode.label}] @ $nodes nodes: navigating...');
+          stdout.write('  • [${mode.label}] @ $nodes nodes: settling...');
           await driver.navigate(url);
 
           for (var s = args.settleSeconds; s > 0; s--) {
             stdout.write(' ${s}s');
             await Future<void>.delayed(const Duration(seconds: 1));
           }
-          stdout.write(' evaluating...\r');
 
+          // Multi-sample collection phase
+          stdout.write(' sampling (${args.samples}x)...');
+          final collected = <BenchmarkRecord>[];
           final readExpr = "localStorage.getItem('${mode.storageKey}')";
-          final rawJson = await driver.evaluate(readExpr);
 
-          if (rawJson is String && rawJson.isNotEmpty) {
-            final data = jsonDecode(rawJson) as Map<String, dynamic>;
-            final record = BenchmarkRecord.fromJson(data);
+          for (var i = 0; i < args.samples; i++) {
+            if (i > 0) {
+              await Future<void>.delayed(const Duration(milliseconds: 500));
+            }
+            final rawJson = await driver.evaluate(readExpr);
+            if (rawJson is String && rawJson.isNotEmpty) {
+              final data = jsonDecode(rawJson) as Map<String, dynamic>;
+              collected.add(BenchmarkRecord.fromJson(data));
+            }
+          }
+          stdout.write(' done.\r');
+
+          if (collected.isNotEmpty) {
+            final multi = MultiSampleRecord.fromRecords(collected);
             final key = BenchmarkKey(mode, nodes);
-            browserMap[key] = record;
+            browserMap[key] = multi;
+
             final label = mode.label.padRight(15);
             final nodeStr = nodes.toString().padLeft(4);
-            final fpsStr = record.effectiveFps.toStringAsFixed(1);
-            final buildStr = record.buildTimeMs.toStringAsFixed(2);
-            final rasterStr = record.rasterTimeMs.toStringAsFixed(2);
+            final fpsStr = multi.fps.medianNs.toStringAsFixed(1);
+            final p95Fps = multi.fps.p95Ns.toStringAsFixed(1);
+            final buildStr = (multi.buildTime.medianNs / 1e6).toStringAsFixed(
+              2,
+            );
+            final buildMad = (multi.buildTime.madNs / 1e6).toStringAsFixed(2);
+            final rasterStr = (multi.rasterTime.medianNs / 1e6).toStringAsFixed(
+              2,
+            );
+            final rasterMad = (multi.rasterTime.madNs / 1e6).toStringAsFixed(2);
+            final stabilityTag = multi.buildTime.isRobustStable
+                ? 'STABLE'
+                : 'UNSTABLE';
+
             print(
               '  ✓ [$label] @ $nodeStr nodes -> '
-              '$fpsStr FPS | Build: ${buildStr}ms | Raster: ${rasterStr}ms',
+              '$fpsStr FPS (p95: $p95Fps) | '
+              'Build: ${buildStr}ms (MAD: ${buildMad}ms) | '
+              'Raster: ${rasterStr}ms (MAD: ${rasterMad}ms) '
+              '[$stabilityTag]',
             );
           } else {
             final label = mode.label.padRight(15);
@@ -134,7 +166,27 @@ Future<void> main(List<String> rawArgs) async {
     final file = File(args.outputPath!);
     await file.parent.create(recursive: true);
     await file.writeAsString(report);
-    print('\nReport saved to ${file.path}');
+    print('Markdown report saved to ${file.path}');
+  }
+
+  final jsonResult = _generateJsonReport(
+    args: args,
+    capabilities: capabilityResults,
+    results: benchmarkResults,
+  );
+
+  if (args.jsonOutput) {
+    print('\n=== JSON TELEMETRY ===\n');
+    print(const JsonEncoder.withIndent('  ').convert(jsonResult));
+  }
+
+  if (args.jsonOutputPath != null) {
+    final file = File(args.jsonOutputPath!);
+    await file.parent.create(recursive: true);
+    await file.writeAsString(
+      const JsonEncoder.withIndent('  ').convert(jsonResult),
+    );
+    print('JSON telemetry saved to ${file.path}');
   }
 }
 
@@ -165,7 +217,7 @@ String _buildUrl(String baseUrl, BenchmarkMode mode, int nodes) {
 String _formatMarkdownReport({
   required _BenchmarkArgs args,
   required Map<BrowserType, CapabilityRecord> capabilities,
-  required Map<BrowserType, Map<BenchmarkKey, BenchmarkRecord>> results,
+  required Map<BrowserType, Map<BenchmarkKey, MultiSampleRecord>> results,
 }) {
   final buffer = StringBuffer();
   buffer.writeln(
@@ -178,7 +230,10 @@ String _formatMarkdownReport({
     '- **Viewport**: ${args.viewportWidth}x${args.viewportHeight} px '
     '(calibrated identically across all browsers)',
   );
-  buffer.writeln('- **Settle Duration**: ${args.settleSeconds} seconds');
+  buffer.writeln(
+    '- **Sampling**: ${args.samples} trials per run after '
+    '${args.settleSeconds}s initial settle',
+  );
   buffer.writeln();
 
   if (capabilities.isNotEmpty) {
@@ -202,7 +257,7 @@ String _formatMarkdownReport({
     buffer.writeln();
   }
 
-  buffer.writeln('## 📊 Performance Comparison Matrix');
+  buffer.writeln('## 📊 Performance Comparison Matrix (Median Values)');
   buffer.writeln();
   buffer.writeln('<!-- mdformat off -->');
 
@@ -230,9 +285,9 @@ String _formatMarkdownReport({
     for (final col in columns) {
       final rec = results[col.browser]?[BenchmarkKey(col.mode, nodes)];
       if (rec != null) {
-        final fpsStr = rec.effectiveFps.toStringAsFixed(1);
-        final buildStr = rec.buildTimeMs.toStringAsFixed(2);
-        final rasterStr = rec.rasterTimeMs.toStringAsFixed(2);
+        final fpsStr = rec.fps.medianNs.toStringAsFixed(1);
+        final buildStr = (rec.buildTime.medianNs / 1e6).toStringAsFixed(2);
+        final rasterStr = (rec.rasterTime.medianNs / 1e6).toStringAsFixed(2);
         buffer.write(' **$fpsStr FPS** / ${buildStr}ms / ${rasterStr}ms |');
       } else {
         buffer.write(' N/A |');
@@ -243,7 +298,7 @@ String _formatMarkdownReport({
   buffer.writeln('<!-- mdformat on -->');
   buffer.writeln();
 
-  buffer.writeln('### Key Takeaways');
+  buffer.writeln('### Key Takeaways (Fieller 95% Confidence Intervals)');
   for (final browser in results.keys) {
     final browserResults = results[browser]!;
     final mt1000 =
@@ -260,36 +315,213 @@ String _formatMarkdownReport({
         browserResults[const BenchmarkKey(BenchmarkMode.jsCanvasKit, 1000)];
 
     if (mt1000 != null && st1000 != null && js1000 != null) {
-      final rasterOverhead = mt1000.rasterTimeMs / st1000.rasterTimeMs;
-      final fpsWin = mt1000.effectiveFps / st1000.effectiveFps;
-      final vsJsWin = mt1000.effectiveFps / js1000.effectiveFps;
-      final buildSpeedup = js1000.buildTimeMs / mt1000.buildTimeMs;
+      final rasterFieller = FiellerInterval.compute(
+        sampleA: mt1000.rawRasterMs,
+        sampleB: st1000.rawRasterMs,
+      );
+      final fpsWinFieller = FiellerInterval.compute(
+        sampleA: mt1000.rawFps,
+        sampleB: st1000.rawFps,
+      );
+      final vsJsWinFieller = FiellerInterval.compute(
+        sampleA: mt1000.rawFps,
+        sampleB: js1000.rawFps,
+      );
+      final buildSpeedupFieller = FiellerInterval.compute(
+        sampleA: js1000.rawBuildMs,
+        sampleB: mt1000.rawBuildMs,
+      );
+
+      final mtRasterMed = (mt1000.rasterTime.medianNs / 1e6).toStringAsFixed(2);
+      final stRasterMed = (st1000.rasterTime.medianNs / 1e6).toStringAsFixed(2);
+      final mtFpsMed = mt1000.fps.medianNs.toStringAsFixed(1);
+      final stFpsMed = st1000.fps.medianNs.toStringAsFixed(1);
+      final mtBuildMed = (mt1000.buildTime.medianNs / 1e6).toStringAsFixed(2);
+      final jsBuildMed = (js1000.buildTime.medianNs / 1e6).toStringAsFixed(2);
 
       buffer.writeln('* **${browser.label} (at 1,000 nodes)**:');
       buffer.writeln(
         '  * Worker Raster Overhead: `st=0` is '
-        '**${rasterOverhead.toStringAsFixed(2)}x** that of `st=1` '
-        '(${mt1000.rasterTimeMs.toStringAsFixed(2)}ms vs '
-        '${st1000.rasterTimeMs.toStringAsFixed(2)}ms).',
+        '**${_formatFieller(rasterFieller)}** that of `st=1` '
+        '(${mtRasterMed}ms vs ${stRasterMed}ms).',
       );
       buffer.writeln(
         '  * Pipelining Throughput Win: `st=0` delivers '
-        '**${fpsWin.toStringAsFixed(2)}x higher FPS** than `st=1` '
-        '(${mt1000.effectiveFps.toStringAsFixed(1)} vs '
-        '${st1000.effectiveFps.toStringAsFixed(1)} FPS).',
+        '**${_formatFieller(fpsWinFieller)} higher FPS** than `st=1` '
+        '($mtFpsMed vs $stFpsMed FPS).',
       );
       buffer.writeln(
         '  * Dart2Wasm vs Dart2JS: Wasm delivers '
-        '**${vsJsWin.toStringAsFixed(2)}x higher FPS** and '
-        '**${buildSpeedup.toStringAsFixed(2)}x faster UI build** '
-        '(${mt1000.buildTimeMs.toStringAsFixed(2)}ms vs '
-        '${js1000.buildTimeMs.toStringAsFixed(2)}ms).',
+        '**${_formatFieller(vsJsWinFieller)} higher FPS** and '
+        '**${_formatFieller(buildSpeedupFieller)} faster UI build** '
+        '(${mtBuildMed}ms vs ${jsBuildMed}ms).',
       );
     }
   }
 
   return buffer.toString();
 }
+
+String _formatFieller(FiellerInterval fieller) {
+  if (!fieller.isValid) {
+    return '${fieller.ratio.toStringAsFixed(2)}x';
+  }
+  final r = fieller.ratio.toStringAsFixed(2);
+  final low = fieller.lowerBound.toStringAsFixed(2);
+  final high = fieller.upperBound.toStringAsFixed(2);
+  return '${r}x [${low}x, ${high}x] (95% CI)';
+}
+
+Map<String, Object?> _generateJsonReport({
+  required _BenchmarkArgs args,
+  required Map<BrowserType, CapabilityRecord> capabilities,
+  required Map<BrowserType, Map<BenchmarkKey, MultiSampleRecord>> results,
+}) {
+  final env = EnvironmentInfo.current(
+    extra: {
+      'viewport': '${args.viewportWidth}x${args.viewportHeight}',
+      'settle_seconds': args.settleSeconds,
+      'samples': args.samples,
+    },
+  );
+
+  final benchmarksList = <Map<String, Object?>>[];
+  final comparisonsList = <Map<String, Object?>>[];
+
+  for (final browserEntry in results.entries) {
+    final browser = browserEntry.key;
+    for (final mapEntry in browserEntry.value.entries) {
+      final key = mapEntry.key;
+      final multi = mapEntry.value;
+
+      benchmarksList.add({
+        'browser': browser.label.toLowerCase(),
+        'mode': key.mode.name,
+        'mode_label': key.mode.label,
+        'nodes': key.nodes,
+        'samples': multi.samplesCount,
+        'is_pipelined': multi.isPipelined,
+        'fps': _statsToJson(multi.fps, isMs: false),
+        'build_time_ms': _statsToJson(multi.buildTime, isMs: true),
+        'raster_time_ms': _statsToJson(multi.rasterTime, isMs: true),
+        'total_frame_time_ms': _statsToJson(multi.totalFrameTime, isMs: true),
+        'jitter_ms': _statsToJson(multi.jitter, isMs: true),
+      });
+    }
+
+    // Generate comparison ratios
+    final mt1000 = browserEntry
+        .value[const BenchmarkKey(BenchmarkMode.wasmMultithreaded, 1000)];
+    final st1000 = browserEntry
+        .value[const BenchmarkKey(BenchmarkMode.wasmSingleThreaded, 1000)];
+    final js1000 =
+        browserEntry.value[const BenchmarkKey(BenchmarkMode.jsCanvasKit, 1000)];
+
+    if (mt1000 != null && st1000 != null && js1000 != null) {
+      comparisonsList.add(
+        _fiellerToJson(
+          browser: browser.label.toLowerCase(),
+          nodes: 1000,
+          name: 'wasm_mt_vs_wasm_st_raster_overhead',
+          fieller: FiellerInterval.compute(
+            sampleA: mt1000.rawRasterMs,
+            sampleB: st1000.rawRasterMs,
+          ),
+        ),
+      );
+      comparisonsList.add(
+        _fiellerToJson(
+          browser: browser.label.toLowerCase(),
+          nodes: 1000,
+          name: 'wasm_mt_vs_wasm_st_fps_pipelining_win',
+          fieller: FiellerInterval.compute(
+            sampleA: mt1000.rawFps,
+            sampleB: st1000.rawFps,
+          ),
+        ),
+      );
+      comparisonsList.add(
+        _fiellerToJson(
+          browser: browser.label.toLowerCase(),
+          nodes: 1000,
+          name: 'wasm_mt_vs_js_fps_speedup',
+          fieller: FiellerInterval.compute(
+            sampleA: mt1000.rawFps,
+            sampleB: js1000.rawFps,
+          ),
+        ),
+      );
+      comparisonsList.add(
+        _fiellerToJson(
+          browser: browser.label.toLowerCase(),
+          nodes: 1000,
+          name: 'wasm_mt_vs_js_build_speedup',
+          fieller: FiellerInterval.compute(
+            sampleA: js1000.rawBuildMs,
+            sampleB: mt1000.rawBuildMs,
+          ),
+        ),
+      );
+    }
+  }
+
+  return {
+    '\$schema_version': 1,
+    'timestamp': DateTime.now().toUtc().toIso8601String(),
+    'target_url': args.baseUrl,
+    'environment': env.toJson(),
+    'capabilities': {
+      for (final c in capabilities.entries)
+        c.key.label.toLowerCase(): {
+          'user_agent': c.value.userAgent,
+          'cross_origin_isolated': c.value.crossOriginIsolated,
+          'wasm_js_string_supported': c.value.invertedProbe,
+        },
+    },
+    'benchmarks': benchmarksList,
+    'comparisons': comparisonsList,
+  };
+}
+
+Map<String, Object?> _statsToJson(
+  BenchmarkMetrics metrics, {
+  required bool isMs,
+}) {
+  final scale = isMs ? 1e6 : 1.0;
+  return {
+    'mean': metrics.meanNs / scale,
+    'median': metrics.medianNs / scale,
+    'min': metrics.minNs / scale,
+    'max': metrics.maxNs / scale,
+    'stddev': metrics.stddevNs / scale,
+    'cv': metrics.cv,
+    'mad': metrics.madNs / scale,
+    'robust_cv': metrics.robustCv,
+    'iqr': metrics.iqrNs / scale,
+    'p95': metrics.p95Ns / scale,
+    'p99': metrics.p99Ns / scale,
+    'is_stable': metrics.isStable,
+    'is_robust_stable': metrics.isRobustStable,
+  };
+}
+
+Map<String, Object?> _fiellerToJson({
+  required String browser,
+  required int nodes,
+  required String name,
+  required FiellerInterval fieller,
+}) => {
+  'browser': browser,
+  'nodes': nodes,
+  'comparison': name,
+  'ratio': fieller.ratio,
+  'confidence_interval': {
+    'lower': fieller.lowerBound,
+    'upper': fieller.upperBound,
+    'confidence_level': fieller.confidenceLevel,
+    'is_valid': fieller.isValid,
+  },
+};
 
 class _ReportColumn {
   final BrowserType browser;
@@ -356,6 +588,7 @@ class BenchmarkRecord {
   final double buildTimeMs;
   final double rasterTimeMs;
   final double totalFrameTimeMs;
+  final double jitterMs;
   final bool isPipelined;
 
   BenchmarkRecord({
@@ -363,6 +596,7 @@ class BenchmarkRecord {
     required this.buildTimeMs,
     required this.rasterTimeMs,
     required this.totalFrameTimeMs,
+    required this.jitterMs,
     required this.isPipelined,
   });
 
@@ -372,6 +606,7 @@ class BenchmarkRecord {
       buildTimeMs: (json['buildTimeMs'] as num?)?.toDouble() ?? 0.0,
       rasterTimeMs: (json['rasterTimeMs'] as num?)?.toDouble() ?? 0.0,
       totalFrameTimeMs: (json['totalFrameTimeMs'] as num?)?.toDouble() ?? 0.0,
+      jitterMs: (json['jitterMs'] as num?)?.toDouble() ?? 0.0,
       isPipelined: json['isPipelined'] as bool? ?? false,
     );
   }
@@ -386,6 +621,63 @@ class BenchmarkRecord {
       return active > 0 ? 1000.0 / active : fps;
     }
     return fps;
+  }
+}
+
+/// Aggregates multi-sample benchmark trials into statistical metrics.
+class MultiSampleRecord {
+  final int samplesCount;
+  final bool isPipelined;
+  final BenchmarkMetrics fps;
+  final BenchmarkMetrics buildTime;
+  final BenchmarkMetrics rasterTime;
+  final BenchmarkMetrics totalFrameTime;
+  final BenchmarkMetrics jitter;
+
+  final List<double> rawFps;
+  final List<double> rawBuildMs;
+  final List<double> rawRasterMs;
+
+  MultiSampleRecord({
+    required this.samplesCount,
+    required this.isPipelined,
+    required this.fps,
+    required this.buildTime,
+    required this.rasterTime,
+    required this.totalFrameTime,
+    required this.jitter,
+    required this.rawFps,
+    required this.rawBuildMs,
+    required this.rawRasterMs,
+  });
+
+  factory MultiSampleRecord.fromRecords(List<BenchmarkRecord> records) {
+    final rawFps = records.map((r) => r.effectiveFps).toList();
+    final rawBuild = records.map((r) => r.buildTimeMs).toList();
+    final rawRaster = records.map((r) => r.rasterTimeMs).toList();
+    final rawTotal = records.map((r) => r.totalFrameTimeMs).toList();
+    final rawJitter = records.map((r) => r.jitterMs).toList();
+
+    return MultiSampleRecord(
+      samplesCount: records.length,
+      isPipelined: records.first.isPipelined,
+      fps: BenchmarkMetrics.fromSamples(rawFps),
+      buildTime: BenchmarkMetrics.fromSamples(
+        rawBuild.map((ms) => ms * 1e6).toList(),
+      ),
+      rasterTime: BenchmarkMetrics.fromSamples(
+        rawRaster.map((ms) => ms * 1e6).toList(),
+      ),
+      totalFrameTime: BenchmarkMetrics.fromSamples(
+        rawTotal.map((ms) => ms * 1e6).toList(),
+      ),
+      jitter: BenchmarkMetrics.fromSamples(
+        rawJitter.map((ms) => ms * 1e6).toList(),
+      ),
+      rawFps: List.unmodifiable(rawFps),
+      rawBuildMs: List.unmodifiable(rawBuild),
+      rawRasterMs: List.unmodifiable(rawRaster),
+    );
   }
 }
 
@@ -863,7 +1155,10 @@ class _BenchmarkArgs {
   final int viewportWidth;
   final int viewportHeight;
   final int settleSeconds;
+  final int samples;
   final String? outputPath;
+  final bool jsonOutput;
+  final String? jsonOutputPath;
   final bool skipCapabilityProbe;
 
   _BenchmarkArgs({
@@ -875,7 +1170,10 @@ class _BenchmarkArgs {
     required this.viewportWidth,
     required this.viewportHeight,
     required this.settleSeconds,
+    required this.samples,
     required this.outputPath,
+    required this.jsonOutput,
+    required this.jsonOutputPath,
     required this.skipCapabilityProbe,
   });
 
@@ -890,7 +1188,10 @@ class _BenchmarkArgs {
         viewportWidth: 0,
         viewportHeight: 0,
         settleSeconds: 0,
+        samples: 0,
         outputPath: null,
+        jsonOutput: false,
+        jsonOutputPath: null,
         skipCapabilityProbe: false,
       );
     }
@@ -901,8 +1202,11 @@ class _BenchmarkArgs {
     var nodeCounts = [100, 1000, 8000];
     var viewportWidth = 1280;
     var viewportHeight = 720;
-    var settleSeconds = 7;
+    var settleSeconds = 5;
+    var samples = 5;
     String? outputPath;
+    var jsonOutput = false;
+    String? jsonOutputPath;
     var skipCapabilityProbe = false;
 
     for (final arg in args) {
@@ -959,8 +1263,14 @@ class _BenchmarkArgs {
         settleSeconds =
             int.tryParse(arg.substring('--settle-seconds='.length)) ??
             settleSeconds;
+      } else if (arg.startsWith('--samples=')) {
+        samples = int.tryParse(arg.substring('--samples='.length)) ?? samples;
       } else if (arg.startsWith('--output=')) {
         outputPath = arg.substring('--output='.length);
+      } else if (arg == '--json') {
+        jsonOutput = true;
+      } else if (arg.startsWith('--json-output=')) {
+        jsonOutputPath = arg.substring('--json-output='.length);
       } else if (arg == '--skip-capability-probe') {
         skipCapabilityProbe = true;
       }
@@ -975,7 +1285,10 @@ class _BenchmarkArgs {
       viewportWidth: viewportWidth,
       viewportHeight: viewportHeight,
       settleSeconds: settleSeconds,
+      samples: samples,
       outputPath: outputPath,
+      jsonOutput: jsonOutput,
+      jsonOutputPath: jsonOutputPath,
       skipCapabilityProbe: skipCapabilityProbe,
     );
   }
@@ -998,15 +1311,19 @@ Options:
                            Default: wasm_mt,wasm_st,js
   --viewport=<WxH>         Enforced inner viewport size in pixels across all browsers.
                            Default: 1280x720
-  --settle-seconds=<sec>   Seconds to wait after navigation before reading metrics.
-                           Default: 7
+  --settle-seconds=<sec>   Seconds to wait after navigation before sampling.
+                           Default: 5
+  --samples=<count>        Number of trial samples to record per workload.
+                           Default: 5
   --output=<file>          Optional file path to save the generated Markdown report.
+  --json                   Print formatted JSON telemetry results to stdout.
+  --json-output=<file>     Optional file path to save the JSON telemetry results.
   --skip-capability-probe  Skip the initial Wasm JS-string capability probe.
   --help, -h               Show this help message.
 
 Examples:
-  dart tool/benchmark.dart --browser=chrome
-  dart tool/benchmark.dart --browser=safari,firefox --nodes=1000 --viewport=1280x720
+  dart tool/benchmark.dart --browser=chrome --json
+  dart tool/benchmark.dart --browser=safari,firefox --nodes=1000 --json-output=results.json
   dart tool/benchmark.dart --url=http://localhost:8080 --output=doc/benchmarks.md
 ''');
 }
