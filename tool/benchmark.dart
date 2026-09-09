@@ -21,6 +21,7 @@ Future<void> main(List<String> rawArgs) async {
   print('Browsers:        ${args.browsers.map((b) => b.label).join(', ')}');
   print('Modes:           ${args.modes.map((m) => m.label).join(', ')}');
   print('Nodes:           ${args.nodeCounts.join(', ')}');
+  print('Viewport:        ${args.viewportWidth}x${args.viewportHeight} px');
   print('Settle Duration: ${args.settleSeconds}s per run');
   print('=' * 63);
   print('');
@@ -37,7 +38,17 @@ Future<void> main(List<String> rawArgs) async {
 
     print('\n>>> Launching ${browserType.label}...');
     try {
-      await driver.start();
+      await driver.start(
+        viewportWidth: args.viewportWidth,
+        viewportHeight: args.viewportHeight,
+      );
+
+      final vpRaw = await driver.evaluate(
+        '[window.innerWidth, window.innerHeight]',
+      );
+      if (vpRaw is List && vpRaw.length >= 2) {
+        print('  • Calibrated viewport: ${vpRaw[0]}x${vpRaw[1]} px');
+      }
 
       if (!args.skipCapabilityProbe) {
         print('  • Probing WebAssembly capabilities...');
@@ -163,6 +174,10 @@ String _formatMarkdownReport({
   buffer.writeln();
   buffer.writeln('- **Date**: ${DateTime.now().toUtc().toIso8601String()}');
   buffer.writeln('- **Target App**: [${args.baseUrl}](${args.baseUrl})');
+  buffer.writeln(
+    '- **Viewport**: ${args.viewportWidth}x${args.viewportHeight} px '
+    '(calibrated identically across all browsers)',
+  );
   buffer.writeln('- **Settle Duration**: ${args.settleSeconds} seconds');
   buffer.writeln();
 
@@ -395,7 +410,7 @@ class CapabilityRecord {
 
 abstract interface class BrowserDriver {
   Future<bool> isAvailable();
-  Future<void> start();
+  Future<void> start({required int viewportWidth, required int viewportHeight});
   Future<void> navigate(String url);
   Future<dynamic> evaluate(String script);
   Future<void> stop();
@@ -433,7 +448,10 @@ class _ChromeCdpDriver implements BrowserDriver {
   }
 
   @override
-  Future<void> start() async {
+  Future<void> start({
+    required int viewportWidth,
+    required int viewportHeight,
+  }) async {
     final chromePath = _findChromeBinary()!;
     final port = await _findAvailablePort();
     _tempDir = await Directory.systemTemp.createTemp('chrome_bench_');
@@ -446,7 +464,7 @@ class _ChromeCdpDriver implements BrowserDriver {
       '--disable-renderer-backgrounding',
       '--no-first-run',
       '--no-default-browser-check',
-      '--window-size=1280,800',
+      '--window-size=${viewportWidth + 100},${viewportHeight + 100}',
       'about:blank',
     ], mode: ProcessStartMode.normal);
 
@@ -491,6 +509,14 @@ class _ChromeCdpDriver implements BrowserDriver {
           _pendingResponses.remove(id)!.complete(map['result']);
         }
       }
+    });
+
+    // Enforce exact device viewport metrics in Chrome
+    await _sendCdp('Emulation.setDeviceMetricsOverride', {
+      'width': viewportWidth,
+      'height': viewportHeight,
+      'deviceScaleFactor': 1,
+      'mobile': false,
     });
   }
 
@@ -561,7 +587,10 @@ class _SafariWebDriver implements BrowserDriver {
   }
 
   @override
-  Future<void> start() async {
+  Future<void> start({
+    required int viewportWidth,
+    required int viewportHeight,
+  }) async {
     _port = await _findAvailablePort();
     _driverProcess = await Process.start('/usr/bin/safaridriver', [
       '-p',
@@ -582,6 +611,43 @@ class _SafariWebDriver implements BrowserDriver {
     }
     if (_sessionId == null) {
       throw StateError('Failed to create Safari WebDriver session');
+    }
+
+    await _calibrateViewport(viewportWidth, viewportHeight);
+  }
+
+  Future<void> _calibrateViewport(int targetWidth, int targetHeight) async {
+    // Set initial window rect
+    await _wdRequest('POST', '/session/$_sessionId/window/rect', {
+      'width': targetWidth,
+      'height': targetHeight + 100,
+    });
+
+    // Measure inner viewport and adjust for browser toolbar/chrome
+    final inner = await evaluate('[window.innerWidth, window.innerHeight]');
+    if (inner is List && inner.length >= 2) {
+      final iw = (inner[0] as num).toInt();
+      final ih = (inner[1] as num).toInt();
+      final deltaW = targetWidth - iw;
+      final deltaH = targetHeight - ih;
+
+      if (deltaW != 0 || deltaH != 0) {
+        final rectRes = await _wdRequest(
+          'GET',
+          '/session/$_sessionId/window/rect',
+        );
+        final currRect = rectRes['value'] as Map<String, dynamic>?;
+        final currW =
+            (currRect?['width'] as num?)?.toInt() ?? (targetWidth + deltaW);
+        final currH =
+            (currRect?['height'] as num?)?.toInt() ??
+            (targetHeight + 100 + deltaH);
+
+        await _wdRequest('POST', '/session/$_sessionId/window/rect', {
+          'width': currW + deltaW,
+          'height': currH + deltaH,
+        });
+      }
     }
   }
 
@@ -632,7 +698,7 @@ class _SafariWebDriver implements BrowserDriver {
   }
 }
 
-/// Drives Firefox via `geckodriver` (W3C WebDriver HTTP API) with unthrottled.
+/// Drives Firefox via `geckodriver` (W3C WebDriver HTTP API) with unthrottled prefs.
 class _FirefoxWebDriver implements BrowserDriver {
   Process? _driverProcess;
   int? _port;
@@ -654,7 +720,10 @@ class _FirefoxWebDriver implements BrowserDriver {
   }
 
   @override
-  Future<void> start() async {
+  Future<void> start({
+    required int viewportWidth,
+    required int viewportHeight,
+  }) async {
     _port = await _findAvailablePort();
     _driverProcess = await Process.start('geckodriver', [
       '-p',
@@ -690,6 +759,41 @@ class _FirefoxWebDriver implements BrowserDriver {
     }
     if (_sessionId == null) {
       throw StateError('Failed to create Firefox WebDriver session');
+    }
+
+    await _calibrateViewport(viewportWidth, viewportHeight);
+  }
+
+  Future<void> _calibrateViewport(int targetWidth, int targetHeight) async {
+    await _wdRequest('POST', '/session/$_sessionId/window/rect', {
+      'width': targetWidth,
+      'height': targetHeight + 100,
+    });
+
+    final inner = await evaluate('[window.innerWidth, window.innerHeight]');
+    if (inner is List && inner.length >= 2) {
+      final iw = (inner[0] as num).toInt();
+      final ih = (inner[1] as num).toInt();
+      final deltaW = targetWidth - iw;
+      final deltaH = targetHeight - ih;
+
+      if (deltaW != 0 || deltaH != 0) {
+        final rectRes = await _wdRequest(
+          'GET',
+          '/session/$_sessionId/window/rect',
+        );
+        final currRect = rectRes['value'] as Map<String, dynamic>?;
+        final currW =
+            (currRect?['width'] as num?)?.toInt() ?? (targetWidth + deltaW);
+        final currH =
+            (currRect?['height'] as num?)?.toInt() ??
+            (targetHeight + 100 + deltaH);
+
+        await _wdRequest('POST', '/session/$_sessionId/window/rect', {
+          'width': currW + deltaW,
+          'height': currH + deltaH,
+        });
+      }
     }
   }
 
@@ -753,6 +857,8 @@ class _BenchmarkArgs {
   final List<BrowserType> browsers;
   final List<BenchmarkMode> modes;
   final List<int> nodeCounts;
+  final int viewportWidth;
+  final int viewportHeight;
   final int settleSeconds;
   final String? outputPath;
   final bool skipCapabilityProbe;
@@ -763,6 +869,8 @@ class _BenchmarkArgs {
     required this.browsers,
     required this.modes,
     required this.nodeCounts,
+    required this.viewportWidth,
+    required this.viewportHeight,
     required this.settleSeconds,
     required this.outputPath,
     required this.skipCapabilityProbe,
@@ -776,6 +884,8 @@ class _BenchmarkArgs {
         browsers: const [],
         modes: const [],
         nodeCounts: const [],
+        viewportWidth: 0,
+        viewportHeight: 0,
         settleSeconds: 0,
         outputPath: null,
         skipCapabilityProbe: false,
@@ -786,6 +896,8 @@ class _BenchmarkArgs {
     var browsers = BrowserType.values.toList();
     var modes = BenchmarkMode.values.toList();
     var nodeCounts = [100, 1000, 8000];
+    var viewportWidth = 1280;
+    var viewportHeight = 720;
     var settleSeconds = 7;
     String? outputPath;
     var skipCapabilityProbe = false;
@@ -829,6 +941,17 @@ class _BenchmarkArgs {
             .map((s) => int.tryParse(s.trim()))
             .whereType<int>()
             .toList();
+      } else if (arg.startsWith('--viewport=')) {
+        final val = arg.substring('--viewport='.length).toLowerCase();
+        final parts = val.split('x');
+        if (parts.length == 2) {
+          final w = int.tryParse(parts[0].trim());
+          final h = int.tryParse(parts[1].trim());
+          if (w != null && h != null) {
+            viewportWidth = w;
+            viewportHeight = h;
+          }
+        }
       } else if (arg.startsWith('--settle-seconds=')) {
         settleSeconds =
             int.tryParse(arg.substring('--settle-seconds='.length)) ??
@@ -846,6 +969,8 @@ class _BenchmarkArgs {
       browsers: browsers.isEmpty ? BrowserType.values.toList() : browsers,
       modes: modes.isEmpty ? BenchmarkMode.values.toList() : modes,
       nodeCounts: nodeCounts.isEmpty ? [100, 1000, 8000] : nodeCounts,
+      viewportWidth: viewportWidth,
+      viewportHeight: viewportHeight,
       settleSeconds: settleSeconds,
       outputPath: outputPath,
       skipCapabilityProbe: skipCapabilityProbe,
@@ -868,6 +993,8 @@ Options:
                            Default: 100,1000,8000
   --modes=<modes>          Comma-separated list of engine modes: wasm_mt, wasm_st, js.
                            Default: wasm_mt,wasm_st,js
+  --viewport=<WxH>         Enforced inner viewport size in pixels across all browsers.
+                           Default: 1280x720
   --settle-seconds=<sec>   Seconds to wait after navigation before reading metrics.
                            Default: 7
   --output=<file>          Optional file path to save the generated Markdown report.
@@ -876,7 +1003,7 @@ Options:
 
 Examples:
   dart tool/benchmark.dart --browser=chrome
-  dart tool/benchmark.dart --browser=safari,firefox --nodes=1000
+  dart tool/benchmark.dart --browser=safari,firefox --nodes=1000 --viewport=1280x720
   dart tool/benchmark.dart --url=http://localhost:8080 --output=doc/benchmarks.md
 ''');
 }
