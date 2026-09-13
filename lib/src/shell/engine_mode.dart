@@ -16,9 +16,11 @@ final bool _isWimp = isCurrentlyWasm() && isWimpActive;
 
 bool isCurrentlyWimp() => _isWimp;
 
-bool isCurrentlySingleThreaded() => isCurrentlyWasm() && isSingleThreaded();
+bool isCurrentlySingleThreaded() =>
+    isCurrentlyWasm() && (isCurrentlyWimp() || isSingleThreaded());
 
-bool isCurrentlyPipelined() => isCurrentlyWasm() && !isSingleThreaded();
+bool isCurrentlyPipelined() =>
+    isCurrentlyWasm() && !isCurrentlySingleThreaded();
 
 String currentEngineMode() {
   if (!isCurrentlyWasm()) return 'js';
@@ -26,6 +28,18 @@ String currentEngineMode() {
 }
 
 void toggleSingleThreadedMode(BuildContext context) {
+  if (isCurrentlyWimp()) {
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      const SnackBar(
+        duration: Duration(seconds: 3),
+        content: Text(
+          '⚡ Web Impeller is currently single-threaded only in the engine.',
+        ),
+      ),
+    );
+    return;
+  }
+
   final currentSt = isSingleThreaded();
   final newSt = !currentSt;
   savePersistedSingleThreaded(newSt);

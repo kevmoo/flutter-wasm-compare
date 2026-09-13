@@ -93,7 +93,7 @@ class BenchmarkStorage {
       jitterMs: metrics.jitterMs,
       stressLevel: stressLevel,
       nodeCount: nodeCount,
-      isPipelined: isPipelined ?? (normMode == 'wasm' || normMode == 'wimp'),
+      isPipelined: isPipelined ?? (normMode == 'wasm'),
     );
   }
 

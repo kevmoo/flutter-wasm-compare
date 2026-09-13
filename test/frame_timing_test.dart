@@ -265,6 +265,7 @@ void main() {
 
       expect(comparison.hasBothRuns, isFalse);
       expect(comparison.speedBadge, isNull);
+      expect(comparison.jitterBadge, isNull);
       expect(
         comparison.promptBadge,
         equals('⏳ Switch to JS to test at 200 nodes'),

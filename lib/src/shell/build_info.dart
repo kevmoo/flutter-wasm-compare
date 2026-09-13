@@ -181,23 +181,28 @@ class BuildInfoDialog extends StatelessWidget {
               const SizedBox(height: 8),
               _BuildInfoRow(
                 label: 'Threading',
-                child: Tooltip(
-                  message: 'Press Ctrl+Shift+S (or ⌘+Shift+S) to toggle',
-                  child: ActionChip(
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    label: Text(
-                      isCurrentlySingleThreaded()
-                          ? 'Single-threaded (Toggle)'
-                          : 'Multi-threaded (Toggle)',
-                      style: const TextStyle(fontSize: 11),
-                    ),
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      toggleSingleThreadedMode(context);
-                    },
-                  ),
-                ),
+                child: isCurrentlyWimp()
+                    ? const Text(
+                        'Single-threaded (forced by engine)',
+                        style: TextStyle(fontFamily: 'monospace', fontSize: 13),
+                      )
+                    : Tooltip(
+                        message: 'Press Ctrl+Shift+S (or ⌘+Shift+S) to toggle',
+                        child: ActionChip(
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          label: Text(
+                            isCurrentlySingleThreaded()
+                                ? 'Single-threaded (Toggle)'
+                                : 'Multi-threaded (Toggle)',
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                            toggleSingleThreadedMode(context);
+                          },
+                        ),
+                      ),
               ),
             ],
             const SizedBox(height: 8),

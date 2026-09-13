@@ -3,14 +3,20 @@
 
 const searchParams = new URLSearchParams(window.location.search);
 const modeParam = searchParams.get("mode");
+const KNOWN_MODES = new Set([
+  "auto", "wasm", "skwasm", "skwasm-st", "skwasm-mt",
+  "wimp", "impeller", "js", "canvaskit"
+]);
+
 let mode = modeParam;
 if (!mode) {
   try {
-    mode = localStorage.getItem("wasm_compare_engine_mode") || "auto";
+    const saved = localStorage.getItem("wasm_compare_engine_mode");
+    mode = (saved && KNOWN_MODES.has(saved)) ? saved : "auto";
   } catch (_) {
     mode = "auto";
   }
-} else {
+} else if (KNOWN_MODES.has(mode)) {
   try {
     localStorage.setItem("wasm_compare_engine_mode", mode);
   } catch (_) {}
