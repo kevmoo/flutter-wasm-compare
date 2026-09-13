@@ -152,7 +152,7 @@ void main() {
 
     // Find engine selector button in AppBar
     final engineSelector = find.byTooltip(
-      'Select Rendering Engine (Impeller / Skia / JS)',
+      'Select Rendering Engine (Impeller [Exp] / Skia / JS)',
     );
     expect(engineSelector, findsOneWidget);
 
@@ -161,12 +161,12 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
 
-    expect(find.text('⚡ Wasm (Impeller)'), findsOneWidget);
+    expect(find.text('⚡ Wasm (Impeller) [Exp]'), findsOneWidget);
     expect(find.text('⚡ Wasm (Skia)'), findsOneWidget);
     expect(find.text('📜 JavaScript (CanvasKit)'), findsOneWidget);
 
     // Tap Wasm Impeller: test stub (non-Chromium) should show SnackBar
-    await tester.tap(find.text('⚡ Wasm (Impeller)'));
+    await tester.tap(find.text('⚡ Wasm (Impeller) [Exp]'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.textContaining('requires Chromium'), findsOneWidget);

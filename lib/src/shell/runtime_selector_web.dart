@@ -29,7 +29,7 @@ class RuntimeSelector extends StatelessWidget {
             if (targets.isEmpty || targets.contains('dart2wasm')) ...[
               if (isWimpSupportedInBrowser) ...[
                 const SizedBox(width: 8),
-                _buildEngineButton(context, 'Wasm (Impeller)', 'wimp'),
+                _buildEngineButton(context, 'Wasm (Impeller) [Exp]', 'wimp'),
               ],
               const SizedBox(width: 8),
               _buildEngineButton(context, 'Wasm (Skia)', 'wasm'),

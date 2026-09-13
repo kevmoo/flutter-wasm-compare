@@ -393,7 +393,7 @@ class _EngineTogglePill extends StatelessWidget {
   Widget build(BuildContext context) {
     final isWimp = isCurrentlyWimp();
     final wasmLabel = isWimp
-        ? (isSingleThreaded ? '⚡ Impeller (ST)' : '⚡ Impeller')
+        ? (isSingleThreaded ? '⚡ Impeller (Exp, ST)' : '⚡ Impeller (Exp)')
         : (isSingleThreaded ? '⚡ Wasm (ST)' : '⚡ Wasm');
     return Container(
       decoration: BoxDecoration(
@@ -414,7 +414,7 @@ class _EngineTogglePill extends StatelessWidget {
                 : () => switchEngineMode(context, mode: 'wasm'),
             tooltip: isCurrentWasm
                 ? (isWimp
-                      ? 'Wasm + Impeller (Single-threaded)'
+                      ? 'Wasm + Impeller (Experimental • Single-threaded)'
                       : (isSingleThreaded
                             ? 'Wasm + Skia (Single-threaded) • '
                                   'Tap to toggle threading'
@@ -637,7 +637,9 @@ class _DualEngineCards extends StatelessWidget {
                 (isCurrentWasm
                     ? isCurrentlyWimp()
                     : wasmRun?.mode.toLowerCase() == 'wimp')
-                ? (isWasmST ? 'Impeller • Single-threaded' : 'Impeller (Wimp)')
+                ? (isWasmST
+                      ? 'Impeller (Exp) • Single-threaded'
+                      : 'Impeller (Experimental)')
                 : (isWasmST ? 'Skia • Single-threaded' : 'Skwasm (Skia)'),
             titleColor: Colors.lightBlueAccent,
             isLive: isCurrentWasm,
@@ -770,7 +772,7 @@ class _EngineMiniCard extends StatelessWidget {
     final tooltipMessage = isLive
         ? (isWasmCard
               ? (isWimp
-                    ? 'Active: Web Impeller (Single-threaded)'
+                    ? 'Active: Web Impeller (Experimental • Single-threaded)'
                     : (isSingleThreaded
                           ? 'Active: Single-threaded • '
                                 'Tap or Ctrl+Shift+S to toggle'
