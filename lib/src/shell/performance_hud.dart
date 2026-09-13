@@ -230,7 +230,7 @@ class _PerformanceHudState extends State<PerformanceHud> {
             _lastSaved = now;
             WidgetsBinding.instance.addPostFrameCallback((_) {
               BenchmarkStorage.saveMetrics(
-                mode: isCurrentWasm ? 'wasm' : 'js',
+                mode: currentEngineMode(),
                 metrics: metrics,
                 stressLevel: stressCtrl.currentLabel,
                 nodeCount: stressCtrl.nodeCount,
@@ -240,11 +240,22 @@ class _PerformanceHudState extends State<PerformanceHud> {
           }
         }
 
-        final wasmRun = BenchmarkStorage.getRunForMode(
-          mode: 'wasm',
-          nodeCount: stressCtrl.nodeCount,
-          stressLevel: stressCtrl.currentLabel,
-        );
+        final wasmRun = isCurrentlyWimp()
+            ? BenchmarkStorage.getRunForMode(
+                mode: 'wimp',
+                nodeCount: stressCtrl.nodeCount,
+                stressLevel: stressCtrl.currentLabel,
+              )
+            : (BenchmarkStorage.getRunForMode(
+                    mode: 'wasm',
+                    nodeCount: stressCtrl.nodeCount,
+                    stressLevel: stressCtrl.currentLabel,
+                  ) ??
+                  BenchmarkStorage.getRunForMode(
+                    mode: 'wimp',
+                    nodeCount: stressCtrl.nodeCount,
+                    stressLevel: stressCtrl.currentLabel,
+                  ));
 
         final jsRun = BenchmarkStorage.getRunForMode(
           mode: 'js',
@@ -626,7 +637,10 @@ class _DualEngineCards extends StatelessWidget {
         Expanded(
           child: _EngineMiniCard(
             title: isWasmST ? '⚡ WASM (ST)' : '⚡ WASM',
-            subtitle: isCurrentlyWimp()
+            subtitle:
+                (isCurrentWasm
+                    ? isCurrentlyWimp()
+                    : wasmRun?.mode.toLowerCase() == 'wimp')
                 ? (isWasmST ? 'Impeller • Single-threaded' : 'Impeller (Wimp)')
                 : (isWasmST ? 'Skia • Single-threaded' : 'Skwasm (Skia)'),
             titleColor: Colors.lightBlueAccent,
@@ -640,7 +654,12 @@ class _DualEngineCards extends StatelessWidget {
             isSingleThreaded: isWasmST,
             onTap: isCurrentWasm
                 ? () => toggleSingleThreadedMode(context)
-                : () => switchEngineMode(context, mode: 'wasm'),
+                : () => switchEngineMode(
+                    context,
+                    mode: wasmRun?.mode.toLowerCase() == 'wimp'
+                        ? 'wimp'
+                        : 'wasm',
+                  ),
           ),
         ),
         const SizedBox(width: 8),

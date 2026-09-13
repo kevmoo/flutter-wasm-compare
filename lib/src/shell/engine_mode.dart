@@ -12,7 +12,9 @@ export 'renderer_detect.dart';
 
 bool isCurrentlyWasm() => kIsWeb && kIsWasm;
 
-bool isCurrentlyWimp() => isCurrentlyWasm() && isWimpActive;
+final bool _isWimp = isCurrentlyWasm() && isWimpActive;
+
+bool isCurrentlyWimp() => _isWimp;
 
 bool isCurrentlySingleThreaded() => isCurrentlyWasm() && isSingleThreaded();
 

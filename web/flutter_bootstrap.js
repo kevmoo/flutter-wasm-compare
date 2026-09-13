@@ -2,7 +2,19 @@
 {{flutter_build_config}}
 
 const searchParams = new URLSearchParams(window.location.search);
-let mode = searchParams.get("mode") || "auto";
+const modeParam = searchParams.get("mode");
+let mode = modeParam;
+if (!mode) {
+  try {
+    mode = localStorage.getItem("wasm_compare_engine_mode") || "auto";
+  } catch (_) {
+    mode = "auto";
+  }
+} else {
+  try {
+    localStorage.setItem("wasm_compare_engine_mode", mode);
+  } catch (_) {}
+}
 
 const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 const isFirefox = /firefox/i.test(navigator.userAgent);

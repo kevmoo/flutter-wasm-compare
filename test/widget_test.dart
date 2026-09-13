@@ -140,30 +140,35 @@ void main() {
     expect(find.byType(DemoDashboard), findsOneWidget);
   });
 
-  testWidgets(
-    'Renders _EngineSelectorButton on desktop and opens engine popup menu',
-    (WidgetTester tester) async {
-      tester.view.physicalSize = const Size(1200, 900);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
+  testWidgets('Renders _EngineSelectorButton on desktop, opens popup menu, '
+      'and handles selection', (WidgetTester tester) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(const WasmCompareApp());
-      await tester.pump();
+    await tester.pumpWidget(const WasmCompareApp());
+    await tester.pump();
 
-      // Find engine selector button in AppBar
-      final engineSelector = find.byTooltip(
-        'Select Rendering Engine (Impeller / Skia / JS)',
-      );
-      expect(engineSelector, findsOneWidget);
+    // Find engine selector button in AppBar
+    final engineSelector = find.byTooltip(
+      'Select Rendering Engine (Impeller / Skia / JS)',
+    );
+    expect(engineSelector, findsOneWidget);
 
-      // Tap to open popup menu
-      await tester.tap(engineSelector);
-      await tester.pump(const Duration(milliseconds: 300));
+    // Tap to open popup menu
+    await tester.tap(engineSelector);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
 
-      expect(find.text('⚡ Wasm (Impeller)'), findsOneWidget);
-      expect(find.text('⚡ Wasm (Skia)'), findsOneWidget);
-      expect(find.text('📜 JavaScript (CanvasKit)'), findsOneWidget);
-    },
-  );
+    expect(find.text('⚡ Wasm (Impeller)'), findsOneWidget);
+    expect(find.text('⚡ Wasm (Skia)'), findsOneWidget);
+    expect(find.text('📜 JavaScript (CanvasKit)'), findsOneWidget);
+
+    // Tap Wasm Impeller: test stub (non-Chromium) should show SnackBar
+    await tester.tap(find.text('⚡ Wasm (Impeller)'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.textContaining('requires Chromium'), findsOneWidget);
+  });
 }
