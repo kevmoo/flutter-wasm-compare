@@ -410,15 +410,11 @@ class _EngineTogglePill extends StatelessWidget {
             isSelected: isCurrentWasm,
             selectedColor: Colors.lightBlueAccent,
             onTap: isCurrentWasm
-                ? () => toggleSingleThreadedMode(context)
+                ? (isWimp ? null : () => toggleSingleThreadedMode(context))
                 : () => switchEngineMode(context, mode: 'wasm'),
             tooltip: isCurrentWasm
                 ? (isWimp
-                      ? (isSingleThreaded
-                            ? 'Wasm + Impeller (Single-threaded) • '
-                                  'Tap to toggle threading'
-                            : 'Wasm + Impeller (Multi-threaded) • '
-                                  'Tap to toggle threading')
+                      ? 'Wasm + Impeller (Single-threaded)'
                       : (isSingleThreaded
                             ? 'Wasm + Skia (Single-threaded) • '
                                   'Tap to toggle threading'
@@ -653,7 +649,9 @@ class _DualEngineCards extends StatelessWidget {
             targetHz: targetHz,
             isSingleThreaded: isWasmST,
             onTap: isCurrentWasm
-                ? () => toggleSingleThreadedMode(context)
+                ? (isCurrentlyWimp()
+                      ? null
+                      : () => toggleSingleThreadedMode(context))
                 : () => switchEngineMode(
                     context,
                     mode: wasmRun?.mode.toLowerCase() == 'wimp'
@@ -768,11 +766,16 @@ class _EngineMiniCard extends StatelessWidget {
 
     final isWasmCard = title.contains('WASM');
     final targetEngine = isWasmCard ? 'Wasm (Skwasm)' : 'JS (CanvasKit)';
+    final isWimp = isCurrentlyWimp();
     final tooltipMessage = isLive
         ? (isWasmCard
-              ? (isSingleThreaded
-                    ? 'Active: Single-threaded • Tap or Ctrl+Shift+S to toggle'
-                    : 'Active: Multi-threaded • Tap or Ctrl+Shift+S to toggle')
+              ? (isWimp
+                    ? 'Active: Web Impeller (Single-threaded)'
+                    : (isSingleThreaded
+                          ? 'Active: Single-threaded • '
+                                'Tap or Ctrl+Shift+S to toggle'
+                          : 'Active: Multi-threaded • '
+                                'Tap or Ctrl+Shift+S to toggle'))
               : 'Currently active runtime engine')
         : 'Click to switch to $targetEngine';
 

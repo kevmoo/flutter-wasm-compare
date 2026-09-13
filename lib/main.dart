@@ -80,7 +80,7 @@ class DemoDashboard extends StatelessWidget {
             actions: [
               if (!isCompactScreen) const _EngineSelectorButton(),
               BuildInfoButton(isCompact: isCompactScreen),
-              if (isCurrentlySingleThreaded())
+              if (isCurrentlySingleThreaded() && !isCurrentlyWimp())
                 _ThreadingModeButton(isCompact: isCompactScreen),
               _DeviceDetailsButton(
                 stressCtrl: stressCtrl,
