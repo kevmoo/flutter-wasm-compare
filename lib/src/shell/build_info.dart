@@ -148,9 +148,13 @@ class BuildInfoDialog extends StatelessWidget {
                 children: [
                   Text(
                     isWasm
-                        ? (isCurrentlySingleThreaded()
-                              ? '⚡ WASM (Single-threaded)'
-                              : '⚡ WASM (Multi-threaded)')
+                        ? (isCurrentlyWimp()
+                              ? (isCurrentlySingleThreaded()
+                                    ? '⚡ WASM + Impeller (ST)'
+                                    : '⚡ WASM + Impeller')
+                              : (isCurrentlySingleThreaded()
+                                    ? '⚡ WASM + Skia (ST)'
+                                    : '⚡ WASM + Skia'))
                         : '📜 JS (CanvasKit)',
                     style: TextStyle(
                       color: isWasm
@@ -166,24 +170,39 @@ class BuildInfoDialog extends StatelessWidget {
             if (isWasm) ...[
               const SizedBox(height: 8),
               _BuildInfoRow(
-                label: 'Threading',
-                child: Tooltip(
-                  message: 'Press Ctrl+Shift+S (or ⌘+Shift+S) to toggle',
-                  child: ActionChip(
-                    visualDensity: VisualDensity.compact,
-                    padding: EdgeInsets.zero,
-                    label: Text(
-                      isCurrentlySingleThreaded()
-                          ? 'Single-threaded (Toggle)'
-                          : 'Multi-threaded (Toggle)',
-                      style: const TextStyle(fontSize: 11),
-                    ),
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      toggleSingleThreadedMode(context);
-                    },
-                  ),
+                label: 'Renderer',
+                child: Text(
+                  isCurrentlyWimp()
+                      ? 'Impeller (wimp.wasm)'
+                      : 'Skia (skwasm.wasm)',
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
                 ),
+              ),
+              const SizedBox(height: 8),
+              _BuildInfoRow(
+                label: 'Threading',
+                child: isCurrentlyWimp()
+                    ? const Text(
+                        'Single-threaded (forced by engine)',
+                        style: TextStyle(fontFamily: 'monospace', fontSize: 13),
+                      )
+                    : Tooltip(
+                        message: 'Press Ctrl+Shift+S (or ⌘+Shift+S) to toggle',
+                        child: ActionChip(
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          label: Text(
+                            isCurrentlySingleThreaded()
+                                ? 'Single-threaded (Toggle)'
+                                : 'Multi-threaded (Toggle)',
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                            toggleSingleThreadedMode(context);
+                          },
+                        ),
+                      ),
               ),
             ],
             const SizedBox(height: 8),

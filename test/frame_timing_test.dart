@@ -271,5 +271,35 @@ void main() {
         equals('⏳ Switch to JS to test at 200 nodes'),
       );
     });
+
+    test('generates comparison when wasmRun is from Impeller (wimp mode)', () {
+      const wimpSavedRun = (
+        mode: 'wimp',
+        fps: 60.0,
+        buildTimeMs: 10.0,
+        rasterTimeMs: 5.0,
+        totalFrameTimeMs: 15.0,
+        jitterMs: 0.25,
+        stressLevel: 'Manual (200)',
+        nodeCount: 200,
+        isPipelined: true,
+      );
+
+      final comparison = evaluateComparisonForTest(
+        currentActive: 10.0,
+        currentJitter: 0.25,
+        currentFps: 60.0,
+        targetRefreshRate: 60.0,
+        wasmRun: wimpSavedRun,
+        jsRun: jsSavedRun,
+        isCurrentWasm: true,
+        nodeCount: 200,
+      );
+
+      expect(comparison.hasBothRuns, isTrue);
+      expect(comparison.speedBadge, isNotNull);
+      expect(comparison.speedBadge?.title, equals('⚡ Wasm 3.2x Faster'));
+      expect(comparison.speedBadge?.detail, equals('10.0ms vs 32.0ms'));
+    });
   });
 }

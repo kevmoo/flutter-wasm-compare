@@ -230,7 +230,7 @@ class _PerformanceHudState extends State<PerformanceHud> {
             _lastSaved = now;
             WidgetsBinding.instance.addPostFrameCallback((_) {
               BenchmarkStorage.saveMetrics(
-                mode: isCurrentWasm ? 'wasm' : 'js',
+                mode: currentEngineMode(),
                 metrics: metrics,
                 stressLevel: stressCtrl.currentLabel,
                 nodeCount: stressCtrl.nodeCount,
@@ -240,11 +240,22 @@ class _PerformanceHudState extends State<PerformanceHud> {
           }
         }
 
-        final wasmRun = BenchmarkStorage.getRunForMode(
-          mode: 'wasm',
-          nodeCount: stressCtrl.nodeCount,
-          stressLevel: stressCtrl.currentLabel,
-        );
+        final wasmRun = isCurrentlyWimp()
+            ? BenchmarkStorage.getRunForMode(
+                mode: 'wimp',
+                nodeCount: stressCtrl.nodeCount,
+                stressLevel: stressCtrl.currentLabel,
+              )
+            : (BenchmarkStorage.getRunForMode(
+                    mode: 'wasm',
+                    nodeCount: stressCtrl.nodeCount,
+                    stressLevel: stressCtrl.currentLabel,
+                  ) ??
+                  BenchmarkStorage.getRunForMode(
+                    mode: 'wimp',
+                    nodeCount: stressCtrl.nodeCount,
+                    stressLevel: stressCtrl.currentLabel,
+                  ));
 
         final jsRun = BenchmarkStorage.getRunForMode(
           mode: 'js',
@@ -380,7 +391,10 @@ class _EngineTogglePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final wasmLabel = isSingleThreaded ? '⚡ Wasm (ST)' : '⚡ Wasm';
+    final isWimp = isCurrentlyWimp();
+    final wasmLabel = isWimp
+        ? (isSingleThreaded ? '⚡ Impeller (ST)' : '⚡ Impeller')
+        : (isSingleThreaded ? '⚡ Wasm (ST)' : '⚡ Wasm');
     return Container(
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.08),
@@ -396,12 +410,16 @@ class _EngineTogglePill extends StatelessWidget {
             isSelected: isCurrentWasm,
             selectedColor: Colors.lightBlueAccent,
             onTap: isCurrentWasm
-                ? () => toggleSingleThreadedMode(context)
+                ? (isWimp ? null : () => toggleSingleThreadedMode(context))
                 : () => switchEngineMode(context, mode: 'wasm'),
             tooltip: isCurrentWasm
-                ? (isSingleThreaded
-                      ? 'Wasm (Single-threaded) • Tap or Ctrl+Shift+S to toggle'
-                      : 'Wasm (Multi-threaded) • Tap or Ctrl+Shift+S to toggle')
+                ? (isWimp
+                      ? 'Wasm + Impeller (Single-threaded)'
+                      : (isSingleThreaded
+                            ? 'Wasm + Skia (Single-threaded) • '
+                                  'Tap to toggle threading'
+                            : 'Wasm + Skia (Multi-threaded) • '
+                                  'Tap to toggle threading'))
                 : 'Switch to WebAssembly',
           ),
           const SizedBox(width: 2),
@@ -615,8 +633,12 @@ class _DualEngineCards extends StatelessWidget {
         Expanded(
           child: _EngineMiniCard(
             title: isWasmST ? '⚡ WASM (ST)' : '⚡ WASM',
-            subtitle: isWasmST ? 'Single-threaded' : null,
-
+            subtitle:
+                (isCurrentWasm
+                    ? isCurrentlyWimp()
+                    : wasmRun?.mode.toLowerCase() == 'wimp')
+                ? (isWasmST ? 'Impeller • Single-threaded' : 'Impeller (Wimp)')
+                : (isWasmST ? 'Skia • Single-threaded' : 'Skwasm (Skia)'),
             titleColor: Colors.lightBlueAccent,
             isLive: isCurrentWasm,
             fps: wasmMetrics.fps,
@@ -627,8 +649,15 @@ class _DualEngineCards extends StatelessWidget {
             targetHz: targetHz,
             isSingleThreaded: isWasmST,
             onTap: isCurrentWasm
-                ? () => toggleSingleThreadedMode(context)
-                : () => switchEngineMode(context, mode: 'wasm'),
+                ? (isCurrentlyWimp()
+                      ? null
+                      : () => toggleSingleThreadedMode(context))
+                : () => switchEngineMode(
+                    context,
+                    mode: wasmRun?.mode.toLowerCase() == 'wimp'
+                        ? 'wimp'
+                        : 'wasm',
+                  ),
           ),
         ),
         const SizedBox(width: 8),
@@ -737,11 +766,16 @@ class _EngineMiniCard extends StatelessWidget {
 
     final isWasmCard = title.contains('WASM');
     final targetEngine = isWasmCard ? 'Wasm (Skwasm)' : 'JS (CanvasKit)';
+    final isWimp = isCurrentlyWimp();
     final tooltipMessage = isLive
         ? (isWasmCard
-              ? (isSingleThreaded
-                    ? 'Active: Single-threaded • Tap or Ctrl+Shift+S to toggle'
-                    : 'Active: Multi-threaded • Tap or Ctrl+Shift+S to toggle')
+              ? (isWimp
+                    ? 'Active: Web Impeller (Single-threaded)'
+                    : (isSingleThreaded
+                          ? 'Active: Single-threaded • '
+                                'Tap or Ctrl+Shift+S to toggle'
+                          : 'Active: Multi-threaded • '
+                                'Tap or Ctrl+Shift+S to toggle'))
               : 'Currently active runtime engine')
         : 'Click to switch to $targetEngine';
 

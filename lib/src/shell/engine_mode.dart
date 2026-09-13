@@ -5,15 +5,41 @@ import 'package:provider/provider.dart';
 import '../metrics/benchmark_storage.dart';
 import '../metrics/frame_timing_service.dart';
 import '../scene/stress_controller.dart';
+import 'renderer_detect.dart';
 import 'url_helper.dart';
+
+export 'renderer_detect.dart';
 
 bool isCurrentlyWasm() => kIsWeb && kIsWasm;
 
-bool isCurrentlySingleThreaded() => isCurrentlyWasm() && isSingleThreaded();
+final bool _isWimp = isCurrentlyWasm() && isWimpActive;
 
-bool isCurrentlyPipelined() => isCurrentlyWasm() && !isSingleThreaded();
+bool isCurrentlyWimp() => _isWimp;
+
+bool isCurrentlySingleThreaded() =>
+    isCurrentlyWasm() && (isCurrentlyWimp() || isSingleThreaded());
+
+bool isCurrentlyPipelined() =>
+    isCurrentlyWasm() && !isCurrentlySingleThreaded();
+
+String currentEngineMode() {
+  if (!isCurrentlyWasm()) return 'js';
+  return isCurrentlyWimp() ? 'wimp' : 'wasm';
+}
 
 void toggleSingleThreadedMode(BuildContext context) {
+  if (isCurrentlyWimp()) {
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      const SnackBar(
+        duration: Duration(seconds: 3),
+        content: Text(
+          '⚡ Web Impeller is currently single-threaded only in the engine.',
+        ),
+      ),
+    );
+    return;
+  }
+
   final currentSt = isSingleThreaded();
   final newSt = !currentSt;
   savePersistedSingleThreaded(newSt);
@@ -23,7 +49,7 @@ void toggleSingleThreadedMode(BuildContext context) {
     final stressCtrl = context.read<StressController>();
 
     BenchmarkStorage.saveMetrics(
-      mode: 'wasm',
+      mode: currentEngineMode(),
       metrics: metrics,
       stressLevel: stressCtrl.currentLabel,
       nodeCount: stressCtrl.nodeCount,
@@ -47,7 +73,7 @@ void toggleSingleThreadedMode(BuildContext context) {
 }
 
 void switchEngineMode(BuildContext context, {required String mode}) {
-  final currentMode = isCurrentlyWasm() ? 'wasm' : 'js';
+  final currentMode = currentEngineMode();
   if (currentMode == mode) return;
 
   final metrics = context.read<FrameTimingService>().metrics;

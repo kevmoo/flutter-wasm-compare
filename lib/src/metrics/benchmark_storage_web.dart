@@ -8,10 +8,12 @@ import 'frame_timing_service.dart';
 class BenchmarkStorage {
   static const String _activeNodesKey = 'wasm_compare_active_node_count';
   static const String _wasmRunKey = 'wasm_compare_last_wasm_run';
+  static const String _wimpRunKey = 'wasm_compare_last_wimp_run';
   static const String _jsRunKey = 'wasm_compare_last_js_run';
 
   static int? _cachedActiveNodes;
   static BenchmarkRun? _cachedWasmRun;
+  static BenchmarkRun? _cachedWimpRun;
   static BenchmarkRun? _cachedJsRun;
   static bool _cacheLoaded = false;
 
@@ -32,6 +34,13 @@ class BenchmarkStorage {
         );
       }
 
+      final wimpStr = storage.getItem(_wimpRunKey);
+      if (wimpStr != null && wimpStr.isNotEmpty) {
+        _cachedWimpRun = _parseBenchmarkRun(
+          jsonDecode(wimpStr) as Map<String, dynamic>,
+        );
+      }
+
       final jsStr = storage.getItem(_jsRunKey);
       if (jsStr != null && jsStr.isNotEmpty) {
         _cachedJsRun = _parseBenchmarkRun(
@@ -46,12 +55,14 @@ class BenchmarkStorage {
   static void clearRuns() {
     _cachedActiveNodes = null;
     _cachedWasmRun = null;
+    _cachedWimpRun = null;
     _cachedJsRun = null;
     _cacheLoaded = true;
     try {
       final storage = web.window.localStorage;
       storage.removeItem(_activeNodesKey);
       storage.removeItem(_wasmRunKey);
+      storage.removeItem(_wimpRunKey);
       storage.removeItem(_jsRunKey);
     } catch (_) {
       // Ignore
@@ -72,6 +83,7 @@ class BenchmarkStorage {
     required int nodeCount,
     bool? isPipelined,
   }) {
+    final normMode = mode.toLowerCase();
     saveRun(
       mode: mode,
       fps: metrics.fps,
@@ -81,7 +93,7 @@ class BenchmarkStorage {
       jitterMs: metrics.jitterMs,
       stressLevel: stressLevel,
       nodeCount: nodeCount,
-      isPipelined: isPipelined ?? (mode.toLowerCase() == 'wasm'),
+      isPipelined: isPipelined ?? (normMode == 'wasm'),
     );
   }
 
@@ -112,10 +124,23 @@ class BenchmarkStorage {
     );
 
     final normMode = mode.toLowerCase();
-    if (normMode == 'wasm') {
-      _cachedWasmRun = run;
-    } else {
-      _cachedJsRun = run;
+    final String storageKey;
+    switch (normMode) {
+      case 'wimp' || 'impeller':
+        _cachedWimpRun = run;
+        storageKey = _wimpRunKey;
+      case 'wasm' || 'skwasm':
+        _cachedWasmRun = run;
+        storageKey = _wasmRunKey;
+      case 'js' || 'canvaskit':
+        _cachedJsRun = run;
+        storageKey = _jsRunKey;
+      default:
+        throw ArgumentError.value(
+          mode,
+          'mode',
+          'Unsupported benchmark engine mode',
+        );
     }
 
     try {
@@ -134,7 +159,7 @@ class BenchmarkStorage {
         'isPipelined': isPipelined,
       };
       final jsonStr = jsonEncode(data);
-      storage.setItem(normMode == 'wasm' ? _wasmRunKey : _jsRunKey, jsonStr);
+      storage.setItem(storageKey, jsonStr);
     } catch (_) {
       // Ignore
     }
@@ -154,7 +179,17 @@ class BenchmarkStorage {
     }
 
     final normMode = mode.toLowerCase();
-    final run = (normMode == 'wasm') ? _cachedWasmRun : _cachedJsRun;
+    final BenchmarkRun? run;
+    switch (normMode) {
+      case 'wimp' || 'impeller':
+        run = _cachedWimpRun;
+      case 'wasm' || 'skwasm':
+        run = _cachedWasmRun;
+      case 'js' || 'canvaskit':
+        run = _cachedJsRun;
+      default:
+        run = null;
+    }
     if (run == null) return null;
 
     if (nodeCount != null && run.nodeCount != nodeCount) return null;

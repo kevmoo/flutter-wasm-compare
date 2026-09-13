@@ -2,7 +2,25 @@
 {{flutter_build_config}}
 
 const searchParams = new URLSearchParams(window.location.search);
-let mode = searchParams.get("mode") || "auto";
+const modeParam = searchParams.get("mode");
+const KNOWN_MODES = new Set([
+  "auto", "wasm", "skwasm", "skwasm-st", "skwasm-mt",
+  "wimp", "impeller", "js", "canvaskit"
+]);
+
+let mode = modeParam;
+if (!mode) {
+  try {
+    const saved = localStorage.getItem("wasm_compare_engine_mode");
+    mode = (saved && KNOWN_MODES.has(saved)) ? saved : "auto";
+  } catch (_) {
+    mode = "auto";
+  }
+} else if (KNOWN_MODES.has(mode)) {
+  try {
+    localStorage.setItem("wasm_compare_engine_mode", mode);
+  } catch (_) {}
+}
 
 const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 const isFirefox = /firefox/i.test(navigator.userAgent);
@@ -11,7 +29,7 @@ const optin = searchParams.get("optin") === "true";
 
 let forceCanvasKit = false;
 
-if ((mode === "wasm" || mode === "skwasm" || mode === "auto") && isExperimentalWasm && !optin) {
+if ((mode === "wasm" || mode === "skwasm" || mode === "wimp" || mode === "impeller" || mode === "auto") && isExperimentalWasm && !optin) {
   forceCanvasKit = true;
   window.experimentallyBlocked = true;
 }
@@ -42,10 +60,13 @@ try {
 const userConfig = {'wasmAllowList': {'gecko': true, 'webkit': true}};
 if (forceCanvasKit) {
   userConfig.renderer = "canvaskit";
-} else if (isSingleThreaded || mode === "skwasm-st") {
-  userConfig.forceSingleThreadedSkwasm = true;
-} else if (mode === "wimp") {
-  userConfig.enableWimp = true;
+} else {
+  if (isSingleThreaded || mode === "skwasm-st") {
+    userConfig.forceSingleThreadedSkwasm = true;
+  }
+  if (mode === "wimp" || mode === "impeller") {
+    userConfig.enableWimp = true;
+  }
 }
 
 _flutter.loader.load({
