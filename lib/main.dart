@@ -140,7 +140,7 @@ class _EngineSelectorButton extends StatelessWidget {
         : const Color(0xFFF1E05A);
 
     final label = isWimp
-        ? 'Impeller'
+        ? 'Impeller (Exp)'
         : isWasm
         ? 'Skia'
         : 'JS';
@@ -154,7 +154,7 @@ class _EngineSelectorButton extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2.0),
       child: PopupMenuButton<String>(
-        tooltip: 'Select Rendering Engine (Impeller / Skia / JS)',
+        tooltip: 'Select Rendering Engine (Impeller [Exp] / Skia / JS)',
         initialValue: current,
         onSelected: (mode) {
           if (mode == current) return;
@@ -179,15 +179,15 @@ class _EngineSelectorButton extends StatelessWidget {
             child: ListTile(
               dense: true,
               leading: const Icon(Icons.bolt, color: Colors.tealAccent),
-              title: const Text('⚡ Wasm (Impeller)'),
+              title: const Text('⚡ Wasm (Impeller) [Exp]'),
               subtitle: Text(
                 isWimpSupportedInBrowser
-                    ? 'Web Impeller (wimp.wasm)'
+                    ? 'Web Impeller (wimp.wasm) • Experimental (Unstable)'
                     : 'Impeller (Unsupported on Safari/Firefox)',
                 style: TextStyle(
                   fontSize: 11,
                   color: isWimpSupportedInBrowser
-                      ? Colors.white54
+                      ? Colors.amberAccent
                       : Colors.redAccent,
                 ),
               ),

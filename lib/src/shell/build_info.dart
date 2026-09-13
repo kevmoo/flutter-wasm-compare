@@ -150,8 +150,8 @@ class BuildInfoDialog extends StatelessWidget {
                     isWasm
                         ? (isCurrentlyWimp()
                               ? (isCurrentlySingleThreaded()
-                                    ? '⚡ WASM + Impeller (ST)'
-                                    : '⚡ WASM + Impeller')
+                                    ? '⚡ WASM + Impeller (Exp, ST)'
+                                    : '⚡ WASM + Impeller (Exp)')
                               : (isCurrentlySingleThreaded()
                                     ? '⚡ WASM + Skia (ST)'
                                     : '⚡ WASM + Skia'))
@@ -173,7 +173,7 @@ class BuildInfoDialog extends StatelessWidget {
                 label: 'Renderer',
                 child: Text(
                   isCurrentlyWimp()
-                      ? 'Impeller (wimp.wasm)'
+                      ? 'Impeller (wimp.wasm) • Experimental'
                       : 'Skia (skwasm.wasm)',
                   style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
                 ),
