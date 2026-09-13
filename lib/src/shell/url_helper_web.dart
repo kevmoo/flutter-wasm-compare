@@ -70,39 +70,14 @@ double? getPersistedRefreshRate() {
 }
 
 void savePersistedHudCollapsed(bool collapsed) {
-  try {
-    web.window.localStorage.setItem(
-      'wasm_compare_hud_collapsed',
-      collapsed ? 'true' : 'false',
-    );
-  } catch (_) {
-    // Ignore
-  }
+  _setStoredBool('wasm_compare_hud_collapsed', collapsed);
 }
 
-bool? getPersistedHudCollapsed() {
-  try {
-    final stored = web.window.localStorage.getItem(
-      'wasm_compare_hud_collapsed',
-    );
-    if (stored != null && stored.isNotEmpty) {
-      return stored == 'true';
-    }
-  } catch (_) {
-    // Ignore
-  }
-  return null;
-}
+bool? getPersistedHudCollapsed() =>
+    _getStoredBool('wasm_compare_hud_collapsed');
 
 void savePersistedSingleThreaded(bool singleThreaded) {
-  try {
-    web.window.localStorage.setItem(
-      'wasm_compare_single_threaded',
-      singleThreaded ? 'true' : 'false',
-    );
-  } catch (_) {
-    // Ignore
-  }
+  _setStoredBool('wasm_compare_single_threaded', singleThreaded);
 }
 
 bool isSingleThreaded() {
@@ -117,16 +92,31 @@ bool isSingleThreaded() {
     if (modeParam == 'skwasm-st') return true;
     if (modeParam == 'skwasm-mt') return false;
 
-    final stored = web.window.localStorage.getItem(
-      'wasm_compare_single_threaded',
-    );
+    return _getStoredBool('wasm_compare_single_threaded') ?? false;
+  } catch (_) {
+    // Ignore
+  }
+  return false;
+}
+
+bool? _getStoredBool(String key) {
+  try {
+    final stored = web.window.localStorage.getItem(key);
     if (stored != null && stored.isNotEmpty) {
       return stored == 'true';
     }
   } catch (_) {
     // Ignore
   }
-  return false;
+  return null;
+}
+
+void _setStoredBool(String key, bool value) {
+  try {
+    web.window.localStorage.setItem(key, value ? 'true' : 'false');
+  } catch (_) {
+    // Ignore
+  }
 }
 
 void openExternalUrl(String url) {
