@@ -5,13 +5,23 @@ import 'package:provider/provider.dart';
 import '../metrics/benchmark_storage.dart';
 import '../metrics/frame_timing_service.dart';
 import '../scene/stress_controller.dart';
+import 'renderer_detect.dart';
 import 'url_helper.dart';
 
+export 'renderer_detect.dart';
+
 bool isCurrentlyWasm() => kIsWeb && kIsWasm;
+
+bool isCurrentlyWimp() => isCurrentlyWasm() && isWimpActive;
 
 bool isCurrentlySingleThreaded() => isCurrentlyWasm() && isSingleThreaded();
 
 bool isCurrentlyPipelined() => isCurrentlyWasm() && !isSingleThreaded();
+
+String currentEngineMode() {
+  if (!isCurrentlyWasm()) return 'js';
+  return isCurrentlyWimp() ? 'wimp' : 'wasm';
+}
 
 void toggleSingleThreadedMode(BuildContext context) {
   final currentSt = isSingleThreaded();
@@ -23,7 +33,7 @@ void toggleSingleThreadedMode(BuildContext context) {
     final stressCtrl = context.read<StressController>();
 
     BenchmarkStorage.saveMetrics(
-      mode: 'wasm',
+      mode: currentEngineMode(),
       metrics: metrics,
       stressLevel: stressCtrl.currentLabel,
       nodeCount: stressCtrl.nodeCount,
@@ -47,7 +57,7 @@ void toggleSingleThreadedMode(BuildContext context) {
 }
 
 void switchEngineMode(BuildContext context, {required String mode}) {
-  final currentMode = isCurrentlyWasm() ? 'wasm' : 'js';
+  final currentMode = currentEngineMode();
   if (currentMode == mode) return;
 
   final metrics = context.read<FrameTimingService>().metrics;

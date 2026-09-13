@@ -380,7 +380,10 @@ class _EngineTogglePill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final wasmLabel = isSingleThreaded ? '⚡ Wasm (ST)' : '⚡ Wasm';
+    final isWimp = isCurrentlyWimp();
+    final wasmLabel = isWimp
+        ? (isSingleThreaded ? '⚡ Impeller (ST)' : '⚡ Impeller')
+        : (isSingleThreaded ? '⚡ Wasm (ST)' : '⚡ Wasm');
     return Container(
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.08),
@@ -399,9 +402,17 @@ class _EngineTogglePill extends StatelessWidget {
                 ? () => toggleSingleThreadedMode(context)
                 : () => switchEngineMode(context, mode: 'wasm'),
             tooltip: isCurrentWasm
-                ? (isSingleThreaded
-                      ? 'Wasm (Single-threaded) • Tap or Ctrl+Shift+S to toggle'
-                      : 'Wasm (Multi-threaded) • Tap or Ctrl+Shift+S to toggle')
+                ? (isWimp
+                      ? (isSingleThreaded
+                            ? 'Wasm + Impeller (Single-threaded) • '
+                                  'Tap to toggle threading'
+                            : 'Wasm + Impeller (Multi-threaded) • '
+                                  'Tap to toggle threading')
+                      : (isSingleThreaded
+                            ? 'Wasm + Skia (Single-threaded) • '
+                                  'Tap to toggle threading'
+                            : 'Wasm + Skia (Multi-threaded) • '
+                                  'Tap to toggle threading'))
                 : 'Switch to WebAssembly',
           ),
           const SizedBox(width: 2),
@@ -615,8 +626,9 @@ class _DualEngineCards extends StatelessWidget {
         Expanded(
           child: _EngineMiniCard(
             title: isWasmST ? '⚡ WASM (ST)' : '⚡ WASM',
-            subtitle: isWasmST ? 'Single-threaded' : null,
-
+            subtitle: isCurrentlyWimp()
+                ? (isWasmST ? 'Impeller • Single-threaded' : 'Impeller (Wimp)')
+                : (isWasmST ? 'Skia • Single-threaded' : 'Skwasm (Skia)'),
             titleColor: Colors.lightBlueAccent,
             isLive: isCurrentWasm,
             fps: wasmMetrics.fps,

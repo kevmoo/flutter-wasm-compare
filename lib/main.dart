@@ -78,6 +78,7 @@ class DemoDashboard extends StatelessWidget {
               ),
             ),
             actions: [
+              if (!isCompactScreen) const _EngineSelectorButton(),
               BuildInfoButton(isCompact: isCompactScreen),
               if (isCurrentlySingleThreaded())
                 _ThreadingModeButton(isCompact: isCompactScreen),
@@ -115,6 +116,147 @@ class DemoDashboard extends StatelessWidget {
                 ],
               );
             },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EngineSelectorButton extends StatelessWidget {
+  const _EngineSelectorButton();
+
+  @override
+  Widget build(BuildContext context) {
+    final current = currentEngineMode();
+    final isWimp = current == 'wimp';
+    final isWasm = current == 'wasm';
+    final isJs = current == 'js';
+
+    final color = isWimp
+        ? Colors.tealAccent
+        : isWasm
+        ? Colors.lightBlueAccent
+        : const Color(0xFFF1E05A);
+
+    final label = isWimp
+        ? 'Impeller'
+        : isWasm
+        ? 'Skia'
+        : 'JS';
+
+    final iconWidget = Icon(
+      isJs ? Icons.javascript : Icons.bolt,
+      size: 14,
+      color: color,
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2.0),
+      child: PopupMenuButton<String>(
+        tooltip: 'Select Rendering Engine (Impeller / Skia / JS)',
+        initialValue: current,
+        onSelected: (mode) {
+          if (mode == current) return;
+          if (mode == 'wimp' && !isWimpSupportedInBrowser) {
+            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+              const SnackBar(
+                content: Text(
+                  '⚠️ Impeller on Web (wimp) requires Chromium '
+                  '(ImageDecoder and V8 iterators). '
+                  'On Safari and Firefox, Flutter Web falls back to Skia.',
+                ),
+                duration: Duration(seconds: 4),
+              ),
+            );
+            return;
+          }
+          switchEngineMode(context, mode: mode);
+        },
+        itemBuilder: (context) => [
+          PopupMenuItem(
+            value: 'wimp',
+            child: ListTile(
+              dense: true,
+              leading: const Icon(Icons.bolt, color: Colors.tealAccent),
+              title: const Text('⚡ Wasm (Impeller)'),
+              subtitle: Text(
+                isWimpSupportedInBrowser
+                    ? 'Web Impeller (wimp.wasm)'
+                    : 'Impeller (Unsupported on Safari/Firefox)',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: isWimpSupportedInBrowser
+                      ? Colors.white54
+                      : Colors.redAccent,
+                ),
+              ),
+              trailing: isWimp
+                  ? const Icon(Icons.check, size: 16, color: Colors.tealAccent)
+                  : null,
+            ),
+          ),
+          PopupMenuItem(
+            value: 'wasm',
+            child: ListTile(
+              dense: true,
+              leading: const Icon(Icons.bolt, color: Colors.lightBlueAccent),
+              title: const Text('⚡ Wasm (Skia)'),
+              subtitle: const Text(
+                'Skwasm (skwasm.wasm)',
+                style: TextStyle(fontSize: 11, color: Colors.white54),
+              ),
+              trailing: isWasm
+                  ? const Icon(
+                      Icons.check,
+                      size: 16,
+                      color: Colors.lightBlueAccent,
+                    )
+                  : null,
+            ),
+          ),
+          PopupMenuItem(
+            value: 'js',
+            child: ListTile(
+              dense: true,
+              leading: const Icon(Icons.javascript, color: Color(0xFFF1E05A)),
+              title: const Text('📜 JavaScript (CanvasKit)'),
+              subtitle: const Text(
+                'CanvasKit (canvaskit.wasm)',
+                style: TextStyle(fontSize: 11, color: Colors.white54),
+              ),
+              trailing: isJs
+                  ? const Icon(Icons.check, size: 16, color: Color(0xFFF1E05A))
+                  : null,
+            ),
+          ),
+        ],
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: color.withValues(alpha: 0.45),
+              width: 1.0,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              iconWidget,
+              const SizedBox(width: 4),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: color,
+                ),
+              ),
+              const SizedBox(width: 2),
+              Icon(Icons.arrow_drop_down, size: 14, color: color),
+            ],
           ),
         ),
       ),

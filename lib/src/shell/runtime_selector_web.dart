@@ -27,8 +27,12 @@ class RuntimeSelector extends StatelessWidget {
             const ChoiceChip(label: Text('DDC (Debug)'), selected: true),
           ] else ...[
             if (targets.isEmpty || targets.contains('dart2wasm')) ...[
+              if (isWimpSupportedInBrowser) ...[
+                const SizedBox(width: 8),
+                _buildEngineButton(context, 'Wasm (Impeller)', 'wimp'),
+              ],
               const SizedBox(width: 8),
-              _buildEngineButton(context, 'Wasm', 'wasm'),
+              _buildEngineButton(context, 'Wasm (Skia)', 'wasm'),
             ],
             if (targets.isEmpty || targets.contains('dart2js')) ...[
               const SizedBox(width: 8),
@@ -41,10 +45,7 @@ class RuntimeSelector extends StatelessWidget {
   }
 
   Widget _buildEngineButton(BuildContext context, String label, String mode) {
-    final queryMode = Uri.base.queryParameters['mode']?.toLowerCase();
-    final isCurrent = mode == 'js'
-        ? (queryMode == 'js' || queryMode == 'canvaskit')
-        : (queryMode == 'wasm' || queryMode == 'skwasm' || queryMode == null);
+    final isCurrent = mode == currentEngineMode();
 
     return ChoiceChip(
       label: Text(label),

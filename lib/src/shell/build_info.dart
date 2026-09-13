@@ -148,9 +148,13 @@ class BuildInfoDialog extends StatelessWidget {
                 children: [
                   Text(
                     isWasm
-                        ? (isCurrentlySingleThreaded()
-                              ? '⚡ WASM (Single-threaded)'
-                              : '⚡ WASM (Multi-threaded)')
+                        ? (isCurrentlyWimp()
+                              ? (isCurrentlySingleThreaded()
+                                    ? '⚡ WASM + Impeller (ST)'
+                                    : '⚡ WASM + Impeller')
+                              : (isCurrentlySingleThreaded()
+                                    ? '⚡ WASM + Skia (ST)'
+                                    : '⚡ WASM + Skia'))
                         : '📜 JS (CanvasKit)',
                     style: TextStyle(
                       color: isWasm
@@ -164,6 +168,16 @@ class BuildInfoDialog extends StatelessWidget {
               ),
             ),
             if (isWasm) ...[
+              const SizedBox(height: 8),
+              _BuildInfoRow(
+                label: 'Renderer',
+                child: Text(
+                  isCurrentlyWimp()
+                      ? 'Impeller (wimp.wasm)'
+                      : 'Skia (skwasm.wasm)',
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+                ),
+              ),
               const SizedBox(height: 8),
               _BuildInfoRow(
                 label: 'Threading',

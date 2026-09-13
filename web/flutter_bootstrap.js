@@ -11,7 +11,7 @@ const optin = searchParams.get("optin") === "true";
 
 let forceCanvasKit = false;
 
-if ((mode === "wasm" || mode === "skwasm" || mode === "auto") && isExperimentalWasm && !optin) {
+if ((mode === "wasm" || mode === "skwasm" || mode === "wimp" || mode === "impeller" || mode === "auto") && isExperimentalWasm && !optin) {
   forceCanvasKit = true;
   window.experimentallyBlocked = true;
 }
@@ -42,10 +42,13 @@ try {
 const userConfig = {'wasmAllowList': {'gecko': true, 'webkit': true}};
 if (forceCanvasKit) {
   userConfig.renderer = "canvaskit";
-} else if (isSingleThreaded || mode === "skwasm-st") {
-  userConfig.forceSingleThreadedSkwasm = true;
-} else if (mode === "wimp") {
-  userConfig.enableWimp = true;
+} else {
+  if (isSingleThreaded || mode === "skwasm-st") {
+    userConfig.forceSingleThreadedSkwasm = true;
+  }
+  if (mode === "wimp" || mode === "impeller") {
+    userConfig.enableWimp = true;
+  }
 }
 
 _flutter.loader.load({
