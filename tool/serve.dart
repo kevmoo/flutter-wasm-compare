@@ -41,8 +41,9 @@ Future<void> main(List<String> args) async {
     }
   }
 
-  final server = await HttpServer.bind(InternetAddress.loopbackIPv4, port);
-  final url = 'http://localhost:${server.port}';
+  final server = await HttpServer.bind(InternetAddress.anyIPv4, port);
+  final hostname = Platform.localHostname;
+  final url = 'http://$hostname:${server.port}';
 
   print('\n🚀 Serving ${webDir.path} at $url');
   print('   Headers: COOP & COEP enabled for WebAssembly multithreading');

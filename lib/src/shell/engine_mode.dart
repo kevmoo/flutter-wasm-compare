@@ -53,6 +53,7 @@ void toggleSingleThreadedMode(BuildContext context) {
       metrics: metrics,
       stressLevel: stressCtrl.currentLabel,
       nodeCount: stressCtrl.nodeCount,
+      workloadId: stressCtrl.workload.id,
       isPipelined: !currentSt,
     );
 
@@ -84,6 +85,7 @@ void switchEngineMode(BuildContext context, {required String mode}) {
     metrics: metrics,
     stressLevel: stressCtrl.currentLabel,
     nodeCount: stressCtrl.nodeCount,
+    workloadId: stressCtrl.workload.id,
     isPipelined: isCurrentlyPipelined(),
   );
 

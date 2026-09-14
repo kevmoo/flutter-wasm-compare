@@ -7,11 +7,13 @@ import 'frame_timing_service.dart';
 
 class BenchmarkStorage {
   static const String _activeNodesKey = 'wasm_compare_active_node_count';
+  static const String _activeWorkloadKey = 'wasm_compare_active_workload_id';
   static const String _wasmRunKey = 'wasm_compare_last_wasm_run';
   static const String _wimpRunKey = 'wasm_compare_last_wimp_run';
   static const String _jsRunKey = 'wasm_compare_last_js_run';
 
   static int? _cachedActiveNodes;
+  static String? _cachedActiveWorkloadId;
   static BenchmarkRun? _cachedWasmRun;
   static BenchmarkRun? _cachedWimpRun;
   static BenchmarkRun? _cachedJsRun;
@@ -26,6 +28,7 @@ class BenchmarkStorage {
       _cachedActiveNodes = activeNodesStr != null
           ? int.tryParse(activeNodesStr)
           : null;
+      _cachedActiveWorkloadId = storage.getItem(_activeWorkloadKey);
 
       final wasmStr = storage.getItem(_wasmRunKey);
       if (wasmStr != null && wasmStr.isNotEmpty) {
@@ -54,6 +57,7 @@ class BenchmarkStorage {
 
   static void clearRuns() {
     _cachedActiveNodes = null;
+    _cachedActiveWorkloadId = null;
     _cachedWasmRun = null;
     _cachedWimpRun = null;
     _cachedJsRun = null;
@@ -61,6 +65,7 @@ class BenchmarkStorage {
     try {
       final storage = web.window.localStorage;
       storage.removeItem(_activeNodesKey);
+      storage.removeItem(_activeWorkloadKey);
       storage.removeItem(_wasmRunKey);
       storage.removeItem(_wimpRunKey);
       storage.removeItem(_jsRunKey);
@@ -69,9 +74,18 @@ class BenchmarkStorage {
     }
   }
 
-  static void invalidateIfNodeCountChanged(int currentNodeCount) {
+  static void invalidateIfNodeCountChanged(
+    int currentNodeCount, {
+    String? workloadId,
+  }) {
     _ensureCacheLoaded();
-    if (_cachedActiveNodes != null && _cachedActiveNodes != currentNodeCount) {
+    final nodesChanged =
+        _cachedActiveNodes != null && _cachedActiveNodes != currentNodeCount;
+    final workloadChanged =
+        workloadId != null &&
+        _cachedActiveWorkloadId != null &&
+        _cachedActiveWorkloadId != workloadId;
+    if (nodesChanged || workloadChanged) {
       clearRuns();
     }
   }
@@ -81,6 +95,7 @@ class BenchmarkStorage {
     required FrameTimingMetrics metrics,
     required String stressLevel,
     required int nodeCount,
+    String workloadId = 'bouncy',
     bool? isPipelined,
   }) {
     final normMode = mode.toLowerCase();
@@ -93,6 +108,7 @@ class BenchmarkStorage {
       jitterMs: metrics.jitterMs,
       stressLevel: stressLevel,
       nodeCount: nodeCount,
+      workloadId: workloadId,
       isPipelined: isPipelined ?? (normMode == 'wasm'),
     );
   }
@@ -106,10 +122,12 @@ class BenchmarkStorage {
     double jitterMs = 0.0,
     required String stressLevel,
     required int nodeCount,
+    String workloadId = 'bouncy',
     bool isPipelined = false,
   }) {
-    invalidateIfNodeCountChanged(nodeCount);
+    invalidateIfNodeCountChanged(nodeCount, workloadId: workloadId);
     _cachedActiveNodes = nodeCount;
+    _cachedActiveWorkloadId = workloadId;
 
     final run = (
       mode: mode,
@@ -120,6 +138,7 @@ class BenchmarkStorage {
       jitterMs: jitterMs,
       stressLevel: stressLevel,
       nodeCount: nodeCount,
+      workloadId: workloadId,
       isPipelined: isPipelined,
     );
 
@@ -146,6 +165,7 @@ class BenchmarkStorage {
     try {
       final storage = web.window.localStorage;
       storage.setItem(_activeNodesKey, '$nodeCount');
+      storage.setItem(_activeWorkloadKey, workloadId);
 
       final data = {
         'mode': mode,
@@ -156,6 +176,7 @@ class BenchmarkStorage {
         'jitterMs': jitterMs,
         'stressLevel': stressLevel,
         'nodeCount': nodeCount,
+        'workloadId': workloadId,
         'isPipelined': isPipelined,
       };
       final jsonStr = jsonEncode(data);
@@ -169,12 +190,19 @@ class BenchmarkStorage {
     required String mode,
     int? nodeCount,
     String? stressLevel,
+    String? workloadId,
   }) {
     _ensureCacheLoaded();
 
     if (nodeCount != null &&
         _cachedActiveNodes != null &&
         _cachedActiveNodes != nodeCount) {
+      return null;
+    }
+
+    if (workloadId != null &&
+        _cachedActiveWorkloadId != null &&
+        _cachedActiveWorkloadId != workloadId) {
       return null;
     }
 
@@ -193,6 +221,7 @@ class BenchmarkStorage {
     if (run == null) return null;
 
     if (nodeCount != null && run.nodeCount != nodeCount) return null;
+    if (workloadId != null && run.workloadId != workloadId) return null;
     if (stressLevel != null &&
         run.stressLevel.toLowerCase() != stressLevel.toLowerCase()) {
       return null;
@@ -215,6 +244,8 @@ class BenchmarkStorage {
       return null;
     }
 
+    final workloadId = (map['workloadId'] as String?) ?? 'bouncy';
+
     final runMode = map['mode'] as String?;
     final fps = (map['fps'] as num?)?.toDouble();
     if (runMode == null || fps == null) return null;
@@ -231,6 +262,7 @@ class BenchmarkStorage {
       jitterMs: (map['jitterMs'] as num?)?.toDouble() ?? 0.0,
       stressLevel: stress,
       nodeCount: nodes,
+      workloadId: workloadId,
       isPipelined: isPipelined,
     );
   }

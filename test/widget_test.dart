@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:wasm_compare/main.dart';
 import 'package:wasm_compare/src/scene/adaptive_stress_scene.dart';
+import 'package:wasm_compare/src/scene/bouncy_layout_matrix.dart';
 import 'package:wasm_compare/src/scene/morphing_layout_matrix.dart';
 import 'package:wasm_compare/src/shell/performance_hud.dart';
 
@@ -30,9 +31,9 @@ void main() {
     // Verify compact title is used
     expect(find.text('Wasm vs JS'), findsOneWidget);
 
-    // Verify MorphingLayoutMatrix is rendered
+    // Verify default BouncyLayoutMatrix is rendered inside AdaptiveStressScene
     expect(find.byType(AdaptiveStressScene), findsOneWidget);
-    expect(find.byType(MorphingLayoutMatrix), findsOneWidget);
+    expect(find.byType(BouncyLayoutMatrix), findsOneWidget);
 
     // Verify PerformanceHud is collapsed on compact screens initially
     expect(find.byType(PerformanceHud), findsOneWidget);
@@ -46,8 +47,31 @@ void main() {
     expect(find.byIcon(Icons.expand_less), findsOneWidget);
   });
 
+  testWidgets('Renders adaptive desktop layout on large viewports (>= 720px)', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(const WasmCompareApp());
+    await tester.pump();
+
+    // Verify full title is used
+    expect(find.text('Wasm vs JS Performance'), findsOneWidget);
+
+    // Verify default BouncyLayoutMatrix is used inside AdaptiveStressScene
+    expect(find.byType(AdaptiveStressScene), findsOneWidget);
+    expect(find.byType(BouncyLayoutMatrix), findsOneWidget);
+
+    // Verify expanded PerformanceHud
+    expect(find.byType(PerformanceHud), findsOneWidget);
+    expect(find.byIcon(Icons.expand_less), findsOneWidget);
+  });
+
   testWidgets(
-    'Renders adaptive desktop grid layout on large viewports (>= 720px)',
+    'Switches between Bouncy Layout Churn and Polymorphic Card Grid workloads',
     (WidgetTester tester) async {
       tester.view.physicalSize = const Size(1200, 900);
       tester.view.devicePixelRatio = 1.0;
@@ -57,16 +81,28 @@ void main() {
       await tester.pumpWidget(const WasmCompareApp());
       await tester.pump();
 
-      // Verify full title is used
-      expect(find.text('Wasm vs JS Performance'), findsOneWidget);
+      // Starts on BouncyLayoutMatrix with calibrated medium preset (64 Widgets)
+      expect(find.byType(BouncyLayoutMatrix), findsOneWidget);
+      expect(find.text('64 Widgets'), findsOneWidget);
 
-      // Verify MorphingLayoutMatrix is used inside AdaptiveStressScene
-      expect(find.byType(AdaptiveStressScene), findsOneWidget);
+      // Open workload selector popup menu
+      final workloadSelector = find.byTooltip(
+        'Select Benchmark Workload (Layout Churn / Card Grid)',
+      );
+      expect(workloadSelector, findsOneWidget);
+      await tester.tap(workloadSelector);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
+      expect(find.text('Polymorphic Card Grid'), findsOneWidget);
+
+      // Switch to Polymorphic Card Grid
+      await tester.tap(find.text('Polymorphic Card Grid'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+
       expect(find.byType(MorphingLayoutMatrix), findsOneWidget);
-
-      // Verify expanded PerformanceHud
-      expect(find.byType(PerformanceHud), findsOneWidget);
-      expect(find.byIcon(Icons.expand_less), findsOneWidget);
+      expect(find.text('500 Cards'), findsOneWidget);
     },
   );
 

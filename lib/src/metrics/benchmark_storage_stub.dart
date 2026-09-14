@@ -4,7 +4,10 @@ import 'frame_timing_service.dart';
 class BenchmarkStorage {
   static void clearRuns() {}
 
-  static void invalidateIfNodeCountChanged(int currentNodeCount) {}
+  static void invalidateIfNodeCountChanged(
+    int currentNodeCount, {
+    String? workloadId,
+  }) {}
 
   static void saveRun({
     required String mode,
@@ -15,6 +18,7 @@ class BenchmarkStorage {
     double jitterMs = 0.0,
     required String stressLevel,
     required int nodeCount,
+    String workloadId = 'bouncy',
     bool isPipelined = false,
   }) {}
 
@@ -23,6 +27,7 @@ class BenchmarkStorage {
     required FrameTimingMetrics metrics,
     required String stressLevel,
     required int nodeCount,
+    String workloadId = 'bouncy',
     bool? isPipelined,
   }) {}
 
@@ -30,5 +35,6 @@ class BenchmarkStorage {
     required String mode,
     String? stressLevel,
     int? nodeCount,
+    String? workloadId,
   }) => null;
 }

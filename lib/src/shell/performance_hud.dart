@@ -234,6 +234,7 @@ class _PerformanceHudState extends State<PerformanceHud> {
                 metrics: metrics,
                 stressLevel: stressCtrl.currentLabel,
                 nodeCount: stressCtrl.nodeCount,
+                workloadId: stressCtrl.workload.id,
                 isPipelined: isCurrentPipelined,
               );
             });
@@ -245,22 +246,26 @@ class _PerformanceHudState extends State<PerformanceHud> {
                 mode: 'wimp',
                 nodeCount: stressCtrl.nodeCount,
                 stressLevel: stressCtrl.currentLabel,
+                workloadId: stressCtrl.workload.id,
               )
             : (BenchmarkStorage.getRunForMode(
                     mode: 'wasm',
                     nodeCount: stressCtrl.nodeCount,
                     stressLevel: stressCtrl.currentLabel,
+                    workloadId: stressCtrl.workload.id,
                   ) ??
                   BenchmarkStorage.getRunForMode(
                     mode: 'wimp',
                     nodeCount: stressCtrl.nodeCount,
                     stressLevel: stressCtrl.currentLabel,
+                    workloadId: stressCtrl.workload.id,
                   ));
 
         final jsRun = BenchmarkStorage.getRunForMode(
           mode: 'js',
           nodeCount: stressCtrl.nodeCount,
           stressLevel: stressCtrl.currentLabel,
+          workloadId: stressCtrl.workload.id,
         );
 
         final comparison = _evaluateComparison(
