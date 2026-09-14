@@ -7,13 +7,14 @@ import '../tool/benchmark.dart';
 
 void main() {
   group('BenchmarkArgs.parse', () {
-    test('parses defaults correctly', () {
+    test('parses defaults correctly (bouncy workload)', () {
       final args = BenchmarkArgs.parse([]);
       expect(args.showHelp, isFalse);
       expect(args.baseUrl, equals('https://flutter-wasm-compare.web.app/'));
+      expect(args.workload, equals('bouncy'));
       expect(args.browsers, equals(BrowserType.values));
       expect(args.modes, equals(BenchmarkMode.values));
-      expect(args.nodeCounts, equals([100, 1000, 8000]));
+      expect(args.nodeCounts, equals([32, 64, 128]));
       expect(args.viewportWidth, equals(1280));
       expect(args.viewportHeight, equals(720));
       expect(args.settleSeconds, equals(5));
@@ -23,18 +24,29 @@ void main() {
       expect(args.outputPath, isNull);
     });
 
-    test('parses preset arguments', () {
+    test('parses preset arguments for bouncy and grid workloads', () {
       final light = BenchmarkArgs.parse(['--preset=light']);
-      expect(light.nodeCounts, equals([100]));
+      expect(light.workload, equals('bouncy'));
+      expect(light.nodeCounts, equals([32]));
 
       final medium = BenchmarkArgs.parse(['--preset=medium']);
-      expect(medium.nodeCounts, equals([1000]));
+      expect(medium.nodeCounts, equals([64]));
 
       final heavy = BenchmarkArgs.parse(['--preset=heavy']);
-      expect(heavy.nodeCounts, equals([8000]));
+      expect(heavy.nodeCounts, equals([128]));
 
       final all = BenchmarkArgs.parse(['--preset=all']);
-      expect(all.nodeCounts, equals([100, 1000, 8000]));
+      expect(all.nodeCounts, equals([32, 64, 128]));
+
+      final gridHeavy = BenchmarkArgs.parse([
+        '--workload=grid',
+        '--preset=heavy',
+      ]);
+      expect(gridHeavy.workload, equals('grid'));
+      expect(gridHeavy.nodeCounts, equals([8000]));
+
+      final gridDefault = BenchmarkArgs.parse(['--workload=grid']);
+      expect(gridDefault.nodeCounts, equals([100, 1000, 8000]));
     });
 
     test('parses custom sample interval and nodes', () {
@@ -58,6 +70,7 @@ void main() {
         final recordMT = BenchmarkRecord.fromJson({
           'mode': 'wasm',
           'nodeCount': 1000,
+          'workloadId': 'grid',
           'isPipelined': true,
           'fps': 50.0,
           'buildTimeMs': 18.0,
@@ -66,7 +79,22 @@ void main() {
           'jitterMs': 1.0,
         });
 
-        expect(recordMT.matches(BenchmarkMode.wasmMultithreaded, 1000), isTrue);
+        expect(
+          recordMT.matches(
+            BenchmarkMode.wasmMultithreaded,
+            1000,
+            expectedWorkloadId: 'grid',
+          ),
+          isTrue,
+        );
+        expect(
+          recordMT.matches(
+            BenchmarkMode.wasmMultithreaded,
+            1000,
+            expectedWorkloadId: 'bouncy',
+          ),
+          isFalse,
+        );
         expect(
           recordMT.matches(BenchmarkMode.wasmSingleThreaded, 1000),
           isFalse,

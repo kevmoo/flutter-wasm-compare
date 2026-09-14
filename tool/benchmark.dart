@@ -77,18 +77,28 @@ Future<void> main(List<String> rawArgs) async {
       final browserMap = <BenchmarkKey, MultiSampleRecord>{};
       for (final mode in args.modes) {
         for (final nodes in args.nodeCounts) {
-          final url = _buildUrl(args.baseUrl, mode, nodes);
+          final url = _buildUrl(
+            args.baseUrl,
+            mode,
+            nodes,
+            workload: args.workload,
+          );
 
           // Clear prior benchmark run storage before navigation to prevent
           // stale cross-mode reads.
           await driver.evaluate('''
             try {
               localStorage.removeItem('${mode.storageKey}');
+              localStorage.removeItem('${mode.storageKey}_${args.workload}');
               localStorage.removeItem('wasm_compare_active_node_count');
+              localStorage.removeItem('wasm_compare_active_node_count_${args.workload}');
+              localStorage.removeItem('wasm_compare_active_workload_id');
             } catch (_) {}
           ''');
 
-          stdout.write('  • [${mode.label}] @ $nodes nodes: settling...');
+          stdout.write(
+            '  • [${mode.label} / ${args.workload}] @ $nodes nodes: settling...',
+          );
           await driver.navigate(url);
 
           for (var s = args.settleSeconds; s > 0; s--) {
@@ -116,7 +126,11 @@ Future<void> main(List<String> rawArgs) async {
             if (rawJson is String && rawJson.isNotEmpty) {
               final data = jsonDecode(rawJson) as Map<String, dynamic>;
               final record = BenchmarkRecord.fromJson(data);
-              if (record.matches(mode, nodes)) {
+              if (record.matches(
+                mode,
+                nodes,
+                expectedWorkloadId: args.workload,
+              )) {
                 // Ensure sample is fresh (not an identical snapshot of the same
                 // frame window).
                 if (record.totalFrameTimeMs != lastTotalFrameTime ||
@@ -217,9 +231,15 @@ Future<void> main(List<String> rawArgs) async {
   }
 }
 
-String _buildUrl(String baseUrl, BenchmarkMode mode, int nodes) {
+String _buildUrl(
+  String baseUrl,
+  BenchmarkMode mode,
+  int nodes, {
+  String workload = 'bouncy',
+}) {
   final uri = Uri.parse(baseUrl);
   final query = Map<String, String>.from(uri.queryParameters);
+  query['workload'] = workload;
   query['stress'] = 'manual';
   query['nodes'] = '$nodes';
 
@@ -656,6 +676,7 @@ class BenchmarkRecord {
   final bool isPipelined;
   final int nodeCount;
   final String mode;
+  final String workloadId;
 
   BenchmarkRecord({
     required this.fps,
@@ -666,6 +687,7 @@ class BenchmarkRecord {
     required this.isPipelined,
     required this.nodeCount,
     required this.mode,
+    this.workloadId = 'bouncy',
   });
 
   factory BenchmarkRecord.fromJson(Map<String, dynamic> json) {
@@ -678,14 +700,24 @@ class BenchmarkRecord {
       isPipelined: json['isPipelined'] as bool? ?? false,
       nodeCount: (json['nodeCount'] as num?)?.toInt() ?? 0,
       mode: json['mode'] as String? ?? '',
+      workloadId: json['workloadId'] as String? ?? 'bouncy',
     );
   }
 
-  /// Verifies whether this record corresponds to the intended mode and node
-  /// count, preventing stale cross-mode or cross-workload reads from
-  /// localStorage.
-  bool matches(BenchmarkMode expectedMode, int expectedNodes) {
+  /// Verifies whether this record corresponds to the intended mode, node
+  /// count, and workload, preventing stale cross-mode or cross-workload reads
+  /// from localStorage.
+  bool matches(
+    BenchmarkMode expectedMode,
+    int expectedNodes, {
+    String? expectedWorkloadId,
+  }) {
     if (nodeCount != expectedNodes) return false;
+    if (expectedWorkloadId != null &&
+        workloadId.isNotEmpty &&
+        workloadId != expectedWorkloadId) {
+      return false;
+    }
     final normMode = mode.toLowerCase();
     switch (expectedMode) {
       case BenchmarkMode.wasmMultithreaded:
@@ -844,7 +876,9 @@ class _ChromeCdpDriver implements BrowserDriver {
     _viewportHeight = viewportHeight;
     final chromePath = _findChromeBinary()!;
     _port = await _findAvailablePort();
-    _tempDir = await Directory.systemTemp.createTemp('chrome_bench_');
+    if (!Platform.isLinux) {
+      _tempDir = await Directory.systemTemp.createTemp('chrome_bench_');
+    }
 
     _process = await Process.start(chromePath, [
       if (Platform.isLinux) ...[
@@ -1313,6 +1347,7 @@ Future<int> _findAvailablePort() async {
 class BenchmarkArgs {
   final bool showHelp;
   final String baseUrl;
+  final String workload;
   final List<BrowserType> browsers;
   final List<BenchmarkMode> modes;
   final List<int> nodeCounts;
@@ -1329,6 +1364,7 @@ class BenchmarkArgs {
   BenchmarkArgs({
     required this.showHelp,
     required this.baseUrl,
+    this.workload = 'bouncy',
     required this.browsers,
     required this.modes,
     required this.nodeCounts,
@@ -1342,6 +1378,20 @@ class BenchmarkArgs {
     required this.jsonOutputPath,
     required this.skipCapabilityProbe,
   });
+
+  static List<int> _defaultNodesForWorkload(String workload, [String? preset]) {
+    final isGrid = workload == 'grid';
+    switch (preset) {
+      case 'light':
+        return isGrid ? [100] : [32];
+      case 'medium':
+        return isGrid ? [1000] : [64];
+      case 'heavy' || 'max':
+        return isGrid ? [8000] : [128];
+      default:
+        return isGrid ? [100, 1000, 8000] : [32, 64, 128];
+    }
+  }
 
   factory BenchmarkArgs.parse(List<String> args) {
     if (args.contains('--help') || args.contains('-h')) {
@@ -1364,9 +1414,11 @@ class BenchmarkArgs {
     }
 
     var baseUrl = 'https://flutter-wasm-compare.web.app/';
+    var workload = 'bouncy';
     var browsers = BrowserType.values.toList();
     var modes = BenchmarkMode.values.toList();
-    var nodeCounts = [100, 1000, 8000];
+    List<int>? explicitNodeCounts;
+    String? presetVal;
     var viewportWidth = 1280;
     var viewportHeight = 720;
     var settleSeconds = 5;
@@ -1380,6 +1432,9 @@ class BenchmarkArgs {
     for (final arg in args) {
       if (arg.startsWith('--url=')) {
         baseUrl = arg.substring('--url='.length);
+      } else if (arg.startsWith('--workload=')) {
+        final val = arg.substring('--workload='.length).toLowerCase().trim();
+        workload = val == 'grid' ? 'grid' : 'bouncy';
       } else if (arg.startsWith('--browser=') ||
           arg.startsWith('--browsers=')) {
         final val = arg.split('=').last.toLowerCase();
@@ -1410,19 +1465,10 @@ class BenchmarkArgs {
           }
         }
       } else if (arg.startsWith('--preset=')) {
-        final val = arg.split('=').last.toLowerCase();
-        if (val == 'light') {
-          nodeCounts = [100];
-        } else if (val == 'medium') {
-          nodeCounts = [1000];
-        } else if (val == 'heavy' || val == 'max') {
-          nodeCounts = [8000];
-        } else if (val == 'all' || val == 'default') {
-          nodeCounts = [100, 1000, 8000];
-        }
+        presetVal = arg.split('=').last.toLowerCase();
       } else if (arg.startsWith('--nodes=')) {
         final val = arg.substring('--nodes='.length);
-        nodeCounts = val
+        explicitNodeCounts = val
             .split(',')
             .map((s) => int.tryParse(s.trim()))
             .whereType<int>()
@@ -1459,12 +1505,18 @@ class BenchmarkArgs {
       }
     }
 
+    final resolvedNodeCounts =
+        (explicitNodeCounts != null && explicitNodeCounts.isNotEmpty)
+        ? explicitNodeCounts
+        : _defaultNodesForWorkload(workload, presetVal);
+
     return BenchmarkArgs(
       showHelp: false,
       baseUrl: baseUrl,
+      workload: workload,
       browsers: browsers.isEmpty ? BrowserType.values.toList() : browsers,
       modes: modes.isEmpty ? BenchmarkMode.values.toList() : modes,
-      nodeCounts: nodeCounts.isEmpty ? [100, 1000, 8000] : nodeCounts,
+      nodeCounts: resolvedNodeCounts,
       viewportWidth: viewportWidth,
       viewportHeight: viewportHeight,
       settleSeconds: settleSeconds,
@@ -1489,10 +1541,12 @@ Options:
                            Default: all
   --url=<url>              Target app base URL.
                            Default: https://flutter-wasm-compare.web.app/
-  --preset=<name>          Convenience workload preset: light (100), medium (1000),
-                           heavy (8000), or all (100, 1000, 8000).
+  --workload=<name>        Workload type: bouncy (layout churn) or grid (card grid).
+                           Default: bouncy
+  --preset=<name>          Convenience workload preset: light, medium, heavy, or all.
+                           (bouncy: 32, 64, 128; grid: 100, 1000, 8000)
   --nodes=<counts>         Comma-separated list of stress node counts.
-                           Default: 100,1000,8000
+                           Default: 32,64,128 (bouncy) or 100,1000,8000 (grid)
   --modes=<modes>          Comma-separated list of engine modes: wasm_mt, wasm_st, js.
                            Default: wasm_mt,wasm_st,js
   --viewport=<WxH>         Enforced inner viewport size in pixels across all browsers.
@@ -1511,8 +1565,8 @@ Options:
 
 Examples:
   dart tool/benchmark.dart --browser=chrome --json
-  dart tool/benchmark.dart --browser=safari,firefox --nodes=1000 --json-output=results.json
-  dart tool/benchmark.dart --preset=medium --browser=chrome
+  dart tool/benchmark.dart --workload=grid --preset=heavy --browser=chrome
+  dart tool/benchmark.dart --browser=safari,firefox --nodes=64 --json-output=results.json
   dart tool/benchmark.dart --url=http://localhost:8080 --output=doc/benchmarks.md
 ''');
 }
