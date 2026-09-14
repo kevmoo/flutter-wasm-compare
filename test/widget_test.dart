@@ -45,6 +45,23 @@ void main() {
     await tester.tap(find.byIcon(Icons.expand_more));
     await tester.pump();
     expect(find.byIcon(Icons.expand_less), findsOneWidget);
+
+    // Verify compact preset dropdown displays calibrated Bouncy label
+    // (Medium (64))
+    expect(find.text('Medium (64)'), findsOneWidget);
+
+    // Verify compact workload selector button exists and switches workloads
+    final workloadSelector = find.byTooltip(
+      'Select Benchmark Workload (Layout Churn / Card Grid)',
+    );
+    expect(workloadSelector, findsOneWidget);
+    await tester.tap(workloadSelector);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.tap(find.text('Polymorphic Card Grid'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    expect(find.text('Medium (500)'), findsOneWidget);
   });
 
   testWidgets('Renders adaptive desktop layout on large viewports (>= 720px)', (

@@ -22,16 +22,15 @@ const List<int> kDecadeEngineeringLadder = [
 ];
 
 enum StressPreset {
-  none(0, 'None (0)'),
-  light(100, 'Light (100)'),
-  medium(500, 'Medium (500)'),
-  heavy(1500, 'Heavy (1.5k)'),
-  extreme(4000, 'Extreme (4k)');
+  none(0),
+  light(100),
+  medium(500),
+  heavy(1500),
+  extreme(4000);
 
   final int nodeCount;
-  final String label;
 
-  const StressPreset(this.nodeCount, this.label);
+  const StressPreset(this.nodeCount);
 }
 
 enum StressMode { preset, manual }
@@ -85,15 +84,15 @@ class StressController extends ChangeNotifier {
     StressMode.manual => 'MANUAL ($formattedNodeCount)',
   };
 
-  StressController() {
-    _parseInitialQuery();
+  StressController({Uri? initialUri}) {
+    _parseInitialQuery(initialUri ?? Uri.base);
     BenchmarkStorage.invalidateIfNodeCountChanged(
       _nodeCount,
       workloadId: _workload.id,
     );
   }
 
-  void _parseInitialQuery() {
+  void _parseInitialQuery(Uri uri) {
     final persistedHz = getPersistedRefreshRate();
     if (persistedHz != null && persistedHz > 0) {
       _targetRefreshRate = persistedHz;
@@ -101,7 +100,7 @@ class StressController extends ChangeNotifier {
       _deviceDetailsLabel = '⚡ ${persistedHz.toInt()} Hz Display';
     }
 
-    final params = Uri.base.queryParameters;
+    final params = uri.queryParameters;
     final workloadParam = params['workload'];
     _workload = resolveWorkload(workloadParam);
     _nodeCount = _workload.nodeCountForPreset(_preset);
@@ -109,9 +108,16 @@ class StressController extends ChangeNotifier {
     final stressParam = params['stress']?.toLowerCase();
     final nodesParam = int.tryParse(params['nodes'] ?? '');
 
-    if (stressParam == 'manual' && nodesParam != null) {
+    if (nodesParam != null) {
+      _nodeCount = nodesParam.clamp(0, activeLadder.last);
       _mode = StressMode.manual;
-      _nodeCount = nodesParam.clamp(0, 8000);
+      for (final p in StressPreset.values) {
+        if (_workload.nodeCountForPreset(p) == _nodeCount) {
+          _preset = p;
+          _mode = StressMode.preset;
+          break;
+        }
+      }
     } else if (stressParam != null) {
       for (final p in StressPreset.values) {
         if (p.name == stressParam) {
@@ -201,7 +207,7 @@ class StressController extends ChangeNotifier {
 
   void setManualNodes(int count) {
     _mode = StressMode.manual;
-    _nodeCount = count.clamp(0, 8000);
+    _nodeCount = count.clamp(0, activeLadder.last);
     BenchmarkStorage.invalidateIfNodeCountChanged(
       _nodeCount,
       workloadId: _workload.id,

@@ -12,11 +12,15 @@ class BenchmarkStorage {
   static const String _wimpRunKey = 'wasm_compare_last_wimp_run';
   static const String _jsRunKey = 'wasm_compare_last_js_run';
 
-  static int? _cachedActiveNodes;
-  static String? _cachedActiveWorkloadId;
-  static BenchmarkRun? _cachedWasmRun;
-  static BenchmarkRun? _cachedWimpRun;
-  static BenchmarkRun? _cachedJsRun;
+  static String _nodesKeyFor(String workloadId) =>
+      '${_activeNodesKey}_$workloadId';
+  static String _runKeyFor(String baseKey, String workloadId) =>
+      '${baseKey}_$workloadId';
+
+  static final Map<String, int> _cachedNodesByWorkload = {};
+  static final Map<String, BenchmarkRun> _cachedWasmRuns = {};
+  static final Map<String, BenchmarkRun> _cachedWimpRuns = {};
+  static final Map<String, BenchmarkRun> _cachedJsRuns = {};
   static bool _cacheLoaded = false;
 
   static void _ensureCacheLoaded() {
@@ -24,43 +28,65 @@ class BenchmarkStorage {
     _cacheLoaded = true;
     try {
       final storage = web.window.localStorage;
-      final activeNodesStr = storage.getItem(_activeNodesKey);
-      _cachedActiveNodes = activeNodesStr != null
-          ? int.tryParse(activeNodesStr)
-          : null;
-      _cachedActiveWorkloadId = storage.getItem(_activeWorkloadKey);
+      for (final workloadId in const ['bouncy', 'grid']) {
+        final nodesStr = storage.getItem(_nodesKeyFor(workloadId));
+        final nodes = nodesStr != null ? int.tryParse(nodesStr) : null;
+        if (nodes != null) {
+          _cachedNodesByWorkload[workloadId] = nodes;
+        }
 
-      final wasmStr = storage.getItem(_wasmRunKey);
-      if (wasmStr != null && wasmStr.isNotEmpty) {
-        _cachedWasmRun = _parseBenchmarkRun(
-          jsonDecode(wasmStr) as Map<String, dynamic>,
-        );
-      }
+        final wasmStr = storage.getItem(_runKeyFor(_wasmRunKey, workloadId));
+        if (wasmStr != null && wasmStr.isNotEmpty) {
+          final parsed = _parseBenchmarkRun(
+            jsonDecode(wasmStr) as Map<String, dynamic>,
+          );
+          if (parsed != null) _cachedWasmRuns[workloadId] = parsed;
+        }
 
-      final wimpStr = storage.getItem(_wimpRunKey);
-      if (wimpStr != null && wimpStr.isNotEmpty) {
-        _cachedWimpRun = _parseBenchmarkRun(
-          jsonDecode(wimpStr) as Map<String, dynamic>,
-        );
-      }
+        final wimpStr = storage.getItem(_runKeyFor(_wimpRunKey, workloadId));
+        if (wimpStr != null && wimpStr.isNotEmpty) {
+          final parsed = _parseBenchmarkRun(
+            jsonDecode(wimpStr) as Map<String, dynamic>,
+          );
+          if (parsed != null) _cachedWimpRuns[workloadId] = parsed;
+        }
 
-      final jsStr = storage.getItem(_jsRunKey);
-      if (jsStr != null && jsStr.isNotEmpty) {
-        _cachedJsRun = _parseBenchmarkRun(
-          jsonDecode(jsStr) as Map<String, dynamic>,
-        );
+        final jsStr = storage.getItem(_runKeyFor(_jsRunKey, workloadId));
+        if (jsStr != null && jsStr.isNotEmpty) {
+          final parsed = _parseBenchmarkRun(
+            jsonDecode(jsStr) as Map<String, dynamic>,
+          );
+          if (parsed != null) _cachedJsRuns[workloadId] = parsed;
+        }
       }
     } catch (_) {
       // Ignore
     }
   }
 
-  static void clearRuns() {
-    _cachedActiveNodes = null;
-    _cachedActiveWorkloadId = null;
-    _cachedWasmRun = null;
-    _cachedWimpRun = null;
-    _cachedJsRun = null;
+  static void clearRuns({String? workloadId}) {
+    _ensureCacheLoaded();
+    if (workloadId != null) {
+      _cachedNodesByWorkload.remove(workloadId);
+      _cachedWasmRuns.remove(workloadId);
+      _cachedWimpRuns.remove(workloadId);
+      _cachedJsRuns.remove(workloadId);
+      try {
+        final storage = web.window.localStorage;
+        storage.removeItem(_nodesKeyFor(workloadId));
+        storage.removeItem(_runKeyFor(_wasmRunKey, workloadId));
+        storage.removeItem(_runKeyFor(_wimpRunKey, workloadId));
+        storage.removeItem(_runKeyFor(_jsRunKey, workloadId));
+      } catch (_) {
+        // Ignore
+      }
+      return;
+    }
+
+    _cachedNodesByWorkload.clear();
+    _cachedWasmRuns.clear();
+    _cachedWimpRuns.clear();
+    _cachedJsRuns.clear();
     _cacheLoaded = true;
     try {
       final storage = web.window.localStorage;
@@ -69,6 +95,12 @@ class BenchmarkStorage {
       storage.removeItem(_wasmRunKey);
       storage.removeItem(_wimpRunKey);
       storage.removeItem(_jsRunKey);
+      for (final id in const ['bouncy', 'grid']) {
+        storage.removeItem(_nodesKeyFor(id));
+        storage.removeItem(_runKeyFor(_wasmRunKey, id));
+        storage.removeItem(_runKeyFor(_wimpRunKey, id));
+        storage.removeItem(_runKeyFor(_jsRunKey, id));
+      }
     } catch (_) {
       // Ignore
     }
@@ -79,14 +111,10 @@ class BenchmarkStorage {
     String? workloadId,
   }) {
     _ensureCacheLoaded();
-    final nodesChanged =
-        _cachedActiveNodes != null && _cachedActiveNodes != currentNodeCount;
-    final workloadChanged =
-        workloadId != null &&
-        _cachedActiveWorkloadId != null &&
-        _cachedActiveWorkloadId != workloadId;
-    if (nodesChanged || workloadChanged) {
-      clearRuns();
+    final id = workloadId ?? 'bouncy';
+    final prevNodes = _cachedNodesByWorkload[id];
+    if (prevNodes != null && prevNodes != currentNodeCount) {
+      clearRuns(workloadId: id);
     }
   }
 
@@ -126,8 +154,7 @@ class BenchmarkStorage {
     bool isPipelined = false,
   }) {
     invalidateIfNodeCountChanged(nodeCount, workloadId: workloadId);
-    _cachedActiveNodes = nodeCount;
-    _cachedActiveWorkloadId = workloadId;
+    _cachedNodesByWorkload[workloadId] = nodeCount;
 
     final run = (
       mode: mode,
@@ -143,17 +170,17 @@ class BenchmarkStorage {
     );
 
     final normMode = mode.toLowerCase();
-    final String storageKey;
+    final String baseKey;
     switch (normMode) {
       case 'wimp' || 'impeller':
-        _cachedWimpRun = run;
-        storageKey = _wimpRunKey;
+        _cachedWimpRuns[workloadId] = run;
+        baseKey = _wimpRunKey;
       case 'wasm' || 'skwasm':
-        _cachedWasmRun = run;
-        storageKey = _wasmRunKey;
+        _cachedWasmRuns[workloadId] = run;
+        baseKey = _wasmRunKey;
       case 'js' || 'canvaskit':
-        _cachedJsRun = run;
-        storageKey = _jsRunKey;
+        _cachedJsRuns[workloadId] = run;
+        baseKey = _jsRunKey;
       default:
         throw ArgumentError.value(
           mode,
@@ -165,6 +192,7 @@ class BenchmarkStorage {
     try {
       final storage = web.window.localStorage;
       storage.setItem(_activeNodesKey, '$nodeCount');
+      storage.setItem(_nodesKeyFor(workloadId), '$nodeCount');
       storage.setItem(_activeWorkloadKey, workloadId);
 
       final data = {
@@ -180,7 +208,8 @@ class BenchmarkStorage {
         'isPipelined': isPipelined,
       };
       final jsonStr = jsonEncode(data);
-      storage.setItem(storageKey, jsonStr);
+      storage.setItem(baseKey, jsonStr);
+      storage.setItem(_runKeyFor(baseKey, workloadId), jsonStr);
     } catch (_) {
       // Ignore
     }
@@ -193,16 +222,9 @@ class BenchmarkStorage {
     String? workloadId,
   }) {
     _ensureCacheLoaded();
-
-    if (nodeCount != null &&
-        _cachedActiveNodes != null &&
-        _cachedActiveNodes != nodeCount) {
-      return null;
-    }
-
-    if (workloadId != null &&
-        _cachedActiveWorkloadId != null &&
-        _cachedActiveWorkloadId != workloadId) {
+    final id = workloadId ?? 'bouncy';
+    final cachedNodes = _cachedNodesByWorkload[id];
+    if (nodeCount != null && cachedNodes != null && cachedNodes != nodeCount) {
       return null;
     }
 
@@ -210,11 +232,11 @@ class BenchmarkStorage {
     final BenchmarkRun? run;
     switch (normMode) {
       case 'wimp' || 'impeller':
-        run = _cachedWimpRun;
+        run = _cachedWimpRuns[id];
       case 'wasm' || 'skwasm':
-        run = _cachedWasmRun;
+        run = _cachedWasmRuns[id];
       case 'js' || 'canvaskit':
-        run = _cachedJsRun;
+        run = _cachedJsRuns[id];
       default:
         run = null;
     }

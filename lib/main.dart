@@ -70,20 +70,19 @@ class DemoDashboard extends StatelessWidget {
         autofocus: true,
         child: Scaffold(
           appBar: AppBar(
-            titleSpacing: isCompactScreen ? 12.0 : null,
+            titleSpacing: isCompactScreen ? 6.0 : null,
             title: Text(
               isCompactScreen ? 'Wasm vs JS' : 'Wasm vs JS Performance',
               style: TextStyle(
-                fontSize: isCompactScreen ? 16 : 20,
+                fontSize: isCompactScreen ? 13 : 20,
                 fontWeight: FontWeight.bold,
               ),
             ),
             actions: [
-              if (!isCompactScreen)
-                _WorkloadSelectorButton(
-                  stressCtrl: stressCtrl,
-                  isCompact: isCompactScreen,
-                ),
+              _WorkloadSelectorButton(
+                stressCtrl: stressCtrl,
+                isCompact: isCompactScreen,
+              ),
               if (!isCompactScreen) const _EngineSelectorButton(),
               BuildInfoButton(isCompact: isCompactScreen),
               if (isCurrentlySingleThreaded() && !isCurrentlyWimp())
@@ -411,9 +410,9 @@ class _StressStepperPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: isCompact ? 2.0 : 4.0),
+      padding: EdgeInsets.symmetric(horizontal: isCompact ? 1.0 : 4.0),
       child: Container(
-        height: isCompact ? 30 : 36,
+        height: isCompact ? 28 : 36,
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(20),
@@ -434,14 +433,14 @@ class _StressStepperPill extends StatelessWidget {
                   : null,
             ),
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: isCompact ? 4.0 : 6.0),
+              padding: EdgeInsets.symmetric(horizontal: isCompact ? 2.0 : 6.0),
               child: Text(
                 isCompact
                     ? stressCtrl.formattedNodeCount
                     : '${stressCtrl.formattedNodeCount} '
                           '${stressCtrl.workload.unitLabel}',
                 style: TextStyle(
-                  fontSize: isCompact ? 11 : 12,
+                  fontSize: isCompact ? 10 : 12,
                   fontWeight: FontWeight.bold,
                   fontFamily: 'monospace',
                 ),
@@ -480,9 +479,9 @@ class _StepperButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final size = isCompact ? 24.0 : 32.0;
+    final size = isCompact ? 22.0 : 32.0;
     return IconButton(
-      iconSize: isCompact ? 14 : 16,
+      iconSize: isCompact ? 13 : 16,
       visualDensity: VisualDensity.compact,
       padding: EdgeInsets.zero,
       constraints: BoxConstraints(minWidth: size, minHeight: size),
@@ -502,10 +501,10 @@ class _PresetDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: isCompact ? 2.0 : 6.0),
+      padding: EdgeInsets.symmetric(horizontal: isCompact ? 1.0 : 6.0),
       child: DropdownButton<StressPreset>(
         isDense: isCompact,
-        iconSize: isCompact ? 16 : 24,
+        iconSize: isCompact ? 14 : 24,
         value: stressCtrl.mode == StressMode.preset ? stressCtrl.preset : null,
         hint: Text(
           isCompact
@@ -524,8 +523,8 @@ class _PresetDropdown extends StatelessWidget {
           return DropdownMenuItem(
             value: preset,
             child: Text(
-              isCompact ? preset.label : stressCtrl.presetLabelFor(preset),
-              style: TextStyle(fontSize: isCompact ? 12 : 14),
+              stressCtrl.presetLabelFor(preset),
+              style: TextStyle(fontSize: isCompact ? 11 : 14),
             ),
           );
         }).toList(),

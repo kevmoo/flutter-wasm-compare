@@ -78,7 +78,7 @@ class _BouncyLayoutMatrixState extends State<BouncyLayoutMatrix>
 
     // Deterministic per-node oscillation phase and direction matching
     // bouncy_demo.
-    final isReversed = ((nodeIndex * 2654435761) & 1) == 1;
+    final isReversed = ((nodeIndex * 2654435761) >>> 16).isOdd;
     final phaseOffset = (nodeIndex * 0.17) % 1.0;
     final animVal = (_controller.value + phaseOffset) % 1.0;
     final delta =
