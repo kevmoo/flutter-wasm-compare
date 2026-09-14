@@ -77,7 +77,7 @@ Future<void> main(List<String> rawArgs) async {
       final browserMap = <BenchmarkKey, MultiSampleRecord>{};
       for (final mode in args.modes) {
         for (final nodes in args.nodeCounts) {
-          final url = _buildUrl(
+          final url = buildBenchmarkUrl(
             args.baseUrl,
             mode,
             nodes,
@@ -195,7 +195,7 @@ Future<void> main(List<String> rawArgs) async {
     return;
   }
 
-  final report = _formatMarkdownReport(
+  final report = formatMarkdownReport(
     args: args,
     capabilities: capabilityResults,
     results: benchmarkResults,
@@ -231,7 +231,7 @@ Future<void> main(List<String> rawArgs) async {
   }
 }
 
-String _buildUrl(
+String buildBenchmarkUrl(
   String baseUrl,
   BenchmarkMode mode,
   int nodes, {
@@ -261,7 +261,7 @@ String _buildUrl(
   return uri.replace(queryParameters: query).toString();
 }
 
-String _formatMarkdownReport({
+String formatMarkdownReport({
   required BenchmarkArgs args,
   required Map<BrowserType, CapabilityRecord> capabilities,
   required Map<BrowserType, Map<BenchmarkKey, MultiSampleRecord>> results,
@@ -838,6 +838,21 @@ BrowserDriver _createDriver(BrowserType type) => switch (type) {
   BrowserType.firefox => _FirefoxWebDriver(),
 };
 
+/// Selects the first CDP page target whose URL starts with `http`.
+String? selectCdpPageTargetWsUrl(List<dynamic> targets) {
+  for (final t in targets) {
+    final targetUrl = (t is Map<String, dynamic>)
+        ? (t['url'] as String? ?? '')
+        : '';
+    if (t is Map<String, dynamic> &&
+        t['type'] == 'page' &&
+        targetUrl.startsWith('http')) {
+      return t['webSocketDebuggerUrl'] as String?;
+    }
+  }
+  return null;
+}
+
 /// Drives Chrome via native Chrome DevTools Protocol (CDP) WebSocket.
 class _ChromeCdpDriver implements BrowserDriver {
   Process? _process;
@@ -915,17 +930,7 @@ class _ChromeCdpDriver implements BrowserDriver {
         if (resp.statusCode == 200) {
           final body = await resp.transform(utf8.decoder).join();
           final targets = jsonDecode(body) as List<dynamic>;
-          for (final t in targets) {
-            final targetUrl = (t is Map<String, dynamic>)
-                ? (t['url'] as String? ?? '')
-                : '';
-            if (t is Map<String, dynamic> &&
-                t['type'] == 'page' &&
-                targetUrl.startsWith('http')) {
-              wsUrl = t['webSocketDebuggerUrl'] as String?;
-              break;
-            }
-          }
+          wsUrl = selectCdpPageTargetWsUrl(targets);
         }
       } catch (_) {
         // Retry

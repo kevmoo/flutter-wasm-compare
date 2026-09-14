@@ -31,3 +31,6 @@ jobs:
 
       - name: Run tests
         run: flutter test
+
+      - name: Run browser tests
+        run: flutter test --platform chrome test/benchmark_storage_web_test.dart

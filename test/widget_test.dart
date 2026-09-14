@@ -6,6 +6,7 @@ import 'package:wasm_compare/main.dart';
 import 'package:wasm_compare/src/scene/adaptive_stress_scene.dart';
 import 'package:wasm_compare/src/scene/bouncy_layout_matrix.dart';
 import 'package:wasm_compare/src/scene/morphing_layout_matrix.dart';
+import 'package:wasm_compare/src/shell/build_info.dart';
 import 'package:wasm_compare/src/shell/performance_hud.dart';
 
 void main() {
@@ -223,5 +224,73 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     expect(find.textContaining('requires Chromium'), findsOneWidget);
+  });
+
+  testWidgets('BuildInfoDialog renders Wasm + Skia MT and Git info', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: BuildInfoDialog(
+            isWasmOverride: true,
+            isWimpOverride: false,
+            isSingleThreadedOverride: false,
+            hasGitInfoOverride: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('⚡ WASM + Skia'), findsOneWidget);
+    expect(find.text('Skia (skwasm.wasm)'), findsOneWidget);
+    expect(find.text('Multi-threaded (Toggle)'), findsOneWidget);
+    expect(find.text('Commit'), findsOneWidget);
+  });
+
+  testWidgets('BuildInfoDialog renders Wasm + Skia ST and handles toggle', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: BuildInfoDialog(
+            isWasmOverride: true,
+            isWimpOverride: false,
+            isSingleThreadedOverride: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('⚡ WASM + Skia (ST)'), findsOneWidget);
+    final chip = find.text('Single-threaded (Toggle)');
+    expect(chip, findsOneWidget);
+
+    await tester.tap(chip);
+    await tester.pump();
+  });
+
+  testWidgets('BuildInfoDialog renders Wasm + Impeller (Exp)', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: BuildInfoDialog(
+            isWasmOverride: true,
+            isWimpOverride: true,
+            isSingleThreadedOverride: false,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('⚡ WASM + Impeller (Exp)'), findsOneWidget);
+    expect(find.text('Impeller (wimp.wasm) • Experimental'), findsOneWidget);
+    expect(find.text('Single-threaded (forced by engine)'), findsOneWidget);
   });
 }

@@ -23,6 +23,14 @@ class BenchmarkStorage {
   static final Map<String, BenchmarkRun> _cachedJsRuns = {};
   static bool _cacheLoaded = false;
 
+  static void resetInMemoryCacheForTesting() {
+    _cachedNodesByWorkload.clear();
+    _cachedWasmRuns.clear();
+    _cachedWimpRuns.clear();
+    _cachedJsRuns.clear();
+    _cacheLoaded = false;
+  }
+
   static void _ensureCacheLoaded() {
     if (_cacheLoaded) return;
     _cacheLoaded = true;
