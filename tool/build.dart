@@ -80,7 +80,8 @@ bool _validateDeployPrerequisites({bool allowBranch = false}) {
   final envAllowBranch = Platform.environment['ALLOW_BRANCH'] == '1';
   if (branch != 'main' && !allowBranch && !envAllowBranch) {
     stderr.writeln(
-      '❌ Deploy build failed: Current branch is "$branch" (expected "main", or pass ALLOW_BRANCH=1 for preview channels).',
+      '❌ Deploy build failed: Current branch is "$branch" '
+      '(expected "main", or pass ALLOW_BRANCH=1 for preview channels).',
     );
     return false;
   }
