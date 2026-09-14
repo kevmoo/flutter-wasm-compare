@@ -39,6 +39,7 @@ Future<bool> buildWeb({
     'build',
     'web',
     '--wasm',
+    '--no-web-resources-cdn',
     if (gitSha.isNotEmpty) '--dart-define=GIT_SHA=$gitSha',
     if (dartVersion.isNotEmpty) '--dart-define=DART_VERSION=$dartVersion',
     if (flutterVersion.isNotEmpty)

@@ -144,7 +144,15 @@ class _BouncyLeafWidget extends StatelessWidget {
         value: true,
         onChanged: (state) {},
       ),
-      _BouncyWidgetKind.plainText => const Text('Hello World!'),
+      _BouncyWidgetKind.plainText => const Padding(
+        padding: EdgeInsets.all(4),
+        child: Text(
+          'Flutter WebAssembly & JavaScript engine layout benchmark: '
+          'continuous flex oscillation forces multi-line paragraph reflow, '
+          'glyph shaping, and line-wrap recalculation on every frame.',
+          style: TextStyle(fontSize: 11, height: 1.2),
+        ),
+      ),
       _BouncyWidgetKind.datePicker => CupertinoTimerPicker(
         onTimerDurationChanged: (duration) {},
       ),
@@ -180,15 +188,18 @@ class _BouncyLeafWidget extends StatelessWidget {
       child: ClipRect(
         child: LayoutBuilder(
           builder: (context, constraints) {
-            // Ensure constraints continuously vary with incoming flex
-            // dimensions on every frame so every leaf RenderObject executes
-            // performLayout(), while keeping a floor above
-            // CupertinoTimerPicker/AppBar minimum thresholds to prevent layout
-            // overflow assertions at high N.
-            final effectiveWidth = math.max(
-              constraints.maxWidth,
-              520.0 + (constraints.maxWidth * 0.2),
-            );
+            // For plainText leaves, let effectiveWidth oscillate directly with
+            // incoming flex width (down to 72px) so RenderParagraph /
+            // SkParagraph is forced to recompute line breaks and word wrapping
+            // on every single frame. For AppBar/CupertinoTimerPicker leaves,
+            // maintain a 520px floor to prevent RenderFlex overflow assertions.
+            final isReflowText = kind == _BouncyWidgetKind.plainText;
+            final effectiveWidth = isReflowText
+                ? math.max(72.0, constraints.maxWidth)
+                : math.max(
+                    constraints.maxWidth,
+                    520.0 + (constraints.maxWidth * 0.2),
+                  );
             final effectiveHeight = math.max(
               constraints.maxHeight,
               240.0 + (constraints.maxHeight * 0.2),

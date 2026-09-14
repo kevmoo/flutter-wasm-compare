@@ -46,6 +46,7 @@ Future<void> main(List<String> rawArgs) async {
       await driver.start(
         viewportWidth: args.viewportWidth,
         viewportHeight: args.viewportHeight,
+        initialUrl: args.baseUrl,
       );
 
       final vpRaw = await driver.evaluate(
@@ -789,7 +790,11 @@ class CapabilityRecord {
 
 abstract interface class BrowserDriver {
   Future<bool> isAvailable();
-  Future<void> start({required int viewportWidth, required int viewportHeight});
+  Future<void> start({
+    required int viewportWidth,
+    required int viewportHeight,
+    String initialUrl = 'http://localhost:8899/',
+  });
   Future<void> navigate(String url);
   Future<dynamic> evaluate(String script);
   Future<void> stop();
@@ -806,6 +811,9 @@ class _ChromeCdpDriver implements BrowserDriver {
   Process? _process;
   WebSocket? _ws;
   Directory? _tempDir;
+  int _port = 0;
+  int _viewportWidth = 1280;
+  int _viewportHeight = 720;
   int _msgId = 0;
   final _pendingResponses = <int, Completer<dynamic>>{};
   StreamSubscription<dynamic>? _wsSub;
@@ -830,70 +838,111 @@ class _ChromeCdpDriver implements BrowserDriver {
   Future<void> start({
     required int viewportWidth,
     required int viewportHeight,
+    String initialUrl = 'http://localhost:8899/',
   }) async {
+    _viewportWidth = viewportWidth;
+    _viewportHeight = viewportHeight;
     final chromePath = _findChromeBinary()!;
-    final port = await _findAvailablePort();
+    _port = await _findAvailablePort();
     _tempDir = await Directory.systemTemp.createTemp('chrome_bench_');
 
     _process = await Process.start(chromePath, [
-      '--remote-debugging-port=$port',
-      '--user-data-dir=${_tempDir!.path}',
+      if (Platform.isLinux) ...[
+        '--headless=new',
+        '--no-sandbox',
+        '--no-proxy-server',
+      ],
+      '--remote-debugging-port=$_port',
+      if (!Platform.isLinux) '--user-data-dir=${_tempDir!.path}',
       '--disable-background-timer-throttling',
       '--disable-backgrounding-occluded-windows',
       '--disable-renderer-backgrounding',
       '--no-first-run',
       '--no-default-browser-check',
       '--window-size=${viewportWidth + 100},${viewportHeight + 100}',
-      'about:blank',
+      initialUrl,
     ], mode: ProcessStartMode.normal);
 
-    // Poll until Chrome DevTools HTTP endpoint is ready
+    await _connectToPageTarget();
+  }
+
+  Future<void> _connectToPageTarget() async {
+    await _wsSub?.cancel();
+    await _ws?.close();
+    _pendingResponses.clear();
+
     String? wsUrl;
-    final client = HttpClient();
-    for (var i = 0; i < 30; i++) {
-      await Future<void>.delayed(const Duration(milliseconds: 300));
+    for (var attempt = 0; attempt < 40; attempt++) {
+      final client = HttpClient();
       try {
-        final uri = Uri.parse('http://127.0.0.1:$port/json/list');
+        final uri = Uri.parse('http://127.0.0.1:$_port/json/list');
         final req = await client.getUrl(uri);
         final resp = await req.close();
         if (resp.statusCode == 200) {
           final body = await resp.transform(utf8.decoder).join();
           final targets = jsonDecode(body) as List<dynamic>;
           for (final t in targets) {
-            if (t is Map<String, dynamic> && t['type'] == 'page') {
+            final targetUrl = (t is Map<String, dynamic>)
+                ? (t['url'] as String? ?? '')
+                : '';
+            if (t is Map<String, dynamic> &&
+                t['type'] == 'page' &&
+                targetUrl.startsWith('http')) {
               wsUrl = t['webSocketDebuggerUrl'] as String?;
               break;
             }
           }
-          if (wsUrl != null) break;
         }
       } catch (_) {
         // Retry
+      } finally {
+        client.close();
       }
+
+      if (wsUrl != null) break;
+      await Future<void>.delayed(const Duration(milliseconds: 250));
     }
-    client.close();
 
     if (wsUrl == null) {
       throw StateError(
-        'Failed to obtain Chrome DevTools WebSocket URL on port $port',
+        'Failed to obtain Chrome DevTools WebSocket URL on port $_port',
       );
     }
 
     _ws = await WebSocket.connect(wsUrl);
-    _wsSub = _ws!.listen((message) {
-      if (message is String) {
-        final map = jsonDecode(message) as Map<String, dynamic>;
-        final id = map['id'] as int?;
-        if (id != null && _pendingResponses.containsKey(id)) {
-          _pendingResponses.remove(id)!.complete(map['result']);
+    _wsSub = _ws!.listen(
+      (message) {
+        if (message is String) {
+          final map = jsonDecode(message) as Map<String, dynamic>;
+          final id = map['id'] as int?;
+          if (id != null && _pendingResponses.containsKey(id)) {
+            _pendingResponses.remove(id)!.complete(map['result']);
+          }
         }
-      }
-    });
+      },
+      onDone: () {
+        for (final c in _pendingResponses.values) {
+          if (!c.isCompleted) {
+            c.completeError(StateError('WebSocket disconnected'));
+          }
+        }
+        _pendingResponses.clear();
+      },
+    );
 
-    // Enforce exact device viewport metrics in Chrome
+    for (var i = 0; i < 40; i++) {
+      try {
+        final href = await evaluate('window.location.href');
+        if (href is String && href.startsWith('http')) {
+          break;
+        }
+      } catch (_) {}
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+    }
+
     await _sendCdp('Emulation.setDeviceMetricsOverride', {
-      'width': viewportWidth,
-      'height': viewportHeight,
+      'width': _viewportWidth,
+      'height': _viewportHeight,
       'deviceScaleFactor': 1,
       'mobile': false,
     });
@@ -903,6 +952,9 @@ class _ChromeCdpDriver implements BrowserDriver {
     String method, [
     Map<String, dynamic>? params,
   ]) async {
+    if (_ws == null || _ws!.readyState != WebSocket.open) {
+      await _connectToPageTarget();
+    }
     final id = ++_msgId;
     final completer = Completer<dynamic>();
     _pendingResponses[id] = completer;
@@ -920,7 +972,12 @@ class _ChromeCdpDriver implements BrowserDriver {
 
   @override
   Future<void> navigate(String url) async {
-    await _sendCdp('Page.navigate', {'url': url});
+    await stop();
+    await start(
+      viewportWidth: _viewportWidth,
+      viewportHeight: _viewportHeight,
+      initialUrl: url,
+    );
   }
 
   @override
@@ -969,6 +1026,7 @@ class _SafariWebDriver implements BrowserDriver {
   Future<void> start({
     required int viewportWidth,
     required int viewportHeight,
+    String initialUrl = 'http://localhost:8899/',
   }) async {
     _port = await _findAvailablePort();
     _driverProcess = await Process.start('/usr/bin/safaridriver', [
@@ -1122,6 +1180,7 @@ class _FirefoxWebDriver implements BrowserDriver {
   Future<void> start({
     required int viewportWidth,
     required int viewportHeight,
+    String initialUrl = 'http://localhost:8899/',
   }) async {
     _port = await _findAvailablePort();
     _driverProcess = await Process.start('geckodriver', [

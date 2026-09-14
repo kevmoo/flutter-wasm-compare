@@ -41,7 +41,7 @@ Future<void> main(List<String> args) async {
     }
   }
 
-  final server = await HttpServer.bind(InternetAddress.anyIPv4, port);
+  final server = await HttpServer.bind(InternetAddress.anyIPv6, port);
   final hostname = Platform.localHostname;
   final url = 'http://$hostname:${server.port}';
 
