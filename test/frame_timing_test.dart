@@ -128,6 +128,7 @@ void main() {
       jitterMs: 5.2,
       stressLevel: 'Manual (200)',
       nodeCount: 200,
+      workloadId: 'bouncy',
       isPipelined: false,
     );
 
@@ -140,6 +141,7 @@ void main() {
       jitterMs: 0.3,
       stressLevel: 'Manual (200)',
       nodeCount: 200,
+      workloadId: 'bouncy',
       isPipelined: true,
     );
 
@@ -200,6 +202,7 @@ void main() {
         jitterMs: 0.2,
         stressLevel: 'Manual (200)',
         nodeCount: 200,
+        workloadId: 'bouncy',
         isPipelined: false,
       );
 
@@ -230,6 +233,7 @@ void main() {
         jitterMs: 0.35,
         stressLevel: 'Manual (200)',
         nodeCount: 200,
+        workloadId: 'bouncy',
         isPipelined: false,
       );
 
@@ -282,6 +286,7 @@ void main() {
         jitterMs: 0.25,
         stressLevel: 'Manual (200)',
         nodeCount: 200,
+        workloadId: 'bouncy',
         isPipelined: true,
       );
 

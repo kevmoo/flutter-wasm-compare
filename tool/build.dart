@@ -39,6 +39,7 @@ Future<bool> buildWeb({
     'build',
     'web',
     '--wasm',
+    '--no-web-resources-cdn',
     if (gitSha.isNotEmpty) '--dart-define=GIT_SHA=$gitSha',
     if (dartVersion.isNotEmpty) '--dart-define=DART_VERSION=$dartVersion',
     if (flutterVersion.isNotEmpty)
@@ -66,7 +67,7 @@ Future<bool> buildWeb({
   }
 }
 
-bool _validateDeployPrerequisites() {
+bool _validateDeployPrerequisites({bool allowBranch = false}) {
   if (!_isWorkingTreeClean()) {
     stderr.writeln(
       '❌ Deploy build failed: Working tree is dirty. '
@@ -76,9 +77,11 @@ bool _validateDeployPrerequisites() {
   }
 
   final branch = _runGit(['branch', '--show-current']);
-  if (branch != 'main') {
+  final envAllowBranch = Platform.environment['ALLOW_BRANCH'] == '1';
+  if (branch != 'main' && !allowBranch && !envAllowBranch) {
     stderr.writeln(
-      '❌ Deploy build failed: Current branch is "$branch" (expected "main").',
+      '❌ Deploy build failed: Current branch is "$branch" '
+      '(expected "main", or pass ALLOW_BRANCH=1 for preview channels).',
     );
     return false;
   }

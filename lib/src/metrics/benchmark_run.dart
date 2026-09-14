@@ -7,5 +7,6 @@ typedef BenchmarkRun = ({
   double jitterMs,
   String stressLevel,
   int nodeCount,
+  String workloadId,
   bool isPipelined,
 });

@@ -57,7 +57,10 @@ try {
   isSingleThreaded = isExplicitSt;
 }
 
-const userConfig = {'wasmAllowList': {'gecko': true, 'webkit': true}};
+const userConfig = {
+  'canvasKitBaseUrl': 'canvaskit/',
+  'wasmAllowList': {'gecko': true, 'webkit': true},
+};
 if (forceCanvasKit) {
   userConfig.renderer = "canvaskit";
 } else {

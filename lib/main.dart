@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'src/metrics/frame_timing_service.dart';
 import 'src/scene/adaptive_stress_scene.dart';
 import 'src/scene/stress_controller.dart';
+import 'src/scene/stress_workload.dart';
 import 'src/shell/build_info.dart';
 import 'src/shell/compatibility_shield.dart';
 import 'src/shell/engine_mode.dart';
@@ -39,7 +40,7 @@ class WasmCompareApp extends StatelessWidget {
 }
 
 const double largeScreenMinWidth = 768.0;
-const double compactAppBarBreakpoint = 768.0;
+const double compactAppBarBreakpoint = 960.0;
 
 class DemoDashboard extends StatelessWidget {
   const DemoDashboard({super.key});
@@ -69,15 +70,19 @@ class DemoDashboard extends StatelessWidget {
         autofocus: true,
         child: Scaffold(
           appBar: AppBar(
-            titleSpacing: isCompactScreen ? 12.0 : null,
+            titleSpacing: isCompactScreen ? 6.0 : null,
             title: Text(
               isCompactScreen ? 'Wasm vs JS' : 'Wasm vs JS Performance',
               style: TextStyle(
-                fontSize: isCompactScreen ? 16 : 20,
+                fontSize: isCompactScreen ? 13 : 20,
                 fontWeight: FontWeight.bold,
               ),
             ),
             actions: [
+              _WorkloadSelectorButton(
+                stressCtrl: stressCtrl,
+                isCompact: isCompactScreen,
+              ),
               if (!isCompactScreen) const _EngineSelectorButton(),
               BuildInfoButton(isCompact: isCompactScreen),
               if (isCurrentlySingleThreaded() && !isCurrentlyWimp())
@@ -104,7 +109,10 @@ class DemoDashboard extends StatelessWidget {
                 children: [
                   Positioned.fill(
                     key: const ValueKey('stress_scene'),
-                    child: AdaptiveStressScene(nodeCount: stressCtrl.nodeCount),
+                    child: AdaptiveStressScene(
+                      workload: stressCtrl.workload,
+                      nodeCount: stressCtrl.nodeCount,
+                    ),
                   ),
                   Positioned(
                     key: const ValueKey('perf_hud'),
@@ -402,9 +410,9 @@ class _StressStepperPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: isCompact ? 2.0 : 4.0),
+      padding: EdgeInsets.symmetric(horizontal: isCompact ? 1.0 : 4.0),
       child: Container(
-        height: isCompact ? 30 : 36,
+        height: isCompact ? 28 : 36,
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(20),
@@ -425,13 +433,14 @@ class _StressStepperPill extends StatelessWidget {
                   : null,
             ),
             Padding(
-              padding: EdgeInsets.symmetric(horizontal: isCompact ? 4.0 : 6.0),
+              padding: EdgeInsets.symmetric(horizontal: isCompact ? 2.0 : 6.0),
               child: Text(
                 isCompact
                     ? stressCtrl.formattedNodeCount
-                    : '${stressCtrl.formattedNodeCount} Nodes',
+                    : '${stressCtrl.formattedNodeCount} '
+                          '${stressCtrl.workload.unitLabel}',
                 style: TextStyle(
-                  fontSize: isCompact ? 11 : 12,
+                  fontSize: isCompact ? 10 : 12,
                   fontWeight: FontWeight.bold,
                   fontFamily: 'monospace',
                 ),
@@ -470,9 +479,9 @@ class _StepperButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final size = isCompact ? 24.0 : 32.0;
+    final size = isCompact ? 22.0 : 32.0;
     return IconButton(
-      iconSize: isCompact ? 14 : 16,
+      iconSize: isCompact ? 13 : 16,
       visualDensity: VisualDensity.compact,
       padding: EdgeInsets.zero,
       constraints: BoxConstraints(minWidth: size, minHeight: size),
@@ -492,10 +501,10 @@ class _PresetDropdown extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.symmetric(horizontal: isCompact ? 2.0 : 6.0),
+      padding: EdgeInsets.symmetric(horizontal: isCompact ? 1.0 : 6.0),
       child: DropdownButton<StressPreset>(
         isDense: isCompact,
-        iconSize: isCompact ? 16 : 24,
+        iconSize: isCompact ? 14 : 24,
         value: stressCtrl.mode == StressMode.preset ? stressCtrl.preset : null,
         hint: Text(
           isCompact
@@ -514,11 +523,124 @@ class _PresetDropdown extends StatelessWidget {
           return DropdownMenuItem(
             value: preset,
             child: Text(
-              preset.label,
-              style: TextStyle(fontSize: isCompact ? 12 : 14),
+              stressCtrl.presetLabelFor(preset),
+              style: TextStyle(fontSize: isCompact ? 11 : 14),
             ),
           );
         }).toList(),
+      ),
+    );
+  }
+}
+
+class _WorkloadSelectorButton extends StatelessWidget {
+  final StressController stressCtrl;
+  final bool isCompact;
+
+  const _WorkloadSelectorButton({
+    required this.stressCtrl,
+    this.isCompact = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final current = stressCtrl.workload;
+    final isBouncy = current.id == 'bouncy';
+    final color = isBouncy ? Colors.purpleAccent : Colors.orangeAccent;
+
+    return Padding(
+      padding: EdgeInsets.symmetric(horizontal: isCompact ? 1.0 : 2.0),
+      child: PopupMenuButton<String>(
+        tooltip: 'Select Benchmark Workload (Layout Churn / Card Grid)',
+        initialValue: current.id,
+        padding: EdgeInsets.zero,
+        constraints: isCompact
+            ? const BoxConstraints(minWidth: 28, minHeight: 28)
+            : null,
+        onSelected: (id) {
+          if (id == current.id) return;
+          context.read<FrameTimingService>().resetLog();
+          stressCtrl.setWorkload(resolveWorkload(id));
+        },
+        itemBuilder: (context) => kAllWorkloads.map((workload) {
+          final isSelected = workload.id == current.id;
+          return PopupMenuItem<String>(
+            value: workload.id,
+            child: ListTile(
+              dense: true,
+              leading: Icon(
+                workload.id == 'bouncy'
+                    ? Icons.account_tree_outlined
+                    : Icons.grid_view_outlined,
+                color: workload.id == 'bouncy'
+                    ? Colors.purpleAccent
+                    : Colors.orangeAccent,
+              ),
+              title: Text(workload.title),
+              subtitle: Text(
+                workload.subtitle,
+                style: const TextStyle(fontSize: 11, color: Colors.white54),
+              ),
+              trailing: isSelected
+                  ? Icon(
+                      Icons.check,
+                      size: 16,
+                      color: workload.id == 'bouncy'
+                          ? Colors.purpleAccent
+                          : Colors.orangeAccent,
+                    )
+                  : null,
+            ),
+          );
+        }).toList(),
+        child: isCompact
+            ? Padding(
+                padding: const EdgeInsets.all(4.0),
+                child: Icon(
+                  isBouncy
+                      ? Icons.account_tree_outlined
+                      : Icons.grid_view_outlined,
+                  size: 18,
+                  color: color,
+                ),
+              )
+            : Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.10),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: color.withValues(alpha: 0.45),
+                    width: 1.0,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      isBouncy
+                          ? Icons.account_tree_outlined
+                          : Icons.grid_view_outlined,
+                      size: 14,
+                      color: color,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      current.title,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: color,
+                      ),
+                    ),
+                    const SizedBox(width: 2),
+                    Icon(Icons.arrow_drop_down, size: 14, color: color),
+                  ],
+                ),
+              ),
       ),
     );
   }
