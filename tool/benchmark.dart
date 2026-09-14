@@ -15,6 +15,37 @@ Future<void> main(List<String> rawArgs) async {
     return;
   }
 
+  _printHeader(args);
+
+  final benchmarkResults =
+      <BrowserType, Map<BenchmarkKey, MultiSampleRecord>>{};
+  final capabilityResults = <BrowserType, CapabilityRecord>{};
+
+  for (final browserType in args.browsers) {
+    final browserMap = await _runBrowserSuite(
+      browserType: browserType,
+      args: args,
+      capabilityResults: capabilityResults,
+    );
+    if (browserMap != null) {
+      benchmarkResults[browserType] = browserMap;
+    }
+  }
+
+  if (benchmarkResults.isEmpty) {
+    print('\nNo benchmark results collected.');
+    exitCode = 1;
+    return;
+  }
+
+  await _emitOutputs(
+    args: args,
+    capabilityResults: capabilityResults,
+    benchmarkResults: benchmarkResults,
+  );
+}
+
+void _printHeader(BenchmarkArgs args) {
   print('=' * 63);
   print(' flutter-wasm-compare Browser Benchmark Runner');
   print('=' * 63);
@@ -29,172 +60,205 @@ Future<void> main(List<String> rawArgs) async {
   );
   print('=' * 63);
   print('');
+}
 
-  final benchmarkResults =
-      <BrowserType, Map<BenchmarkKey, MultiSampleRecord>>{};
-  final capabilityResults = <BrowserType, CapabilityRecord>{};
-
-  for (final browserType in args.browsers) {
-    final driver = _createDriver(browserType);
-    if (!await driver.isAvailable()) {
-      print('⚠️  Skipping ${browserType.label}: binary/driver not found.');
-      continue;
-    }
-
-    print('\n>>> Launching ${browserType.label}...');
-    try {
-      await driver.start(
-        viewportWidth: args.viewportWidth,
-        viewportHeight: args.viewportHeight,
-        initialUrl: args.baseUrl,
-      );
-
-      final vpRaw = await driver.evaluate(
-        '[window.innerWidth, window.innerHeight]',
-      );
-      if (vpRaw is List && vpRaw.length >= 2) {
-        print('  • Calibrated viewport: ${vpRaw[0]}x${vpRaw[1]} px');
-      }
-
-      if (!args.skipCapabilityProbe) {
-        print('  • Probing WebAssembly capabilities...');
-        final baseWithoutQuery = args.baseUrl.replaceAll(RegExp(r'\?.*$'), '');
-        final probeUrl = '$baseWithoutQuery?mode=wasm&optin=true';
-        await driver.navigate(probeUrl);
-        await Future<void>.delayed(const Duration(seconds: 3));
-        final probeRaw = await driver.evaluate(_capabilityProbeScript);
-        if (probeRaw != null) {
-          final probe = CapabilityRecord.parse(probeRaw);
-          capabilityResults[browserType] = probe;
-          final passLabel = probe.invertedProbe ? 'YES (PASS)' : 'NO';
-          print('    - Wasm JS-String Supported: $passLabel');
-          print(
-            '    - Cross-Origin Isolated:     ${probe.crossOriginIsolated}',
-          );
-        }
-      }
-
-      final browserMap = <BenchmarkKey, MultiSampleRecord>{};
-      for (final mode in args.modes) {
-        for (final nodes in args.nodeCounts) {
-          final url = buildBenchmarkUrl(
-            args.baseUrl,
-            mode,
-            nodes,
-            workload: args.workload,
-          );
-
-          // Clear prior benchmark run storage before navigation to prevent
-          // stale cross-mode reads.
-          await driver.evaluate('''
-            try {
-              localStorage.removeItem('${mode.storageKey}');
-              localStorage.removeItem('${mode.storageKey}_${args.workload}');
-              localStorage.removeItem('wasm_compare_active_node_count');
-              localStorage.removeItem('wasm_compare_active_node_count_${args.workload}');
-              localStorage.removeItem('wasm_compare_active_workload_id');
-            } catch (_) {}
-          ''');
-
-          stdout.write(
-            '  • [${mode.label} / ${args.workload}] @ $nodes nodes: settling...',
-          );
-          await driver.navigate(url);
-
-          for (var s = args.settleSeconds; s > 0; s--) {
-            stdout.write(' ${s}s');
-            await Future<void>.delayed(const Duration(seconds: 1));
-          }
-
-          // Multi-sample collection phase
-          stdout.write(' sampling (${args.samples}x)...');
-          final collected = <BenchmarkRecord>[];
-          final readExpr = "localStorage.getItem('${mode.storageKey}')";
-
-          final maxAttempts = args.samples * 3 + 5;
-          var attempts = 0;
-          var lastTotalFrameTime = -1.0;
-
-          while (collected.length < args.samples && attempts < maxAttempts) {
-            attempts++;
-            if (collected.isNotEmpty || attempts > 1) {
-              await Future<void>.delayed(
-                Duration(milliseconds: args.sampleIntervalMs),
-              );
-            }
-            final rawJson = await driver.evaluate(readExpr);
-            if (rawJson is String && rawJson.isNotEmpty) {
-              final data = jsonDecode(rawJson) as Map<String, dynamic>;
-              final record = BenchmarkRecord.fromJson(data);
-              if (record.matches(
-                mode,
-                nodes,
-                expectedWorkloadId: args.workload,
-              )) {
-                // Ensure sample is fresh (not an identical snapshot of the same
-                // frame window).
-                if (record.totalFrameTimeMs != lastTotalFrameTime ||
-                    collected.isEmpty) {
-                  collected.add(record);
-                  lastTotalFrameTime = record.totalFrameTimeMs;
-                }
-              }
-            }
-          }
-          stdout.write(' done.\r');
-
-          if (collected.isNotEmpty) {
-            final multi = MultiSampleRecord.fromRecords(collected);
-            final key = BenchmarkKey(mode, nodes);
-            browserMap[key] = multi;
-
-            final label = mode.label.padRight(15);
-            final nodeStr = nodes.toString().padLeft(4);
-            final fpsStr = multi.fps.medianNs.toStringAsFixed(1);
-            final p95Fps = multi.fps.p95Ns.toStringAsFixed(1);
-            final buildStr = (multi.buildTime.medianNs / 1e6).toStringAsFixed(
-              2,
-            );
-            final buildMad = (multi.buildTime.madNs / 1e6).toStringAsFixed(2);
-            final rasterStr = (multi.rasterTime.medianNs / 1e6).toStringAsFixed(
-              2,
-            );
-            final rasterMad = (multi.rasterTime.madNs / 1e6).toStringAsFixed(2);
-            final stabilityTag = multi.buildTime.isRobustStable
-                ? 'STABLE'
-                : 'UNSTABLE';
-
-            print(
-              '  ✓ [$label] @ $nodeStr nodes -> '
-              '$fpsStr FPS (p95: $p95Fps) | '
-              'Build: ${buildStr}ms (MAD: ${buildMad}ms) | '
-              'Raster: ${rasterStr}ms (MAD: ${rasterMad}ms) '
-              '[$stabilityTag]',
-            );
-          } else {
-            final label = mode.label.padRight(15);
-            final nodeStr = nodes.toString().padLeft(4);
-            print(
-              '  ✗ [$label] @ $nodeStr nodes -> '
-              'No metrics found in localStorage.',
-            );
-          }
-        }
-      }
-      benchmarkResults[browserType] = browserMap;
-    } catch (e, st) {
-      print('❌ Error running ${browserType.label}: $e\n$st');
-    } finally {
-      await driver.stop();
-    }
+Future<Map<BenchmarkKey, MultiSampleRecord>?> _runBrowserSuite({
+  required BrowserType browserType,
+  required BenchmarkArgs args,
+  required Map<BrowserType, CapabilityRecord> capabilityResults,
+}) async {
+  final driver = _createDriver(browserType);
+  if (!await driver.isAvailable()) {
+    print('⚠️  Skipping ${browserType.label}: binary/driver not found.');
+    return null;
   }
 
-  if (benchmarkResults.isEmpty) {
-    print('\nNo benchmark results collected.');
-    exitCode = 1;
+  print('\n>>> Launching ${browserType.label}...');
+  try {
+    await driver.start(
+      viewportWidth: args.viewportWidth,
+      viewportHeight: args.viewportHeight,
+      initialUrl: args.baseUrl,
+    );
+
+    final vpRaw = await driver.evaluate(
+      '[window.innerWidth, window.innerHeight]',
+    );
+    if (vpRaw is List && vpRaw.length >= 2) {
+      print('  • Calibrated viewport: ${vpRaw[0]}x${vpRaw[1]} px');
+    }
+
+    if (!args.skipCapabilityProbe) {
+      await _probeCapabilities(
+        driver: driver,
+        browserType: browserType,
+        args: args,
+        capabilityResults: capabilityResults,
+      );
+    }
+
+    final browserMap = <BenchmarkKey, MultiSampleRecord>{};
+    for (final mode in args.modes) {
+      for (final nodes in args.nodeCounts) {
+        final multi = await _runWorkloadForModeAndNodes(
+          driver: driver,
+          args: args,
+          mode: mode,
+          nodes: nodes,
+        );
+        if (multi != null) {
+          browserMap[BenchmarkKey(mode, nodes)] = multi;
+        }
+      }
+    }
+    return browserMap;
+  } catch (e, st) {
+    print('❌ Error running ${browserType.label}: $e\n$st');
+    return null;
+  } finally {
+    await driver.stop();
+  }
+}
+
+Future<void> _probeCapabilities({
+  required BrowserDriver driver,
+  required BrowserType browserType,
+  required BenchmarkArgs args,
+  required Map<BrowserType, CapabilityRecord> capabilityResults,
+}) async {
+  print('  • Probing WebAssembly capabilities...');
+  final baseWithoutQuery = args.baseUrl.replaceAll(RegExp(r'\?.*$'), '');
+  final probeUrl = '$baseWithoutQuery?mode=wasm&optin=true';
+  await driver.navigate(probeUrl);
+  await Future<void>.delayed(const Duration(seconds: 3));
+  final probeRaw = await driver.evaluate(_capabilityProbeScript);
+  if (probeRaw == null) return;
+  final probe = CapabilityRecord.parse(probeRaw);
+  capabilityResults[browserType] = probe;
+  final passLabel = probe.invertedProbe ? 'YES (PASS)' : 'NO';
+  print('    - Wasm JS-String Supported: $passLabel');
+  print('    - Cross-Origin Isolated:     ${probe.crossOriginIsolated}');
+}
+
+Future<MultiSampleRecord?> _runWorkloadForModeAndNodes({
+  required BrowserDriver driver,
+  required BenchmarkArgs args,
+  required BenchmarkMode mode,
+  required int nodes,
+}) async {
+  final url = buildBenchmarkUrl(
+    args.baseUrl,
+    mode,
+    nodes,
+    workload: args.workload,
+  );
+
+  await driver.evaluate('''
+    try {
+      localStorage.removeItem('${mode.storageKey}');
+      localStorage.removeItem('${mode.storageKey}_${args.workload}');
+      localStorage.removeItem('wasm_compare_active_node_count');
+      localStorage.removeItem('wasm_compare_active_node_count_${args.workload}');
+      localStorage.removeItem('wasm_compare_active_workload_id');
+    } catch (_) {}
+  ''');
+
+  stdout.write(
+    '  • [${mode.label} / ${args.workload}] @ $nodes nodes: settling...',
+  );
+  await driver.navigate(url);
+
+  for (var s = args.settleSeconds; s > 0; s--) {
+    stdout.write(' ${s}s');
+    await Future<void>.delayed(const Duration(seconds: 1));
+  }
+
+  stdout.write(' sampling (${args.samples}x)...');
+  final collected = await _collectSamples(
+    driver: driver,
+    args: args,
+    mode: mode,
+    nodes: nodes,
+  );
+  stdout.write(' done.\r');
+
+  final multi = collected.isNotEmpty
+      ? MultiSampleRecord.fromRecords(collected)
+      : null;
+  _printWorkloadSummary(mode, nodes, multi);
+  return multi;
+}
+
+Future<List<BenchmarkRecord>> _collectSamples({
+  required BrowserDriver driver,
+  required BenchmarkArgs args,
+  required BenchmarkMode mode,
+  required int nodes,
+}) async {
+  final collected = <BenchmarkRecord>[];
+  final readExpr = "localStorage.getItem('${mode.storageKey}')";
+  final maxAttempts = args.samples * 3 + 5;
+  var attempts = 0;
+  var lastTotalFrameTime = -1.0;
+
+  while (collected.length < args.samples && attempts < maxAttempts) {
+    attempts++;
+    if (collected.isNotEmpty || attempts > 1) {
+      await Future<void>.delayed(Duration(milliseconds: args.sampleIntervalMs));
+    }
+    final rawJson = await driver.evaluate(readExpr);
+    if (rawJson is! String || rawJson.isEmpty) continue;
+    final data = jsonDecode(rawJson) as Map<String, dynamic>;
+    final record = BenchmarkRecord.fromJson(data);
+    if (!record.matches(mode, nodes, expectedWorkloadId: args.workload)) {
+      continue;
+    }
+    if (record.totalFrameTimeMs != lastTotalFrameTime || collected.isEmpty) {
+      collected.add(record);
+      lastTotalFrameTime = record.totalFrameTimeMs;
+    }
+  }
+  return collected;
+}
+
+void _printWorkloadSummary(
+  BenchmarkMode mode,
+  int nodes,
+  MultiSampleRecord? multi,
+) {
+  final label = mode.label.padRight(15);
+  final nodeStr = nodes.toString().padLeft(4);
+  if (multi == null) {
+    print(
+      '  ✗ [$label] @ $nodeStr nodes -> '
+      'No metrics found in localStorage.',
+    );
     return;
   }
 
+  final fpsStr = multi.fps.medianNs.toStringAsFixed(1);
+  final p95Fps = multi.fps.p95Ns.toStringAsFixed(1);
+  final buildStr = (multi.buildTime.medianNs / 1e6).toStringAsFixed(2);
+  final buildMad = (multi.buildTime.madNs / 1e6).toStringAsFixed(2);
+  final rasterStr = (multi.rasterTime.medianNs / 1e6).toStringAsFixed(2);
+  final rasterMad = (multi.rasterTime.madNs / 1e6).toStringAsFixed(2);
+  final stabilityTag = multi.buildTime.isRobustStable ? 'STABLE' : 'UNSTABLE';
+
+  print(
+    '  ✓ [$label] @ $nodeStr nodes -> '
+    '$fpsStr FPS (p95: $p95Fps) | '
+    'Build: ${buildStr}ms (MAD: ${buildMad}ms) | '
+    'Raster: ${rasterStr}ms (MAD: ${rasterMad}ms) '
+    '[$stabilityTag]',
+  );
+}
+
+Future<void> _emitOutputs({
+  required BenchmarkArgs args,
+  required Map<BrowserType, CapabilityRecord> capabilityResults,
+  required Map<BrowserType, Map<BenchmarkKey, MultiSampleRecord>>
+  benchmarkResults,
+}) async {
   final report = formatMarkdownReport(
     args: args,
     capabilities: capabilityResults,
@@ -267,6 +331,14 @@ String formatMarkdownReport({
   required Map<BrowserType, Map<BenchmarkKey, MultiSampleRecord>> results,
 }) {
   final buffer = StringBuffer();
+  _writeMarkdownHeader(buffer, args);
+  _writeMarkdownCapabilities(buffer, capabilities);
+  _writeMarkdownMatrix(buffer, args, results);
+  _writeMarkdownTakeaways(buffer, args, results);
+  return buffer.toString();
+}
+
+void _writeMarkdownHeader(StringBuffer buffer, BenchmarkArgs args) {
   buffer.writeln(
     '# Browser WebAssembly Benchmark Report (`flutter-wasm-compare`)',
   );
@@ -282,38 +354,46 @@ String formatMarkdownReport({
     '${args.settleSeconds}s initial settle',
   );
   buffer.writeln();
+}
 
-  if (capabilities.isNotEmpty) {
-    buffer.writeln('## 🧪 Capability & Streaming Probes');
-    buffer.writeln();
-    buffer.writeln('<!-- mdformat off -->');
+void _writeMarkdownCapabilities(
+  StringBuffer buffer,
+  Map<BrowserType, CapabilityRecord> capabilities,
+) {
+  if (capabilities.isEmpty) return;
+  buffer.writeln('## 🧪 Capability & Streaming Probes');
+  buffer.writeln();
+  buffer.writeln('<!-- mdformat off -->');
+  buffer.writeln(
+    '| Browser | Cross-Origin Isolated | Wasm JS-String Supported | '
+    'User Agent |',
+  );
+  buffer.writeln('| :--- | :---: | :---: | :--- |');
+  for (final entry in capabilities.entries) {
+    final b = entry.key.label;
+    final c = entry.value;
+    final passStr = c.invertedProbe ? '**PASS**' : '**FAIL**';
     buffer.writeln(
-      '| Browser | Cross-Origin Isolated | Wasm JS-String Supported | '
-      'User Agent |',
+      '| $b | ${c.crossOriginIsolated} | $passStr | `${c.userAgent}` |',
     );
-    buffer.writeln('| :--- | :---: | :---: | :--- |');
-    for (final entry in capabilities.entries) {
-      final b = entry.key.label;
-      final c = entry.value;
-      final passStr = c.invertedProbe ? '**PASS**' : '**FAIL**';
-      buffer.writeln(
-        '| $b | ${c.crossOriginIsolated} | $passStr | `${c.userAgent}` |',
-      );
-    }
-    buffer.writeln('<!-- mdformat on -->');
-    buffer.writeln();
   }
+  buffer.writeln('<!-- mdformat on -->');
+  buffer.writeln();
+}
 
+void _writeMarkdownMatrix(
+  StringBuffer buffer,
+  BenchmarkArgs args,
+  Map<BrowserType, Map<BenchmarkKey, MultiSampleRecord>> results,
+) {
   buffer.writeln('## 📊 Performance Comparison Matrix (Median Values)');
   buffer.writeln();
   buffer.writeln('<!-- mdformat off -->');
 
-  final columns = <_ReportColumn>[];
-  for (final browser in results.keys) {
-    for (final mode in args.modes) {
-      columns.add(_ReportColumn(browser, mode));
-    }
-  }
+  final columns = <_ReportColumn>[
+    for (final browser in results.keys)
+      for (final mode in args.modes) _ReportColumn(browser, mode),
+  ];
 
   buffer.write('| Preset / Metric |');
   for (final col in columns) {
@@ -344,12 +424,19 @@ String formatMarkdownReport({
   }
   buffer.writeln('<!-- mdformat on -->');
   buffer.writeln();
+}
 
+void _writeMarkdownTakeaways(
+  StringBuffer buffer,
+  BenchmarkArgs args,
+  Map<BrowserType, Map<BenchmarkKey, MultiSampleRecord>> results,
+) {
   final takeaways = StringBuffer();
   for (final browser in results.keys) {
     final browserResults = results[browser]!;
-    final matchingNodes = args.nodeCounts.where((int n) {
-      return browserResults.containsKey(
+    final matchingNodes = args.nodeCounts.where(
+      (int n) =>
+          browserResults.containsKey(
             BenchmarkKey(BenchmarkMode.wasmMultithreaded, n),
           ) &&
           browserResults.containsKey(
@@ -357,61 +444,11 @@ String formatMarkdownReport({
           ) &&
           browserResults.containsKey(
             BenchmarkKey(BenchmarkMode.jsCanvasKit, n),
-          );
-    }).toList();
+          ),
+    );
 
     for (final nodes in matchingNodes) {
-      final mt =
-          browserResults[BenchmarkKey(BenchmarkMode.wasmMultithreaded, nodes)]!;
-      final st =
-          browserResults[BenchmarkKey(
-            BenchmarkMode.wasmSingleThreaded,
-            nodes,
-          )]!;
-      final js =
-          browserResults[BenchmarkKey(BenchmarkMode.jsCanvasKit, nodes)]!;
-
-      final rasterFieller = FiellerInterval.compute(
-        sampleA: mt.rawRasterMs,
-        sampleB: st.rawRasterMs,
-      );
-      final fpsWinFieller = FiellerInterval.compute(
-        sampleA: mt.rawFps,
-        sampleB: st.rawFps,
-      );
-      final vsJsWinFieller = FiellerInterval.compute(
-        sampleA: mt.rawFps,
-        sampleB: js.rawFps,
-      );
-      final buildSpeedupFieller = FiellerInterval.compute(
-        sampleA: js.rawBuildMs,
-        sampleB: mt.rawBuildMs,
-      );
-
-      final mtRasterMed = (mt.rasterTime.medianNs / 1e6).toStringAsFixed(2);
-      final stRasterMed = (st.rasterTime.medianNs / 1e6).toStringAsFixed(2);
-      final mtFpsMed = mt.fps.medianNs.toStringAsFixed(1);
-      final stFpsMed = st.fps.medianNs.toStringAsFixed(1);
-      final mtBuildMed = (mt.buildTime.medianNs / 1e6).toStringAsFixed(2);
-      final jsBuildMed = (js.buildTime.medianNs / 1e6).toStringAsFixed(2);
-
-      takeaways.writeln('* **${browser.label} (at $nodes nodes)**:');
-      takeaways.writeln(
-        '  * Worker Raster Overhead: `st=0` is '
-        '**${formatFieller(rasterFieller)}** that of `st=1` '
-        '(${mtRasterMed}ms vs ${stRasterMed}ms).',
-      );
-      takeaways.writeln(
-        '  * Pipelining Throughput Win: `st=0` delivers '
-        '**${formatFieller(fpsWinFieller)} higher FPS** than `st=1` '
-        '($mtFpsMed vs $stFpsMed FPS).',
-      );
-      takeaways.writeln(
-        '  * Dart2Wasm vs Dart2JS: Wasm delivers '
-        '**${formatFieller(vsJsWinFieller)} higher FPS** and '
-        '**${formatFieller(buildSpeedupFieller)} faster UI build** '
-        '(${mtBuildMed}ms vs ${jsBuildMed}ms).',
-      );
+      _writeNodeTakeaways(takeaways, browser, nodes, browserResults);
     }
   }
 
@@ -419,8 +456,61 @@ String formatMarkdownReport({
     buffer.writeln('### Key Takeaways (Fieller 95% Confidence Intervals)');
     buffer.write(takeaways.toString());
   }
+}
 
-  return buffer.toString();
+void _writeNodeTakeaways(
+  StringBuffer takeaways,
+  BrowserType browser,
+  int nodes,
+  Map<BenchmarkKey, MultiSampleRecord> browserResults,
+) {
+  final mt =
+      browserResults[BenchmarkKey(BenchmarkMode.wasmMultithreaded, nodes)]!;
+  final st =
+      browserResults[BenchmarkKey(BenchmarkMode.wasmSingleThreaded, nodes)]!;
+  final js = browserResults[BenchmarkKey(BenchmarkMode.jsCanvasKit, nodes)]!;
+
+  final rasterFieller = FiellerInterval.compute(
+    sampleA: mt.rawRasterMs,
+    sampleB: st.rawRasterMs,
+  );
+  final fpsWinFieller = FiellerInterval.compute(
+    sampleA: mt.rawFps,
+    sampleB: st.rawFps,
+  );
+  final vsJsWinFieller = FiellerInterval.compute(
+    sampleA: mt.rawFps,
+    sampleB: js.rawFps,
+  );
+  final buildSpeedupFieller = FiellerInterval.compute(
+    sampleA: js.rawBuildMs,
+    sampleB: mt.rawBuildMs,
+  );
+
+  final mtRasterMed = (mt.rasterTime.medianNs / 1e6).toStringAsFixed(2);
+  final stRasterMed = (st.rasterTime.medianNs / 1e6).toStringAsFixed(2);
+  final mtFpsMed = mt.fps.medianNs.toStringAsFixed(1);
+  final stFpsMed = st.fps.medianNs.toStringAsFixed(1);
+  final mtBuildMed = (mt.buildTime.medianNs / 1e6).toStringAsFixed(2);
+  final jsBuildMed = (js.buildTime.medianNs / 1e6).toStringAsFixed(2);
+
+  takeaways.writeln('* **${browser.label} (at $nodes nodes)**:');
+  takeaways.writeln(
+    '  * Worker Raster Overhead: `st=0` is '
+    '**${formatFieller(rasterFieller)}** that of `st=1` '
+    '(${mtRasterMed}ms vs ${stRasterMed}ms).',
+  );
+  takeaways.writeln(
+    '  * Pipelining Throughput Win: `st=0` delivers '
+    '**${formatFieller(fpsWinFieller)} higher FPS** than `st=1` '
+    '($mtFpsMed vs $stFpsMed FPS).',
+  );
+  takeaways.writeln(
+    '  * Dart2Wasm vs Dart2JS: Wasm delivers '
+    '**${formatFieller(vsJsWinFieller)} higher FPS** and '
+    '**${formatFieller(buildSpeedupFieller)} faster UI build** '
+    '(${mtBuildMed}ms vs ${jsBuildMed}ms).',
+  );
 }
 
 String formatFieller(FiellerInterval fieller) {
@@ -920,28 +1010,7 @@ class _ChromeCdpDriver implements BrowserDriver {
     await _ws?.close();
     _pendingResponses.clear();
 
-    String? wsUrl;
-    for (var attempt = 0; attempt < 40; attempt++) {
-      final client = HttpClient();
-      try {
-        final uri = Uri.parse('http://127.0.0.1:$_port/json/list');
-        final req = await client.getUrl(uri);
-        final resp = await req.close();
-        if (resp.statusCode == 200) {
-          final body = await resp.transform(utf8.decoder).join();
-          final targets = jsonDecode(body) as List<dynamic>;
-          wsUrl = selectCdpPageTargetWsUrl(targets);
-        }
-      } catch (_) {
-        // Retry
-      } finally {
-        client.close();
-      }
-
-      if (wsUrl != null) break;
-      await Future<void>.delayed(const Duration(milliseconds: 250));
-    }
-
+    final wsUrl = await _pollCdpPageTargetWsUrl();
     if (wsUrl == null) {
       throw StateError(
         'Failed to obtain Chrome DevTools WebSocket URL on port $_port',
@@ -949,14 +1018,51 @@ class _ChromeCdpDriver implements BrowserDriver {
     }
 
     _ws = await WebSocket.connect(wsUrl);
+    _attachCdpWebSocketListener();
+    await _waitForPageReady();
+
+    await _sendCdp('Emulation.setDeviceMetricsOverride', {
+      'width': _viewportWidth,
+      'height': _viewportHeight,
+      'deviceScaleFactor': 1,
+      'mobile': false,
+    });
+  }
+
+  Future<String?> _pollCdpPageTargetWsUrl() async {
+    for (var attempt = 0; attempt < 40; attempt++) {
+      final wsUrl = await _fetchPageTargetWsUrlOnce();
+      if (wsUrl != null) return wsUrl;
+      await Future<void>.delayed(const Duration(milliseconds: 250));
+    }
+    return null;
+  }
+
+  Future<String?> _fetchPageTargetWsUrlOnce() async {
+    final client = HttpClient();
+    try {
+      final uri = Uri.parse('http://127.0.0.1:$_port/json/list');
+      final req = await client.getUrl(uri);
+      final resp = await req.close();
+      if (resp.statusCode != 200) return null;
+      final body = await resp.transform(utf8.decoder).join();
+      final targets = jsonDecode(body) as List<dynamic>;
+      return selectCdpPageTargetWsUrl(targets);
+    } catch (_) {
+      return null;
+    } finally {
+      client.close();
+    }
+  }
+
+  void _attachCdpWebSocketListener() {
     _wsSub = _ws!.listen(
       (message) {
-        if (message is String) {
-          final map = jsonDecode(message) as Map<String, dynamic>;
-          final id = map['id'] as int?;
-          if (id != null && _pendingResponses.containsKey(id)) {
-            _pendingResponses.remove(id)!.complete(map['result']);
-          }
+        if (message is! String) return;
+        final map = jsonDecode(message) as Map<String, dynamic>;
+        final id = map['id'] as int?;
+        if (id != null && _pendingResponses.containsKey(id)) {
+          _pendingResponses.remove(id)!.complete(map['result']);
         }
       },
       onDone: () {
@@ -968,23 +1074,18 @@ class _ChromeCdpDriver implements BrowserDriver {
         _pendingResponses.clear();
       },
     );
+  }
 
+  Future<void> _waitForPageReady() async {
     for (var i = 0; i < 40; i++) {
       try {
         final href = await evaluate('window.location.href');
         if (href is String && href.startsWith('http')) {
-          break;
+          return;
         }
       } catch (_) {}
       await Future<void>.delayed(const Duration(milliseconds: 250));
     }
-
-    await _sendCdp('Emulation.setDeviceMetricsOverride', {
-      'width': _viewportWidth,
-      'height': _viewportHeight,
-      'deviceScaleFactor': 1,
-      'mobile': false,
-    });
   }
 
   Future<dynamic> _sendCdp(
@@ -1418,102 +1519,129 @@ class BenchmarkArgs {
       );
     }
 
-    var baseUrl = 'https://flutter-wasm-compare.web.app/';
-    var workload = 'bouncy';
-    var browsers = BrowserType.values.toList();
-    var modes = BenchmarkMode.values.toList();
-    List<int>? explicitNodeCounts;
-    String? presetVal;
-    var viewportWidth = 1280;
-    var viewportHeight = 720;
-    var settleSeconds = 5;
-    var samples = 5;
-    var sampleIntervalMs = 1200;
-    String? outputPath;
-    var jsonOutput = false;
-    String? jsonOutputPath;
-    var skipCapabilityProbe = false;
-
+    final parsed = _MutableBenchmarkArgs();
     for (final arg in args) {
-      if (arg.startsWith('--url=')) {
-        baseUrl = arg.substring('--url='.length);
-      } else if (arg.startsWith('--workload=')) {
-        final val = arg.substring('--workload='.length).toLowerCase().trim();
-        workload = val == 'grid' ? 'grid' : 'bouncy';
-      } else if (arg.startsWith('--browser=') ||
-          arg.startsWith('--browsers=')) {
-        final val = arg.split('=').last.toLowerCase();
-        if (val != 'all') {
-          final tokens = val.split(',');
-          browsers = [];
-          for (final t in tokens) {
-            final trimmed = t.trim();
-            if (trimmed == 'chrome') browsers.add(BrowserType.chrome);
-            if (trimmed == 'safari') browsers.add(BrowserType.safari);
-            if (trimmed == 'firefox') browsers.add(BrowserType.firefox);
-          }
-        }
-      } else if (arg.startsWith('--modes=')) {
-        final val = arg.substring('--modes='.length).toLowerCase();
-        final tokens = val.split(',');
-        modes = [];
-        for (final t in tokens) {
-          final trimmed = t.trim();
-          if (trimmed == 'wasm_mt' || trimmed == 'mt') {
-            modes.add(BenchmarkMode.wasmMultithreaded);
-          }
-          if (trimmed == 'wasm_st' || trimmed == 'st') {
-            modes.add(BenchmarkMode.wasmSingleThreaded);
-          }
-          if (trimmed == 'js') {
-            modes.add(BenchmarkMode.jsCanvasKit);
-          }
-        }
-      } else if (arg.startsWith('--preset=')) {
-        presetVal = arg.split('=').last.toLowerCase();
-      } else if (arg.startsWith('--nodes=')) {
-        final val = arg.substring('--nodes='.length);
-        explicitNodeCounts = val
-            .split(',')
-            .map((s) => int.tryParse(s.trim()))
-            .whereType<int>()
-            .toList();
-      } else if (arg.startsWith('--viewport=')) {
-        final val = arg.substring('--viewport='.length).toLowerCase();
-        final parts = val.split('x');
-        if (parts.length == 2) {
-          final w = int.tryParse(parts[0].trim());
-          final h = int.tryParse(parts[1].trim());
-          if (w != null && h != null) {
-            viewportWidth = w;
-            viewportHeight = h;
-          }
-        }
-      } else if (arg.startsWith('--settle-seconds=')) {
-        settleSeconds =
-            int.tryParse(arg.substring('--settle-seconds='.length)) ??
-            settleSeconds;
-      } else if (arg.startsWith('--samples=')) {
-        samples = int.tryParse(arg.substring('--samples='.length)) ?? samples;
-      } else if (arg.startsWith('--sample-interval=') ||
-          arg.startsWith('--sample-interval-ms=')) {
-        final val = arg.split('=').last;
-        sampleIntervalMs = int.tryParse(val) ?? sampleIntervalMs;
-      } else if (arg.startsWith('--output=')) {
-        outputPath = arg.substring('--output='.length);
-      } else if (arg == '--json') {
-        jsonOutput = true;
-      } else if (arg.startsWith('--json-output=')) {
-        jsonOutputPath = arg.substring('--json-output='.length);
-      } else if (arg == '--skip-capability-probe') {
-        skipCapabilityProbe = true;
-      }
+      parsed.applyArg(arg);
     }
 
+    return parsed.toBenchmarkArgs();
+  }
+}
+
+class _MutableBenchmarkArgs {
+  String baseUrl = 'https://flutter-wasm-compare.web.app/';
+  String workload = 'bouncy';
+  List<BrowserType> browsers = BrowserType.values.toList();
+  List<BenchmarkMode> modes = BenchmarkMode.values.toList();
+  List<int>? explicitNodeCounts;
+  String? presetVal;
+  int viewportWidth = 1280;
+  int viewportHeight = 720;
+  int settleSeconds = 5;
+  int samples = 5;
+  int sampleIntervalMs = 1200;
+  String? outputPath;
+  bool jsonOutput = false;
+  String? jsonOutputPath;
+  bool skipCapabilityProbe = false;
+
+  void applyArg(String arg) {
+    if (arg == '--json') {
+      jsonOutput = true;
+    } else if (arg == '--skip-capability-probe') {
+      skipCapabilityProbe = true;
+    } else if (arg.startsWith('--')) {
+      _applyKeyValueArg(arg);
+    }
+  }
+
+  void _applyKeyValueArg(String arg) {
+    final eqIdx = arg.indexOf('=');
+    if (eqIdx < 0) return;
+    final key = arg.substring(0, eqIdx);
+    final val = arg.substring(eqIdx + 1);
+    switch (key) {
+      case '--url':
+        baseUrl = val;
+      case '--workload':
+        workload = val.toLowerCase().trim() == 'grid' ? 'grid' : 'bouncy';
+      case '--browser' || '--browsers':
+        browsers = _parseBrowsers(val);
+      case '--modes':
+        modes = _parseModes(val);
+      case '--preset':
+        presetVal = val.toLowerCase();
+      case '--nodes':
+        explicitNodeCounts = _parseNodes(val);
+      case '--viewport':
+        _applyViewport(val);
+      case '--settle-seconds':
+        settleSeconds = int.tryParse(val) ?? settleSeconds;
+      case '--samples':
+        samples = int.tryParse(val) ?? samples;
+      case '--sample-interval' || '--sample-interval-ms':
+        sampleIntervalMs = int.tryParse(val) ?? sampleIntervalMs;
+      case '--output':
+        outputPath = val;
+      case '--json-output':
+        jsonOutputPath = val;
+    }
+  }
+
+  static List<BrowserType> _parseBrowsers(String val) {
+    final lower = val.toLowerCase();
+    if (lower == 'all') return BrowserType.values.toList();
+    final result = <BrowserType>[];
+    for (final token in lower.split(',')) {
+      switch (token.trim()) {
+        case 'chrome':
+          result.add(BrowserType.chrome);
+        case 'safari':
+          result.add(BrowserType.safari);
+        case 'firefox':
+          result.add(BrowserType.firefox);
+      }
+    }
+    return result;
+  }
+
+  static List<BenchmarkMode> _parseModes(String val) {
+    final result = <BenchmarkMode>[];
+    for (final token in val.toLowerCase().split(',')) {
+      switch (token.trim()) {
+        case 'wasm_mt' || 'mt':
+          result.add(BenchmarkMode.wasmMultithreaded);
+        case 'wasm_st' || 'st':
+          result.add(BenchmarkMode.wasmSingleThreaded);
+        case 'js':
+          result.add(BenchmarkMode.jsCanvasKit);
+      }
+    }
+    return result;
+  }
+
+  static List<int> _parseNodes(String val) => val
+      .split(',')
+      .map((s) => int.tryParse(s.trim()))
+      .whereType<int>()
+      .toList();
+
+  void _applyViewport(String val) {
+    final parts = val.toLowerCase().split('x');
+    if (parts.length != 2) return;
+    final w = int.tryParse(parts[0].trim());
+    final h = int.tryParse(parts[1].trim());
+    if (w != null && h != null) {
+      viewportWidth = w;
+      viewportHeight = h;
+    }
+  }
+
+  BenchmarkArgs toBenchmarkArgs() {
     final resolvedNodeCounts =
-        (explicitNodeCounts != null && explicitNodeCounts.isNotEmpty)
-        ? explicitNodeCounts
-        : _defaultNodesForWorkload(workload, presetVal);
+        (explicitNodeCounts != null && explicitNodeCounts!.isNotEmpty)
+        ? explicitNodeCounts!
+        : BenchmarkArgs._defaultNodesForWorkload(workload, presetVal);
 
     return BenchmarkArgs(
       showHelp: false,
