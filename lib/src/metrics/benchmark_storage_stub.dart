@@ -7,6 +7,13 @@ class BenchmarkStorage {
   static final Map<String, BenchmarkRun> _cachedWimpRuns = {};
   static final Map<String, BenchmarkRun> _cachedJsRuns = {};
 
+  static void resetInMemoryCacheForTesting() {
+    _cachedNodesByWorkload.clear();
+    _cachedWasmRuns.clear();
+    _cachedWimpRuns.clear();
+    _cachedJsRuns.clear();
+  }
+
   static void clearRuns({String? workloadId}) {
     if (workloadId != null) {
       _cachedNodesByWorkload.remove(workloadId);

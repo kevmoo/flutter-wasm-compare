@@ -49,11 +49,26 @@ class BuildInfoButton extends StatelessWidget {
 }
 
 class BuildInfoDialog extends StatelessWidget {
-  const BuildInfoDialog({super.key});
+  final bool? isWasmOverride;
+  final bool? isWimpOverride;
+  final bool? isSingleThreadedOverride;
+  final bool? hasGitInfoOverride;
+
+  const BuildInfoDialog({
+    super.key,
+    this.isWasmOverride,
+    this.isWimpOverride,
+    this.isSingleThreadedOverride,
+    this.hasGitInfoOverride,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final isWasm = isCurrentlyWasm();
+    final isWasm = isWasmOverride ?? isCurrentlyWasm();
+    final isWimp = isWimpOverride ?? isCurrentlyWimp();
+    final isSingleThreaded =
+        isSingleThreadedOverride ?? isCurrentlySingleThreaded();
+    final hasGitInfo = hasGitInfoOverride ?? BuildInfo.hasGitInfo;
     final theme = Theme.of(context);
 
     return AlertDialog(
@@ -79,46 +94,7 @@ class BuildInfoDialog extends StatelessWidget {
             const SizedBox(height: 16),
             _BuildInfoRow(
               label: 'Commit',
-              child: BuildInfo.hasGitInfo
-                  ? InkWell(
-                      onTap: () => openExternalUrl(BuildInfo.commitUrl),
-                      borderRadius: BorderRadius.circular(4),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 2,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              BuildInfo.shortSha,
-                              style: const TextStyle(
-                                color: Colors.lightBlueAccent,
-                                fontFamily: 'monospace',
-                                fontWeight: FontWeight.bold,
-                                decoration: TextDecoration.underline,
-                                fontSize: 13,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            const Icon(
-                              Icons.open_in_new,
-                              size: 13,
-                              color: Colors.lightBlueAccent,
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  : const Text(
-                      'local-dev',
-                      style: TextStyle(
-                        color: Colors.white54,
-                        fontFamily: 'monospace',
-                        fontSize: 13,
-                      ),
-                    ),
+              child: _buildCommitValue(hasGitInfo),
             ),
             if (BuildInfo.dartVersion.isNotEmpty) ...[
               const SizedBox(height: 8),
@@ -143,28 +119,19 @@ class BuildInfoDialog extends StatelessWidget {
             const SizedBox(height: 8),
             _BuildInfoRow(
               label: 'Active Engine',
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    isWasm
-                        ? (isCurrentlyWimp()
-                              ? (isCurrentlySingleThreaded()
-                                    ? '⚡ WASM + Impeller (Exp, ST)'
-                                    : '⚡ WASM + Impeller (Exp)')
-                              : (isCurrentlySingleThreaded()
-                                    ? '⚡ WASM + Skia (ST)'
-                                    : '⚡ WASM + Skia'))
-                        : '📜 JS (CanvasKit)',
-                    style: TextStyle(
-                      color: isWasm
-                          ? Colors.lightBlueAccent
-                          : const Color(0xFFF1E05A),
-                      fontWeight: FontWeight.bold,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
+              child: Text(
+                _activeEngineLabel(
+                  isWasm: isWasm,
+                  isWimp: isWimp,
+                  isSingleThreaded: isSingleThreaded,
+                ),
+                style: TextStyle(
+                  color: isWasm
+                      ? Colors.lightBlueAccent
+                      : const Color(0xFFF1E05A),
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
               ),
             ),
             if (isWasm) ...[
@@ -172,7 +139,7 @@ class BuildInfoDialog extends StatelessWidget {
               _BuildInfoRow(
                 label: 'Renderer',
                 child: Text(
-                  isCurrentlyWimp()
+                  isWimp
                       ? 'Impeller (wimp.wasm) • Experimental'
                       : 'Skia (skwasm.wasm)',
                   style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
@@ -181,28 +148,11 @@ class BuildInfoDialog extends StatelessWidget {
               const SizedBox(height: 8),
               _BuildInfoRow(
                 label: 'Threading',
-                child: isCurrentlyWimp()
-                    ? const Text(
-                        'Single-threaded (forced by engine)',
-                        style: TextStyle(fontFamily: 'monospace', fontSize: 13),
-                      )
-                    : Tooltip(
-                        message: 'Press Ctrl+Shift+S (or ⌘+Shift+S) to toggle',
-                        child: ActionChip(
-                          visualDensity: VisualDensity.compact,
-                          padding: EdgeInsets.zero,
-                          label: Text(
-                            isCurrentlySingleThreaded()
-                                ? 'Single-threaded (Toggle)'
-                                : 'Multi-threaded (Toggle)',
-                            style: const TextStyle(fontSize: 11),
-                          ),
-                          onPressed: () {
-                            Navigator.of(context).pop();
-                            toggleSingleThreadedMode(context);
-                          },
-                        ),
-                      ),
+                child: _buildThreadingValue(
+                  context,
+                  isWimp: isWimp,
+                  isSingleThreaded: isSingleThreaded,
+                ),
               ),
             ],
             const SizedBox(height: 8),
@@ -246,6 +196,89 @@ class BuildInfoDialog extends StatelessWidget {
           child: const Text('Close'),
         ),
       ],
+    );
+  }
+
+  static String _activeEngineLabel({
+    required bool isWasm,
+    required bool isWimp,
+    required bool isSingleThreaded,
+  }) => switch ((isWasm, isWimp, isSingleThreaded)) {
+    (false, _, _) => '📜 JS (CanvasKit)',
+    (true, true, true) => '⚡ WASM + Impeller (Exp, ST)',
+    (true, true, false) => '⚡ WASM + Impeller (Exp)',
+    (true, false, true) => '⚡ WASM + Skia (ST)',
+    (true, false, false) => '⚡ WASM + Skia',
+  };
+
+  Widget _buildCommitValue(bool hasGitInfo) {
+    if (!hasGitInfo) {
+      return const Text(
+        'local-dev',
+        style: TextStyle(
+          color: Colors.white54,
+          fontFamily: 'monospace',
+          fontSize: 13,
+        ),
+      );
+    }
+    return InkWell(
+      onTap: () => openExternalUrl(BuildInfo.commitUrl),
+      borderRadius: BorderRadius.circular(4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              BuildInfo.shortSha.isEmpty ? '4867f6c' : BuildInfo.shortSha,
+              style: const TextStyle(
+                color: Colors.lightBlueAccent,
+                fontFamily: 'monospace',
+                fontWeight: FontWeight.bold,
+                decoration: TextDecoration.underline,
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(
+              Icons.open_in_new,
+              size: 13,
+              color: Colors.lightBlueAccent,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildThreadingValue(
+    BuildContext context, {
+    required bool isWimp,
+    required bool isSingleThreaded,
+  }) {
+    if (isWimp) {
+      return const Text(
+        'Single-threaded (forced by engine)',
+        style: TextStyle(fontFamily: 'monospace', fontSize: 13),
+      );
+    }
+    return Tooltip(
+      message: 'Press Ctrl+Shift+S (or ⌘+Shift+S) to toggle',
+      child: ActionChip(
+        visualDensity: VisualDensity.compact,
+        padding: EdgeInsets.zero,
+        label: Text(
+          isSingleThreaded
+              ? 'Single-threaded (Toggle)'
+              : 'Multi-threaded (Toggle)',
+          style: const TextStyle(fontSize: 11),
+        ),
+        onPressed: () {
+          Navigator.of(context).pop();
+          toggleSingleThreadedMode(context);
+        },
+      ),
     );
   }
 }

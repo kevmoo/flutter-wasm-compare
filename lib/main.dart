@@ -137,108 +137,16 @@ class _EngineSelectorButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final current = currentEngineMode();
-    final isWimp = current == 'wimp';
-    final isWasm = current == 'wasm';
-    final isJs = current == 'js';
-
-    final color = isWimp
-        ? Colors.tealAccent
-        : isWasm
-        ? Colors.lightBlueAccent
-        : const Color(0xFFF1E05A);
-
-    final label = isWimp
-        ? 'Impeller (Exp)'
-        : isWasm
-        ? 'Skia'
-        : 'JS';
-
-    final iconWidget = Icon(
-      isJs ? Icons.javascript : Icons.bolt,
-      size: 14,
-      color: color,
-    );
+    final color = _engineColor(current);
+    final label = _engineLabel(current);
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2.0),
       child: PopupMenuButton<String>(
         tooltip: 'Select Rendering Engine (Impeller [Exp] / Skia / JS)',
         initialValue: current,
-        onSelected: (mode) {
-          if (mode == current) return;
-          if (mode == 'wimp' && !isWimpSupportedInBrowser) {
-            ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-              const SnackBar(
-                content: Text(
-                  '⚠️ Impeller on Web (wimp) requires Chromium '
-                  '(ImageDecoder and V8 iterators). '
-                  'On Safari and Firefox, Flutter Web falls back to Skia.',
-                ),
-                duration: Duration(seconds: 4),
-              ),
-            );
-            return;
-          }
-          switchEngineMode(context, mode: mode);
-        },
-        itemBuilder: (context) => [
-          PopupMenuItem(
-            value: 'wimp',
-            child: ListTile(
-              dense: true,
-              leading: const Icon(Icons.bolt, color: Colors.tealAccent),
-              title: const Text('⚡ Wasm (Impeller) [Exp]'),
-              subtitle: Text(
-                isWimpSupportedInBrowser
-                    ? 'Web Impeller (wimp.wasm) • Experimental (Unstable)'
-                    : 'Impeller (Unsupported on Safari/Firefox)',
-                style: TextStyle(
-                  fontSize: 11,
-                  color: isWimpSupportedInBrowser
-                      ? Colors.amberAccent
-                      : Colors.redAccent,
-                ),
-              ),
-              trailing: isWimp
-                  ? const Icon(Icons.check, size: 16, color: Colors.tealAccent)
-                  : null,
-            ),
-          ),
-          PopupMenuItem(
-            value: 'wasm',
-            child: ListTile(
-              dense: true,
-              leading: const Icon(Icons.bolt, color: Colors.lightBlueAccent),
-              title: const Text('⚡ Wasm (Skia)'),
-              subtitle: const Text(
-                'Skwasm (skwasm.wasm)',
-                style: TextStyle(fontSize: 11, color: Colors.white54),
-              ),
-              trailing: isWasm
-                  ? const Icon(
-                      Icons.check,
-                      size: 16,
-                      color: Colors.lightBlueAccent,
-                    )
-                  : null,
-            ),
-          ),
-          PopupMenuItem(
-            value: 'js',
-            child: ListTile(
-              dense: true,
-              leading: const Icon(Icons.javascript, color: Color(0xFFF1E05A)),
-              title: const Text('📜 JavaScript (CanvasKit)'),
-              subtitle: const Text(
-                'CanvasKit (canvaskit.wasm)',
-                style: TextStyle(fontSize: 11, color: Colors.white54),
-              ),
-              trailing: isJs
-                  ? const Icon(Icons.check, size: 16, color: Color(0xFFF1E05A))
-                  : null,
-            ),
-          ),
-        ],
+        onSelected: (mode) => _handleSelected(context, mode, current),
+        itemBuilder: (context) => _buildMenuItems(current),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
@@ -252,7 +160,11 @@ class _EngineSelectorButton extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              iconWidget,
+              Icon(
+                current == 'js' ? Icons.javascript : Icons.bolt,
+                size: 14,
+                color: color,
+              ),
               const SizedBox(width: 4),
               Text(
                 label,
@@ -270,6 +182,91 @@ class _EngineSelectorButton extends StatelessWidget {
       ),
     );
   }
+
+  static Color _engineColor(String mode) => switch (mode) {
+    'wimp' => Colors.tealAccent,
+    'wasm' => Colors.lightBlueAccent,
+    _ => const Color(0xFFF1E05A),
+  };
+
+  static String _engineLabel(String mode) => switch (mode) {
+    'wimp' => 'Impeller (Exp)',
+    'wasm' => 'Skia',
+    _ => 'JS',
+  };
+
+  void _handleSelected(BuildContext context, String mode, String current) {
+    if (mode == current) return;
+    if (mode == 'wimp' && !isWimpSupportedInBrowser) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text(
+            '⚠️ Impeller on Web (wimp) requires Chromium '
+            '(ImageDecoder and V8 iterators). '
+            'On Safari and Firefox, Flutter Web falls back to Skia.',
+          ),
+          duration: Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+    switchEngineMode(context, mode: mode);
+  }
+
+  List<PopupMenuEntry<String>> _buildMenuItems(String current) => [
+    PopupMenuItem(
+      value: 'wimp',
+      child: ListTile(
+        dense: true,
+        leading: const Icon(Icons.bolt, color: Colors.tealAccent),
+        title: const Text('⚡ Wasm (Impeller) [Exp]'),
+        subtitle: Text(
+          isWimpSupportedInBrowser
+              ? 'Web Impeller (wimp.wasm) • Experimental (Unstable)'
+              : 'Impeller (Unsupported on Safari/Firefox)',
+          style: TextStyle(
+            fontSize: 11,
+            color: isWimpSupportedInBrowser
+                ? Colors.amberAccent
+                : Colors.redAccent,
+          ),
+        ),
+        trailing: current == 'wimp'
+            ? const Icon(Icons.check, size: 16, color: Colors.tealAccent)
+            : null,
+      ),
+    ),
+    PopupMenuItem(
+      value: 'wasm',
+      child: ListTile(
+        dense: true,
+        leading: const Icon(Icons.bolt, color: Colors.lightBlueAccent),
+        title: const Text('⚡ Wasm (Skia)'),
+        subtitle: const Text(
+          'Skwasm (skwasm.wasm)',
+          style: TextStyle(fontSize: 11, color: Colors.white54),
+        ),
+        trailing: current == 'wasm'
+            ? const Icon(Icons.check, size: 16, color: Colors.lightBlueAccent)
+            : null,
+      ),
+    ),
+    PopupMenuItem(
+      value: 'js',
+      child: ListTile(
+        dense: true,
+        leading: const Icon(Icons.javascript, color: Color(0xFFF1E05A)),
+        title: const Text('📜 JavaScript (CanvasKit)'),
+        subtitle: const Text(
+          'CanvasKit (canvaskit.wasm)',
+          style: TextStyle(fontSize: 11, color: Colors.white54),
+        ),
+        trailing: current == 'js'
+            ? const Icon(Icons.check, size: 16, color: Color(0xFFF1E05A))
+            : null,
+      ),
+    ),
+  ];
 }
 
 class _ThreadingModeButton extends StatelessWidget {
@@ -545,8 +542,7 @@ class _WorkloadSelectorButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final current = stressCtrl.workload;
-    final isBouncy = current.id == 'bouncy';
-    final color = isBouncy ? Colors.purpleAccent : Colors.orangeAccent;
+    final color = _workloadColor(current.id);
 
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: isCompact ? 1.0 : 2.0),
@@ -562,85 +558,74 @@ class _WorkloadSelectorButton extends StatelessWidget {
           context.read<FrameTimingService>().resetLog();
           stressCtrl.setWorkload(resolveWorkload(id));
         },
-        itemBuilder: (context) => kAllWorkloads.map((workload) {
-          final isSelected = workload.id == current.id;
-          return PopupMenuItem<String>(
-            value: workload.id,
-            child: ListTile(
-              dense: true,
-              leading: Icon(
-                workload.id == 'bouncy'
-                    ? Icons.account_tree_outlined
-                    : Icons.grid_view_outlined,
-                color: workload.id == 'bouncy'
-                    ? Colors.purpleAccent
-                    : Colors.orangeAccent,
-              ),
-              title: Text(workload.title),
-              subtitle: Text(
-                workload.subtitle,
-                style: const TextStyle(fontSize: 11, color: Colors.white54),
-              ),
-              trailing: isSelected
-                  ? Icon(
-                      Icons.check,
-                      size: 16,
-                      color: workload.id == 'bouncy'
-                          ? Colors.purpleAccent
-                          : Colors.orangeAccent,
-                    )
-                  : null,
+        itemBuilder: (context) => [
+          for (final workload in kAllWorkloads)
+            _buildMenuItem(workload, current.id),
+        ],
+        child: _buildTriggerChild(current, color),
+      ),
+    );
+  }
+
+  static Color _workloadColor(String id) =>
+      id == 'bouncy' ? Colors.purpleAccent : Colors.orangeAccent;
+
+  static IconData _workloadIcon(String id) =>
+      id == 'bouncy' ? Icons.account_tree_outlined : Icons.grid_view_outlined;
+
+  PopupMenuItem<String> _buildMenuItem(
+    StressWorkload workload,
+    String currentId,
+  ) {
+    final itemColor = _workloadColor(workload.id);
+    return PopupMenuItem<String>(
+      value: workload.id,
+      child: ListTile(
+        dense: true,
+        leading: Icon(_workloadIcon(workload.id), color: itemColor),
+        title: Text(workload.title),
+        subtitle: Text(
+          workload.subtitle,
+          style: const TextStyle(fontSize: 11, color: Colors.white54),
+        ),
+        trailing: workload.id == currentId
+            ? Icon(Icons.check, size: 16, color: itemColor)
+            : null,
+      ),
+    );
+  }
+
+  Widget _buildTriggerChild(StressWorkload current, Color color) {
+    final iconData = _workloadIcon(current.id);
+    if (isCompact) {
+      return Padding(
+        padding: const EdgeInsets.all(4.0),
+        child: Icon(iconData, size: 18, color: color),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: 0.45), width: 1.0),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(iconData, size: 14, color: color),
+          const SizedBox(width: 4),
+          Text(
+            current.title,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: color,
             ),
-          );
-        }).toList(),
-        child: isCompact
-            ? Padding(
-                padding: const EdgeInsets.all(4.0),
-                child: Icon(
-                  isBouncy
-                      ? Icons.account_tree_outlined
-                      : Icons.grid_view_outlined,
-                  size: 18,
-                  color: color,
-                ),
-              )
-            : Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.10),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: color.withValues(alpha: 0.45),
-                    width: 1.0,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      isBouncy
-                          ? Icons.account_tree_outlined
-                          : Icons.grid_view_outlined,
-                      size: 14,
-                      color: color,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      current.title,
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: color,
-                      ),
-                    ),
-                    const SizedBox(width: 2),
-                    Icon(Icons.arrow_drop_down, size: 14, color: color),
-                  ],
-                ),
-              ),
+          ),
+          const SizedBox(width: 2),
+          Icon(Icons.arrow_drop_down, size: 14, color: color),
+        ],
       ),
     );
   }
