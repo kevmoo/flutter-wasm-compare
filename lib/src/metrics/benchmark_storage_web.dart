@@ -37,38 +37,38 @@ class BenchmarkStorage {
     try {
       final storage = web.window.localStorage;
       for (final workloadId in const ['bouncy', 'grid']) {
-        final nodesStr = storage.getItem(_nodesKeyFor(workloadId));
-        final nodes = nodesStr != null ? int.tryParse(nodesStr) : null;
-        if (nodes != null) {
-          _cachedNodesByWorkload[workloadId] = nodes;
-        }
-
-        final wasmStr = storage.getItem(_runKeyFor(_wasmRunKey, workloadId));
-        if (wasmStr != null && wasmStr.isNotEmpty) {
-          final parsed = _parseBenchmarkRun(
-            jsonDecode(wasmStr) as Map<String, dynamic>,
-          );
-          if (parsed != null) _cachedWasmRuns[workloadId] = parsed;
-        }
-
-        final wimpStr = storage.getItem(_runKeyFor(_wimpRunKey, workloadId));
-        if (wimpStr != null && wimpStr.isNotEmpty) {
-          final parsed = _parseBenchmarkRun(
-            jsonDecode(wimpStr) as Map<String, dynamic>,
-          );
-          if (parsed != null) _cachedWimpRuns[workloadId] = parsed;
-        }
-
-        final jsStr = storage.getItem(_runKeyFor(_jsRunKey, workloadId));
-        if (jsStr != null && jsStr.isNotEmpty) {
-          final parsed = _parseBenchmarkRun(
-            jsonDecode(jsStr) as Map<String, dynamic>,
-          );
-          if (parsed != null) _cachedJsRuns[workloadId] = parsed;
-        }
+        _loadWorkloadFromStorage(storage, workloadId);
       }
     } catch (_) {
       // Ignore
+    }
+  }
+
+  static void _loadWorkloadFromStorage(web.Storage storage, String workloadId) {
+    final nodesStr = storage.getItem(_nodesKeyFor(workloadId));
+    final nodes = nodesStr != null ? int.tryParse(nodesStr) : null;
+    if (nodes != null) {
+      _cachedNodesByWorkload[workloadId] = nodes;
+    }
+
+    _loadCachedRun(storage, _wasmRunKey, workloadId, _cachedWasmRuns);
+    _loadCachedRun(storage, _wimpRunKey, workloadId, _cachedWimpRuns);
+    _loadCachedRun(storage, _jsRunKey, workloadId, _cachedJsRuns);
+  }
+
+  static void _loadCachedRun(
+    web.Storage storage,
+    String baseKey,
+    String workloadId,
+    Map<String, BenchmarkRun> targetCache,
+  ) {
+    final rawStr = storage.getItem(_runKeyFor(baseKey, workloadId));
+    if (rawStr == null || rawStr.isEmpty) return;
+    final parsed = _parseBenchmarkRun(
+      jsonDecode(rawStr) as Map<String, dynamic>,
+    );
+    if (parsed != null) {
+      targetCache[workloadId] = parsed;
     }
   }
 

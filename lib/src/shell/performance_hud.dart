@@ -397,9 +397,6 @@ class _EngineTogglePill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isWimp = isCurrentlyWimp();
-    final wasmLabel = isWimp
-        ? (isSingleThreaded ? '⚡ Impeller (Exp, ST)' : '⚡ Impeller (Exp)')
-        : (isSingleThreaded ? '⚡ Wasm (ST)' : '⚡ Wasm');
     return Container(
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.08),
@@ -411,21 +408,13 @@ class _EngineTogglePill extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           _EnginePillButton(
-            label: wasmLabel,
+            label: _wasmLabel(isWimp),
             isSelected: isCurrentWasm,
             selectedColor: Colors.lightBlueAccent,
             onTap: isCurrentWasm
                 ? (isWimp ? null : () => toggleSingleThreadedMode(context))
                 : () => switchEngineMode(context, mode: 'wasm'),
-            tooltip: isCurrentWasm
-                ? (isWimp
-                      ? 'Wasm + Impeller (Experimental • Single-threaded)'
-                      : (isSingleThreaded
-                            ? 'Wasm + Skia (Single-threaded) • '
-                                  'Tap to toggle threading'
-                            : 'Wasm + Skia (Multi-threaded) • '
-                                  'Tap to toggle threading'))
-                : 'Switch to WebAssembly',
+            tooltip: _wasmTooltip(isWimp),
           ),
           const SizedBox(width: 2),
           _EnginePillButton(
@@ -442,6 +431,21 @@ class _EngineTogglePill extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  String _wasmLabel(bool isWimp) => switch ((isWimp, isSingleThreaded)) {
+    (true, true) => '⚡ Impeller (Exp, ST)',
+    (true, false) => '⚡ Impeller (Exp)',
+    (false, true) => '⚡ Wasm (ST)',
+    (false, false) => '⚡ Wasm',
+  };
+
+  String _wasmTooltip(bool isWimp) {
+    if (!isCurrentWasm) return 'Switch to WebAssembly';
+    if (isWimp) return 'Wasm + Impeller (Experimental • Single-threaded)';
+    return isSingleThreaded
+        ? 'Wasm + Skia (Single-threaded) • Tap to toggle threading'
+        : 'Wasm + Skia (Multi-threaded) • Tap to toggle threading';
   }
 }
 
@@ -638,14 +642,7 @@ class _DualEngineCards extends StatelessWidget {
         Expanded(
           child: _EngineMiniCard(
             title: isWasmST ? '⚡ WASM (ST)' : '⚡ WASM',
-            subtitle:
-                (isCurrentWasm
-                    ? isCurrentlyWimp()
-                    : wasmRun?.mode.toLowerCase() == 'wimp')
-                ? (isWasmST
-                      ? 'Impeller (Exp) • Single-threaded'
-                      : 'Impeller (Experimental)')
-                : (isWasmST ? 'Skia • Single-threaded' : 'Skwasm (Skia)'),
+            subtitle: _wasmSubtitle(isWasmST),
             titleColor: Colors.lightBlueAccent,
             isLive: isCurrentWasm,
             fps: wasmMetrics.fps,
@@ -655,16 +652,7 @@ class _DualEngineCards extends StatelessWidget {
             rasterMs: wasmMetrics.rasterMs,
             targetHz: targetHz,
             isSingleThreaded: isWasmST,
-            onTap: isCurrentWasm
-                ? (isCurrentlyWimp()
-                      ? null
-                      : () => toggleSingleThreadedMode(context))
-                : () => switchEngineMode(
-                    context,
-                    mode: wasmRun?.mode.toLowerCase() == 'wimp'
-                        ? 'wimp'
-                        : 'wasm',
-                  ),
+            onTap: _wasmOnTap(context),
           ),
         ),
         const SizedBox(width: 8),
@@ -687,6 +675,28 @@ class _DualEngineCards extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  String _wasmSubtitle(bool isWasmST) {
+    final isWimp = isCurrentWasm
+        ? isCurrentlyWimp()
+        : wasmRun?.mode.toLowerCase() == 'wimp';
+    return switch ((isWimp, isWasmST)) {
+      (true, true) => 'Impeller (Exp) • Single-threaded',
+      (true, false) => 'Impeller (Experimental)',
+      (false, true) => 'Skia • Single-threaded',
+      (false, false) => 'Skwasm (Skia)',
+    };
+  }
+
+  VoidCallback? _wasmOnTap(BuildContext context) {
+    if (isCurrentWasm) {
+      return isCurrentlyWimp() ? null : () => toggleSingleThreadedMode(context);
+    }
+    return () => switchEngineMode(
+      context,
+      mode: wasmRun?.mode.toLowerCase() == 'wimp' ? 'wimp' : 'wasm',
     );
   }
 }
@@ -772,19 +782,7 @@ class _EngineMiniCard extends StatelessWidget {
         : Colors.white.withValues(alpha: 0.04);
 
     final isWasmCard = title.contains('WASM');
-    final targetEngine = isWasmCard ? 'Wasm (Skwasm)' : 'JS (CanvasKit)';
-    final isWimp = isCurrentlyWimp();
-    final tooltipMessage = isLive
-        ? (isWasmCard
-              ? (isWimp
-                    ? 'Active: Web Impeller (Experimental • Single-threaded)'
-                    : (isSingleThreaded
-                          ? 'Active: Single-threaded • '
-                                'Tap or Ctrl+Shift+S to toggle'
-                          : 'Active: Multi-threaded • '
-                                'Tap or Ctrl+Shift+S to toggle'))
-              : 'Currently active runtime engine')
-        : 'Click to switch to $targetEngine';
+    final tooltipMessage = _tooltipMessage(isWasmCard);
 
     final cardContent = Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
@@ -797,45 +795,7 @@ class _EngineMiniCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisSize: MainAxisSize.min,
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: TextStyle(
-                        color: titleColor,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 11,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    if (subtitle != null)
-                      Text(
-                        subtitle!,
-                        style: TextStyle(
-                          color: isLive ? Colors.white70 : Colors.white38,
-                          fontSize: 8.5,
-                          fontWeight: FontWeight.w500,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                  ],
-                ),
-              ),
-              _EngineStatusBadge(
-                isLive: isLive,
-                hasData: hasData,
-                titleColor: titleColor,
-                liveLabel: isWasmCard && isSingleThreaded
-                    ? 'LIVE (ST)'
-                    : 'LIVE',
-              ),
-            ],
-          ),
+          _buildHeaderRow(isWasmCard: isWasmCard, hasData: hasData),
           const Divider(height: 10, color: Colors.white10),
           _EngineMetricsContent(
             hasData: hasData,
@@ -873,6 +833,60 @@ class _EngineMiniCard extends StatelessWidget {
           child: cardContent,
         ),
       ),
+    );
+  }
+
+  String _tooltipMessage(bool isWasmCard) {
+    if (!isLive) {
+      final targetEngine = isWasmCard ? 'Wasm (Skwasm)' : 'JS (CanvasKit)';
+      return 'Click to switch to $targetEngine';
+    }
+    if (!isWasmCard) return 'Currently active runtime engine';
+    if (isCurrentlyWimp()) {
+      return 'Active: Web Impeller (Experimental • Single-threaded)';
+    }
+    return isSingleThreaded
+        ? 'Active: Single-threaded • Tap or Ctrl+Shift+S to toggle'
+        : 'Active: Multi-threaded • Tap or Ctrl+Shift+S to toggle';
+  }
+
+  Widget _buildHeaderRow({required bool isWasmCard, required bool hasData}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: titleColor,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 11,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+              if (subtitle != null)
+                Text(
+                  subtitle!,
+                  style: TextStyle(
+                    color: isLive ? Colors.white70 : Colors.white38,
+                    fontSize: 8.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+            ],
+          ),
+        ),
+        _EngineStatusBadge(
+          isLive: isLive,
+          hasData: hasData,
+          titleColor: titleColor,
+          liveLabel: isWasmCard && isSingleThreaded ? 'LIVE (ST)' : 'LIVE',
+        ),
+      ],
     );
   }
 }
