@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:wasm_compare/src/metrics/benchmark_run.dart';
 import 'package:wasm_compare/src/metrics/frame_timing_service.dart';
 import 'package:wasm_compare/src/shell/performance_hud.dart';
 
@@ -18,6 +19,41 @@ FrameTiming _makeTiming({
     rasterFinish: finish,
     rasterFinishWallTime: finish,
   );
+}
+
+BenchmarkRun _makeRun({
+  required String mode,
+  double fps = 60.0,
+  required double buildTimeMs,
+  required double rasterTimeMs,
+  required double totalFrameTimeMs,
+  double jitterMs = 0.3,
+  String stressLevel = 'Manual (200)',
+  int nodeCount = 200,
+  String workloadId = 'bouncy',
+  bool? isPipelined,
+}) => (
+  mode: mode,
+  fps: fps,
+  buildTimeMs: buildTimeMs,
+  rasterTimeMs: rasterTimeMs,
+  totalFrameTimeMs: totalFrameTimeMs,
+  jitterMs: jitterMs,
+  stressLevel: stressLevel,
+  nodeCount: nodeCount,
+  workloadId: workloadId,
+  isPipelined: isPipelined ?? (mode == 'wasm' || mode == 'wimp'),
+);
+
+void _expectSpeedBadge(
+  ComparisonData comparison, {
+  required String title,
+  required String detail,
+}) {
+  expect(comparison.hasBothRuns, isTrue);
+  expect(comparison.speedBadge, isNotNull);
+  expect(comparison.speedBadge?.title, equals(title));
+  expect(comparison.speedBadge?.detail, equals(detail));
 }
 
 void main() {
@@ -119,30 +155,22 @@ void main() {
   });
 
   group('PerformanceHud evaluateComparisonForTest', () {
-    const jsSavedRun = (
+    final jsSavedRun = _makeRun(
       mode: 'js',
       fps: 28.0,
       buildTimeMs: 28.0,
       rasterTimeMs: 4.0,
       totalFrameTimeMs: 33.6,
       jitterMs: 5.2,
-      stressLevel: 'Manual (200)',
-      nodeCount: 200,
-      workloadId: 'bouncy',
-      isPipelined: false,
     );
 
-    const wasmSavedRun = (
+    final wasmSavedRun = _makeRun(
       mode: 'wasm',
       fps: 60.0,
       buildTimeMs: 11.0,
       rasterTimeMs: 4.5,
       totalFrameTimeMs: 16.0,
       jitterMs: 0.3,
-      stressLevel: 'Manual (200)',
-      nodeCount: 200,
-      workloadId: 'bouncy',
-      isPipelined: true,
     );
 
     test('generates both speed and jitter benefit badges when Wasm leads', () {
@@ -159,10 +187,11 @@ void main() {
         nodeCount: 200,
       );
 
-      expect(comparison.hasBothRuns, isTrue);
-      expect(comparison.speedBadge, isNotNull);
-      expect(comparison.speedBadge?.title, equals('⚡ Wasm 2.9x Faster'));
-      expect(comparison.speedBadge?.detail, equals('11.0ms vs 32.0ms'));
+      _expectSpeedBadge(
+        comparison,
+        title: '⚡ Wasm 2.9x Faster',
+        detail: '11.0ms vs 32.0ms',
+      );
 
       expect(comparison.jitterBadge, isNotNull);
       expect(comparison.jitterBadge?.title, equals('🎯 Wasm 17x Smoother'));
@@ -186,24 +215,21 @@ void main() {
         isSingleThreaded: true,
       );
 
-      expect(comparison.hasBothRuns, isTrue);
-      expect(comparison.speedBadge, isNotNull);
-      expect(comparison.speedBadge?.title, equals('⚡ Wasm (ST) 1.8x Faster'));
-      expect(comparison.speedBadge?.detail, equals('18.0ms vs 32.0ms'));
+      _expectSpeedBadge(
+        comparison,
+        title: '⚡ Wasm (ST) 1.8x Faster',
+        detail: '18.0ms vs 32.0ms',
+      );
     });
 
     test('does not show badges when Wasm is worse or same', () {
-      const fasterJsRun = (
+      final fasterJsRun = _makeRun(
         mode: 'js',
         fps: 60.0,
         buildTimeMs: 8.0,
         rasterTimeMs: 4.0,
         totalFrameTimeMs: 13.0,
         jitterMs: 0.2,
-        stressLevel: 'Manual (200)',
-        nodeCount: 200,
-        workloadId: 'bouncy',
-        isPipelined: false,
       );
 
       final comparison = evaluateComparisonForTest(
@@ -224,17 +250,13 @@ void main() {
     });
 
     test('shows only speed badge when jitter is not significantly better', () {
-      const similarJitterJsRun = (
+      final similarJitterJsRun = _makeRun(
         mode: 'js',
         fps: 30.0,
         buildTimeMs: 25.0,
         rasterTimeMs: 5.0,
         totalFrameTimeMs: 32.0,
         jitterMs: 0.35,
-        stressLevel: 'Manual (200)',
-        nodeCount: 200,
-        workloadId: 'bouncy',
-        isPipelined: false,
       );
 
       final comparison = evaluateComparisonForTest(
@@ -248,10 +270,11 @@ void main() {
         nodeCount: 200,
       );
 
-      expect(comparison.hasBothRuns, isTrue);
-      expect(comparison.speedBadge, isNotNull);
-      expect(comparison.speedBadge?.title, equals('⚡ Wasm 2.7x Faster'));
-      expect(comparison.speedBadge?.detail, equals('11.0ms vs 30.0ms'));
+      _expectSpeedBadge(
+        comparison,
+        title: '⚡ Wasm 2.7x Faster',
+        detail: '11.0ms vs 30.0ms',
+      );
       expect(comparison.jitterBadge, isNull);
     });
 
@@ -277,17 +300,13 @@ void main() {
     });
 
     test('generates comparison when wasmRun is from Impeller (wimp mode)', () {
-      const wimpSavedRun = (
+      final wimpSavedRun = _makeRun(
         mode: 'wimp',
         fps: 60.0,
         buildTimeMs: 10.0,
         rasterTimeMs: 5.0,
         totalFrameTimeMs: 15.0,
         jitterMs: 0.25,
-        stressLevel: 'Manual (200)',
-        nodeCount: 200,
-        workloadId: 'bouncy',
-        isPipelined: true,
       );
 
       final comparison = evaluateComparisonForTest(
@@ -301,10 +320,11 @@ void main() {
         nodeCount: 200,
       );
 
-      expect(comparison.hasBothRuns, isTrue);
-      expect(comparison.speedBadge, isNotNull);
-      expect(comparison.speedBadge?.title, equals('⚡ Wasm 3.2x Faster'));
-      expect(comparison.speedBadge?.detail, equals('10.0ms vs 32.0ms'));
+      _expectSpeedBadge(
+        comparison,
+        title: '⚡ Wasm 3.2x Faster',
+        detail: '10.0ms vs 32.0ms',
+      );
     });
   });
 }

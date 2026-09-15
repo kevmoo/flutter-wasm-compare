@@ -446,20 +446,7 @@ void _writeMarkdownTakeaways(
   final takeaways = StringBuffer();
   for (final browser in results.keys) {
     final browserResults = results[browser]!;
-    final matchingNodes = args.nodeCounts.where(
-      (int n) =>
-          browserResults.containsKey(
-            BenchmarkKey(BenchmarkMode.wasmMultithreaded, n),
-          ) &&
-          browserResults.containsKey(
-            BenchmarkKey(BenchmarkMode.wasmSingleThreaded, n),
-          ) &&
-          browserResults.containsKey(
-            BenchmarkKey(BenchmarkMode.jsCanvasKit, n),
-          ),
-    );
-
-    for (final nodes in matchingNodes) {
+    for (final nodes in _matchingNodeCounts(args.nodeCounts, browserResults)) {
       _writeNodeTakeaways(takeaways, browser, nodes, browserResults);
     }
   }
@@ -468,6 +455,53 @@ void _writeMarkdownTakeaways(
     buffer.writeln('### Key Takeaways (Fieller 95% Confidence Intervals)');
     buffer.write(takeaways.toString());
   }
+}
+
+Iterable<int> _matchingNodeCounts(
+  List<int> nodeCounts,
+  Map<BenchmarkKey, MultiSampleRecord> browserResults,
+) {
+  return nodeCounts.where(
+    (int n) =>
+        browserResults.containsKey(
+          BenchmarkKey(BenchmarkMode.wasmMultithreaded, n),
+        ) &&
+        browserResults.containsKey(
+          BenchmarkKey(BenchmarkMode.wasmSingleThreaded, n),
+        ) &&
+        browserResults.containsKey(BenchmarkKey(BenchmarkMode.jsCanvasKit, n)),
+  );
+}
+
+({
+  FiellerInterval rasterOverhead,
+  FiellerInterval fpsPipeliningWin,
+  FiellerInterval vsJsFpsSpeedup,
+  FiellerInterval vsJsBuildSpeedup,
+})
+_computeNodeFiellerIntervals(
+  MultiSampleRecord mt,
+  MultiSampleRecord st,
+  MultiSampleRecord js,
+) {
+  return (
+    rasterOverhead: FiellerInterval.compute(
+      sampleA: mt.rawRasterMs,
+      sampleB: st.rawRasterMs,
+    ),
+    fpsPipeliningWin: FiellerInterval.compute(
+      sampleA: mt.rawFps,
+      sampleB: st.rawFps,
+    ),
+    vsJsFpsSpeedup: FiellerInterval.compute(
+      sampleA: mt.rawFps,
+      sampleB: js.rawFps,
+    ),
+    vsJsBuildSpeedup: FiellerInterval.compute(
+      sampleA: js.rawBuildMs,
+      sampleB: mt.rawBuildMs,
+    ),
+  );
 }
 
 void _writeNodeTakeaways(
@@ -482,22 +516,7 @@ void _writeNodeTakeaways(
       browserResults[BenchmarkKey(BenchmarkMode.wasmSingleThreaded, nodes)]!;
   final js = browserResults[BenchmarkKey(BenchmarkMode.jsCanvasKit, nodes)]!;
 
-  final rasterFieller = FiellerInterval.compute(
-    sampleA: mt.rawRasterMs,
-    sampleB: st.rawRasterMs,
-  );
-  final fpsWinFieller = FiellerInterval.compute(
-    sampleA: mt.rawFps,
-    sampleB: st.rawFps,
-  );
-  final vsJsWinFieller = FiellerInterval.compute(
-    sampleA: mt.rawFps,
-    sampleB: js.rawFps,
-  );
-  final buildSpeedupFieller = FiellerInterval.compute(
-    sampleA: js.rawBuildMs,
-    sampleB: mt.rawBuildMs,
-  );
+  final intervals = _computeNodeFiellerIntervals(mt, st, js);
 
   final mtRasterMed = (mt.rasterTime.medianNs / 1e6).toStringAsFixed(2);
   final stRasterMed = (st.rasterTime.medianNs / 1e6).toStringAsFixed(2);
@@ -509,18 +528,18 @@ void _writeNodeTakeaways(
   takeaways.writeln('* **${browser.label} (at $nodes nodes)**:');
   takeaways.writeln(
     '  * Worker Raster Overhead: `st=0` is '
-    '**${formatFieller(rasterFieller)}** that of `st=1` '
+    '**${formatFieller(intervals.rasterOverhead)}** that of `st=1` '
     '(${mtRasterMed}ms vs ${stRasterMed}ms).',
   );
   takeaways.writeln(
     '  * Pipelining Throughput Win: `st=0` delivers '
-    '**${formatFieller(fpsWinFieller)} higher FPS** than `st=1` '
+    '**${formatFieller(intervals.fpsPipeliningWin)} higher FPS** than `st=1` '
     '($mtFpsMed vs $stFpsMed FPS).',
   );
   takeaways.writeln(
     '  * Dart2Wasm vs Dart2JS: Wasm delivers '
-    '**${formatFieller(vsJsWinFieller)} higher FPS** and '
-    '**${formatFieller(buildSpeedupFieller)} faster UI build** '
+    '**${formatFieller(intervals.vsJsFpsSpeedup)} higher FPS** and '
+    '**${formatFieller(intervals.vsJsBuildSpeedup)} faster UI build** '
     '(${mtBuildMed}ms vs ${jsBuildMed}ms).',
   );
 }
@@ -580,19 +599,8 @@ Map<String, Object?> _generateJsonReport({
     }
 
     // Generate comparison ratios for matching node counts
-    final matchingNodes = args.nodeCounts.where((int n) {
-      return browserResults.containsKey(
-            BenchmarkKey(BenchmarkMode.wasmMultithreaded, n),
-          ) &&
-          browserResults.containsKey(
-            BenchmarkKey(BenchmarkMode.wasmSingleThreaded, n),
-          ) &&
-          browserResults.containsKey(
-            BenchmarkKey(BenchmarkMode.jsCanvasKit, n),
-          );
-    }).toList();
-
-    for (final nodes in matchingNodes) {
+    final browserName = browser.label.toLowerCase();
+    for (final nodes in _matchingNodeCounts(args.nodeCounts, browserResults)) {
       final mt =
           browserResults[BenchmarkKey(BenchmarkMode.wasmMultithreaded, nodes)]!;
       final st =
@@ -603,50 +611,23 @@ Map<String, Object?> _generateJsonReport({
       final js =
           browserResults[BenchmarkKey(BenchmarkMode.jsCanvasKit, nodes)]!;
 
-      comparisonsList.add(
-        fiellerToJson(
-          browser: browser.label.toLowerCase(),
-          nodes: nodes,
-          name: 'wasm_mt_vs_wasm_st_raster_overhead',
-          fieller: FiellerInterval.compute(
-            sampleA: mt.rawRasterMs,
-            sampleB: st.rawRasterMs,
+      final intervals = _computeNodeFiellerIntervals(mt, st, js);
+      final entries = [
+        ('wasm_mt_vs_wasm_st_raster_overhead', intervals.rasterOverhead),
+        ('wasm_mt_vs_wasm_st_fps_pipelining_win', intervals.fpsPipeliningWin),
+        ('wasm_mt_vs_js_fps_speedup', intervals.vsJsFpsSpeedup),
+        ('wasm_mt_vs_js_build_speedup', intervals.vsJsBuildSpeedup),
+      ];
+      for (final (name, fieller) in entries) {
+        comparisonsList.add(
+          fiellerToJson(
+            browser: browserName,
+            nodes: nodes,
+            name: name,
+            fieller: fieller,
           ),
-        ),
-      );
-      comparisonsList.add(
-        fiellerToJson(
-          browser: browser.label.toLowerCase(),
-          nodes: nodes,
-          name: 'wasm_mt_vs_wasm_st_fps_pipelining_win',
-          fieller: FiellerInterval.compute(
-            sampleA: mt.rawFps,
-            sampleB: st.rawFps,
-          ),
-        ),
-      );
-      comparisonsList.add(
-        fiellerToJson(
-          browser: browser.label.toLowerCase(),
-          nodes: nodes,
-          name: 'wasm_mt_vs_js_fps_speedup',
-          fieller: FiellerInterval.compute(
-            sampleA: mt.rawFps,
-            sampleB: js.rawFps,
-          ),
-        ),
-      );
-      comparisonsList.add(
-        fiellerToJson(
-          browser: browser.label.toLowerCase(),
-          nodes: nodes,
-          name: 'wasm_mt_vs_js_build_speedup',
-          fieller: FiellerInterval.compute(
-            sampleA: js.rawBuildMs,
-            sampleB: mt.rawBuildMs,
-          ),
-        ),
-      );
+        );
+      }
     }
   }
 
@@ -1128,17 +1109,16 @@ class _ChromeCdpDriver() implements BrowserDriver {
   }
 }
 
-/// Drives Safari via `/usr/bin/safaridriver` (W3C WebDriver HTTP API).
-class _SafariWebDriver() implements BrowserDriver {
+/// Base W3C WebDriver HTTP API driver shared by Safari and Firefox.
+abstract class _W3cWebDriver() implements BrowserDriver {
   Process? _driverProcess;
   int? _port;
   String? _sessionId;
   final HttpClient _client = HttpClient();
 
-  @override
-  Future<bool> isAvailable() async {
-    return Platform.isMacOS && File('/usr/bin/safaridriver').existsSync();
-  }
+  String get driverName;
+  String get executablePath;
+  Map<String, dynamic> buildCapabilities();
 
   @override
   Future<void> start({
@@ -1147,38 +1127,31 @@ class _SafariWebDriver() implements BrowserDriver {
     String initialUrl = 'http://localhost:8899/',
   }) async {
     _port = await _findAvailablePort();
-    _driverProcess = await Process.start('/usr/bin/safaridriver', [
+    _driverProcess = await Process.start(executablePath, [
       '-p',
       '$_port',
     ], mode: ProcessStartMode.normal);
 
     await Future<void>.delayed(const Duration(milliseconds: 1000));
 
-    final res = await _wdRequest('POST', '/session', {
-      'capabilities': {
-        'alwaysMatch': {'browserName': 'safari'},
-      },
-    });
-
+    final res = await _wdRequest('POST', '/session', buildCapabilities());
     final val = res['value'];
     if (val is Map<String, dynamic>) {
       _sessionId = val['sessionId'] as String?;
     }
     if (_sessionId == null) {
-      throw StateError('Failed to create Safari WebDriver session');
+      throw StateError('Failed to create $driverName WebDriver session');
     }
 
     await _calibrateViewport(viewportWidth, viewportHeight);
   }
 
   Future<void> _calibrateViewport(int targetWidth, int targetHeight) async {
-    // Set initial window rect
     await _wdRequest('POST', '/session/$_sessionId/window/rect', {
       'width': targetWidth,
       'height': targetHeight + 100,
     });
 
-    // Measure inner viewport and adjust for browser toolbar/chrome
     final inner = await evaluate('[window.innerWidth, window.innerHeight]');
     if (inner is List && inner.length >= 2) {
       final iw = (inner[0] as num).toInt();
@@ -1253,13 +1226,35 @@ class _SafariWebDriver() implements BrowserDriver {
   }
 }
 
+/// Drives Safari via `/usr/bin/safaridriver` (W3C WebDriver HTTP API).
+class _SafariWebDriver() extends _W3cWebDriver {
+  @override
+  String get driverName => 'Safari';
+
+  @override
+  String get executablePath => '/usr/bin/safaridriver';
+
+  @override
+  Future<bool> isAvailable() async {
+    return Platform.isMacOS && File('/usr/bin/safaridriver').existsSync();
+  }
+
+  @override
+  Map<String, dynamic> buildCapabilities() => {
+    'capabilities': {
+      'alwaysMatch': {'browserName': 'safari'},
+    },
+  };
+}
+
 /// Drives Firefox via `geckodriver` (W3C WebDriver HTTP API) with
 /// unthrottled prefs.
-class _FirefoxWebDriver() implements BrowserDriver {
-  Process? _driverProcess;
-  int? _port;
-  String? _sessionId;
-  final HttpClient _client = HttpClient();
+class _FirefoxWebDriver() extends _W3cWebDriver {
+  @override
+  String get driverName => 'Firefox';
+
+  @override
+  String get executablePath => 'geckodriver';
 
   static String? _resolveFirefoxBinary() {
     if (Platform.isMacOS) {
@@ -1295,21 +1290,9 @@ class _FirefoxWebDriver() implements BrowserDriver {
   }
 
   @override
-  Future<void> start({
-    required int viewportWidth,
-    required int viewportHeight,
-    String initialUrl = 'http://localhost:8899/',
-  }) async {
-    _port = await _findAvailablePort();
-    _driverProcess = await Process.start('geckodriver', [
-      '-p',
-      '$_port',
-    ], mode: ProcessStartMode.normal);
-
-    await Future<void>.delayed(const Duration(milliseconds: 1000));
-
+  Map<String, dynamic> buildCapabilities() {
     final binary = _resolveFirefoxBinary() ?? 'firefox';
-    final caps = {
+    return {
       'capabilities': {
         'alwaysMatch': {
           'browserName': 'firefox',
@@ -1328,96 +1311,6 @@ class _FirefoxWebDriver() implements BrowserDriver {
         },
       },
     };
-
-    final res = await _wdRequest('POST', '/session', caps);
-    final val = res['value'];
-    if (val is Map<String, dynamic>) {
-      _sessionId = val['sessionId'] as String?;
-    }
-    if (_sessionId == null) {
-      throw StateError('Failed to create Firefox WebDriver session');
-    }
-
-    await _calibrateViewport(viewportWidth, viewportHeight);
-  }
-
-  Future<void> _calibrateViewport(int targetWidth, int targetHeight) async {
-    await _wdRequest('POST', '/session/$_sessionId/window/rect', {
-      'width': targetWidth,
-      'height': targetHeight + 100,
-    });
-
-    final inner = await evaluate('[window.innerWidth, window.innerHeight]');
-    if (inner is List && inner.length >= 2) {
-      final iw = (inner[0] as num).toInt();
-      final ih = (inner[1] as num).toInt();
-      final deltaW = targetWidth - iw;
-      final deltaH = targetHeight - ih;
-
-      if (deltaW != 0 || deltaH != 0) {
-        final rectRes = await _wdRequest(
-          'GET',
-          '/session/$_sessionId/window/rect',
-        );
-        final currRect = rectRes['value'] as Map<String, dynamic>?;
-        final currW =
-            (currRect?['width'] as num?)?.toInt() ?? (targetWidth + deltaW);
-        final currH =
-            (currRect?['height'] as num?)?.toInt() ??
-            (targetHeight + 100 + deltaH);
-
-        await _wdRequest('POST', '/session/$_sessionId/window/rect', {
-          'width': currW + deltaW,
-          'height': currH + deltaH,
-        });
-      }
-    }
-  }
-
-  @override
-  Future<void> navigate(String url) async {
-    await _wdRequest('POST', '/session/$_sessionId/url', {'url': url});
-  }
-
-  @override
-  Future<dynamic> evaluate(String script) async {
-    final normalized = script.trim().startsWith('return ')
-        ? script
-        : 'return ($script);';
-    final res = await _wdRequest('POST', '/session/$_sessionId/execute/sync', {
-      'script': normalized,
-      'args': <dynamic>[],
-    });
-    return res['value'];
-  }
-
-  @override
-  Future<void> stop() async {
-    if (_sessionId != null) {
-      try {
-        await _wdRequest('DELETE', '/session/$_sessionId');
-      } catch (_) {}
-      _sessionId = null;
-    }
-    _driverProcess?.kill();
-    _driverProcess = null;
-    _client.close();
-  }
-
-  Future<Map<String, dynamic>> _wdRequest(
-    String method,
-    String path, [
-    Map<String, dynamic>? data,
-  ]) async {
-    final uri = Uri.parse('http://127.0.0.1:$_port$path');
-    final req = await _client.openUrl(method, uri);
-    req.headers.contentType = ContentType.json;
-    if (data != null) {
-      req.write(jsonEncode(data));
-    }
-    final resp = await req.close().timeout(const Duration(seconds: 30));
-    final body = await resp.transform(utf8.decoder).join();
-    return jsonDecode(body) as Map<String, dynamic>;
   }
 }
 

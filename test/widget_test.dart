@@ -9,6 +9,41 @@ import 'package:wasm_compare/src/scene/morphing_layout_matrix.dart';
 import 'package:wasm_compare/src/shell/build_info.dart';
 import 'package:wasm_compare/src/shell/performance_hud.dart';
 
+Future<void> _pumpApp(
+  WidgetTester tester, {
+  Size size = const Size(1200, 900),
+}) async {
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+
+  await tester.pumpWidget(const WasmCompareApp());
+  await tester.pump();
+}
+
+Future<void> _pumpBuildInfoDialog(
+  WidgetTester tester,
+  BuildInfoDialog dialog,
+) async {
+  await tester.pumpWidget(MaterialApp(home: Scaffold(body: dialog)));
+  await tester.pump();
+}
+
+Future<void> _selectWorkload(WidgetTester tester, String workloadTitle) async {
+  final workloadSelector = find.byTooltip(
+    'Select Benchmark Workload (Layout Churn / Card Grid)',
+  );
+  expect(workloadSelector, findsOneWidget);
+  await tester.tap(workloadSelector);
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 500));
+  expect(find.text(workloadTitle), findsOneWidget);
+  await tester.tap(find.text(workloadTitle));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 500));
+}
+
 void main() {
   testWidgets('App smoke test on default window size', (
     WidgetTester tester,
@@ -21,13 +56,7 @@ void main() {
   testWidgets('Renders adaptive mobile layout on small viewports (< 600px)', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(400, 800);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
-    await tester.pumpWidget(const WasmCompareApp());
-    await tester.pump();
+    await _pumpApp(tester, size: const Size(400, 800));
 
     // Verify compact title is used
     expect(find.text('Wasm vs JS'), findsOneWidget);
@@ -52,29 +81,14 @@ void main() {
     expect(find.text('Medium (64)'), findsOneWidget);
 
     // Verify compact workload selector button exists and switches workloads
-    final workloadSelector = find.byTooltip(
-      'Select Benchmark Workload (Layout Churn / Card Grid)',
-    );
-    expect(workloadSelector, findsOneWidget);
-    await tester.tap(workloadSelector);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-    await tester.tap(find.text('Polymorphic Card Grid'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
+    await _selectWorkload(tester, 'Polymorphic Card Grid');
     expect(find.text('Medium (500)'), findsOneWidget);
   });
 
   testWidgets('Renders adaptive desktop layout on large viewports (>= 720px)', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(1200, 900);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
-    await tester.pumpWidget(const WasmCompareApp());
-    await tester.pump();
+    await _pumpApp(tester);
 
     // Verify full title is used
     expect(find.text('Wasm vs JS Performance'), findsOneWidget);
@@ -91,33 +105,14 @@ void main() {
   testWidgets(
     'Switches between Bouncy Layout Churn and Polymorphic Card Grid workloads',
     (WidgetTester tester) async {
-      tester.view.physicalSize = const Size(1200, 900);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-
-      await tester.pumpWidget(const WasmCompareApp());
-      await tester.pump();
+      await _pumpApp(tester);
 
       // Starts on BouncyLayoutMatrix with calibrated medium preset (64 Widgets)
       expect(find.byType(BouncyLayoutMatrix), findsOneWidget);
       expect(find.text('64 Widgets'), findsOneWidget);
 
-      // Open workload selector popup menu
-      final workloadSelector = find.byTooltip(
-        'Select Benchmark Workload (Layout Churn / Card Grid)',
-      );
-      expect(workloadSelector, findsOneWidget);
-      await tester.tap(workloadSelector);
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
-
-      expect(find.text('Polymorphic Card Grid'), findsOneWidget);
-
       // Switch to Polymorphic Card Grid
-      await tester.tap(find.text('Polymorphic Card Grid'));
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 500));
+      await _selectWorkload(tester, 'Polymorphic Card Grid');
 
       expect(find.byType(MorphingLayoutMatrix), findsOneWidget);
       expect(find.text('500 Cards'), findsOneWidget);
@@ -154,13 +149,7 @@ void main() {
   testWidgets('PerformanceHud mini-cards and prompt badge are interactive', (
     WidgetTester tester,
   ) async {
-    tester.view.physicalSize = const Size(1200, 900);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
-    await tester.pumpWidget(const WasmCompareApp());
-    await tester.pump();
+    await _pumpApp(tester);
 
     // Verify WASM and JS mini-cards are rendered in expanded HUD
     expect(find.textContaining('⚡ WASM'), findsOneWidget);
@@ -196,13 +185,7 @@ void main() {
 
   testWidgets('Renders _EngineSelectorButton on desktop, opens popup menu, '
       'and handles selection', (WidgetTester tester) async {
-    tester.view.physicalSize = const Size(1200, 900);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-
-    await tester.pumpWidget(const WasmCompareApp());
-    await tester.pump();
+    await _pumpApp(tester);
 
     // Find engine selector button in AppBar
     final engineSelector = find.byTooltip(
@@ -230,19 +213,15 @@ void main() {
   testWidgets('BuildInfoDialog renders Wasm + Skia MT and Git info', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: BuildInfoDialog(
-            isWasmOverride: true,
-            isWimpOverride: false,
-            isSingleThreadedOverride: false,
-            hasGitInfoOverride: true,
-          ),
-        ),
+    await _pumpBuildInfoDialog(
+      tester,
+      const BuildInfoDialog(
+        isWasmOverride: true,
+        isWimpOverride: false,
+        isSingleThreadedOverride: false,
+        hasGitInfoOverride: true,
       ),
     );
-    await tester.pump();
 
     expect(find.text('⚡ WASM + Skia'), findsOneWidget);
     expect(find.text('Skia (skwasm.wasm)'), findsOneWidget);
@@ -253,18 +232,14 @@ void main() {
   testWidgets('BuildInfoDialog renders Wasm + Skia ST and handles toggle', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: BuildInfoDialog(
-            isWasmOverride: true,
-            isWimpOverride: false,
-            isSingleThreadedOverride: true,
-          ),
-        ),
+    await _pumpBuildInfoDialog(
+      tester,
+      const BuildInfoDialog(
+        isWasmOverride: true,
+        isWimpOverride: false,
+        isSingleThreadedOverride: true,
       ),
     );
-    await tester.pump();
 
     expect(find.text('⚡ WASM + Skia (ST)'), findsOneWidget);
     final chip = find.text('Single-threaded (Toggle)');
@@ -277,18 +252,14 @@ void main() {
   testWidgets('BuildInfoDialog renders Wasm + Impeller (Exp)', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: BuildInfoDialog(
-            isWasmOverride: true,
-            isWimpOverride: true,
-            isSingleThreadedOverride: false,
-          ),
-        ),
+    await _pumpBuildInfoDialog(
+      tester,
+      const BuildInfoDialog(
+        isWasmOverride: true,
+        isWimpOverride: true,
+        isSingleThreadedOverride: false,
       ),
     );
-    await tester.pump();
 
     expect(find.text('⚡ WASM + Impeller (Exp)'), findsOneWidget);
     expect(find.text('Impeller (wimp.wasm) • Experimental'), findsOneWidget);
@@ -298,17 +269,13 @@ void main() {
   testWidgets('BuildInfoDialog renders JS + WebParagraph (Exp)', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: BuildInfoDialog(
-            isWasmOverride: false,
-            isWebParagraphOverride: true,
-          ),
-        ),
+    await _pumpBuildInfoDialog(
+      tester,
+      const BuildInfoDialog(
+        isWasmOverride: false,
+        isWebParagraphOverride: true,
       ),
     );
-    await tester.pump();
 
     expect(find.text('📜 JS (WebParagraph) [Exp]'), findsOneWidget);
     expect(

@@ -6,6 +6,32 @@ import 'package:wasm_compare/src/metrics/benchmark_storage.dart';
 import 'package:wasm_compare/src/metrics/frame_timing_service.dart';
 import 'package:web/web.dart' as web;
 
+void _saveTestRun({
+  required String mode,
+  required double fps,
+  required double buildTimeMs,
+  required double rasterTimeMs,
+  required double totalFrameTimeMs,
+  required double jitterMs,
+  String stressLevel = 'medium',
+  int nodeCount = 500,
+  String workloadId = 'bouncy',
+  bool isPipelined = false,
+}) {
+  BenchmarkStorage.saveRun(
+    mode: mode,
+    fps: fps,
+    buildTimeMs: buildTimeMs,
+    rasterTimeMs: rasterTimeMs,
+    totalFrameTimeMs: totalFrameTimeMs,
+    jitterMs: jitterMs,
+    stressLevel: stressLevel,
+    nodeCount: nodeCount,
+    workloadId: workloadId,
+    isPipelined: isPipelined,
+  );
+}
+
 void main() {
   setUp(() {
     web.window.localStorage.clear();
@@ -18,54 +44,42 @@ void main() {
   });
 
   test('BenchmarkStorage persists to localStorage and reloads cache', () {
-    BenchmarkStorage.saveRun(
+    _saveTestRun(
       mode: 'wasm',
       fps: 59.5,
       buildTimeMs: 4.1,
       rasterTimeMs: 1.5,
       totalFrameTimeMs: 5.6,
       jitterMs: 0.4,
-      stressLevel: 'medium',
-      nodeCount: 500,
-      workloadId: 'bouncy',
       isPipelined: true,
     );
-    BenchmarkStorage.saveRun(
+    _saveTestRun(
       mode: 'wimp',
       fps: 58.2,
       buildTimeMs: 4.5,
       rasterTimeMs: 1.8,
       totalFrameTimeMs: 6.3,
       jitterMs: 0.6,
-      stressLevel: 'medium',
-      nodeCount: 500,
-      workloadId: 'bouncy',
     );
-    BenchmarkStorage.saveRun(
+    _saveTestRun(
       mode: 'js',
       fps: 34.0,
       buildTimeMs: 18.2,
       rasterTimeMs: 3.1,
       totalFrameTimeMs: 21.3,
       jitterMs: 3.2,
-      stressLevel: 'medium',
-      nodeCount: 500,
-      workloadId: 'bouncy',
     );
-    BenchmarkStorage.saveRun(
+    _saveTestRun(
       mode: 'webparagraph',
       fps: 52.4,
       buildTimeMs: 7.4,
       rasterTimeMs: 2.2,
       totalFrameTimeMs: 9.6,
       jitterMs: 0.9,
-      stressLevel: 'medium',
-      nodeCount: 500,
-      workloadId: 'bouncy',
     );
 
     // Save a run for grid as well
-    BenchmarkStorage.saveRun(
+    _saveTestRun(
       mode: 'wasm',
       fps: 60.0,
       buildTimeMs: 2.1,

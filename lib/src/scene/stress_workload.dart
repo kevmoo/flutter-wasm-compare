@@ -9,22 +9,13 @@ import 'stress_controller.dart';
 /// Each workload exercises a distinct aspect of the Flutter framework and
 /// engine pipeline (e.g., deep `RenderFlex` layout invalidation vs. canvas
 /// paint/rasterization) and defines its own calibrated difficulty ladder.
-abstract class const StressWorkload() {
-  /// Unique URL and storage identifier (e.g. `'bouncy'`, `'grid'`).
-  String get id;
-
-  /// Human-readable display name.
-  String get title;
-
-  /// Short description of what subsystem this workload exercises.
-  String get subtitle;
-
-  /// Unit label displayed in the stepper pill (e.g. `'Widgets'`, `'Cards'`).
-  String get unitLabel;
-
-  /// Calibrated engineering ladder of complexity steps `N >= 0`.
-  List<int> get ladder;
-
+abstract class const StressWorkload({
+  required final String id,
+  required final String title,
+  required final String subtitle,
+  required final String unitLabel,
+  required final List<int> ladder,
+}) {
   /// Returns the calibrated node count `N` for the given [preset].
   int nodeCountForPreset(StressPreset preset);
 
@@ -35,6 +26,15 @@ abstract class const StressWorkload() {
 /// Exercises deep recursive `RenderFlex` layout invalidation (`performLayout`)
 /// and Material/Cupertino widget churn, modeled after Yegor's `bouncy_demo`.
 class const BouncyLayoutWorkload() extends StressWorkload {
+  this
+    : super(
+        id: 'bouncy',
+        title: 'Bouncy Layout Churn',
+        subtitle: 'Recursive RenderFlex relayout & widget tree churn',
+        unitLabel: 'Widgets',
+        ladder: kBouncyLadder,
+      );
+
   static const List<int> kBouncyLadder = [
     0,
     8,
@@ -51,21 +51,6 @@ class const BouncyLayoutWorkload() extends StressWorkload {
     768,
     1024,
   ];
-
-  @override
-  String get id => 'bouncy';
-
-  @override
-  String get title => 'Bouncy Layout Churn';
-
-  @override
-  String get subtitle => 'Recursive RenderFlex relayout & widget tree churn';
-
-  @override
-  String get unitLabel => 'Widgets';
-
-  @override
-  List<int> get ladder => kBouncyLadder;
 
   @override
   int nodeCountForPreset(StressPreset preset) => switch (preset) {
@@ -85,20 +70,14 @@ class const BouncyLayoutWorkload() extends StressWorkload {
 /// Exercises high-density vector path painting and Skwasm/CanvasKit rasterization
 /// across a responsive grid of polymorphic dashboard cards.
 class const PolymorphicGridWorkload() extends StressWorkload {
-  @override
-  String get id => 'grid';
-
-  @override
-  String get title => 'Polymorphic Card Grid';
-
-  @override
-  String get subtitle => 'Canvas path painting & multi-threaded rasterization';
-
-  @override
-  String get unitLabel => 'Cards';
-
-  @override
-  List<int> get ladder => kDecadeEngineeringLadder;
+  this
+    : super(
+        id: 'grid',
+        title: 'Polymorphic Card Grid',
+        subtitle: 'Canvas path painting & multi-threaded rasterization',
+        unitLabel: 'Cards',
+        ladder: kDecadeEngineeringLadder,
+      );
 
   @override
   int nodeCountForPreset(StressPreset preset) => preset.nodeCount;

@@ -134,6 +134,11 @@ class const _EngineSelectorButton() extends StatelessWidget {
     final current = currentEngineMode();
     final color = _engineColor(current);
     final label = _engineLabel(current);
+    final iconData = switch (current) {
+      'js' => Icons.javascript,
+      'webparagraph' => Icons.text_fields,
+      _ => Icons.bolt,
+    };
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2.0),
@@ -142,42 +147,7 @@ class const _EngineSelectorButton() extends StatelessWidget {
         initialValue: current,
         onSelected: (mode) => _handleSelected(context, mode, current),
         itemBuilder: (context) => _buildMenuItems(current),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: color.withValues(alpha: 0.45),
-              width: 1.0,
-            ),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                switch (current) {
-                  'js' => Icons.javascript,
-                  'webparagraph' => Icons.text_fields,
-                  _ => Icons.bolt,
-                },
-                size: 14,
-                color: color,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: color,
-                ),
-              ),
-              const SizedBox(width: 2),
-              Icon(Icons.arrow_drop_down, size: 14, color: color),
-            ],
-          ),
-        ),
+        child: _DropdownPillTrigger(icon: iconData, label: label, color: color),
       ),
     );
   }
@@ -199,108 +169,74 @@ class const _EngineSelectorButton() extends StatelessWidget {
   void _handleSelected(BuildContext context, String mode, String current) {
     if (mode == current) return;
     if (mode == 'wimp' && !isWimpSupportedInBrowser) {
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        const SnackBar(
-          content: Text(
-            '⚠️ Impeller on Web (wimp) requires Chromium '
-            '(ImageDecoder and V8 iterators). '
-            'On Safari and Firefox, Flutter Web falls back to Skia.',
-          ),
-          duration: Duration(seconds: 4),
-        ),
+      _showUnsupportedSnackBar(
+        context,
+        '⚠️ Impeller on Web (wimp) requires Chromium '
+        '(ImageDecoder and V8 iterators). '
+        'On Safari and Firefox, Flutter Web falls back to Skia.',
       );
       return;
     }
     if (mode == 'webparagraph' && !isWebParagraphSupportedInBrowser) {
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        const SnackBar(
-          content: Text(
-            '⚠️ WebParagraph requires Chrome with '
-            'chrome://flags/#enable-experimental-web-platform-features '
-            'enabled (window.TextCluster API).',
-          ),
-          duration: Duration(seconds: 4),
-        ),
+      _showUnsupportedSnackBar(
+        context,
+        '⚠️ WebParagraph requires Chrome with '
+        'chrome://flags/#enable-experimental-web-platform-features '
+        'enabled (window.TextCluster API).',
       );
       return;
     }
     switchEngineMode(context, mode: mode);
   }
 
+  static void _showUnsupportedSnackBar(BuildContext context, String message) {
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 4)),
+    );
+  }
+
   List<PopupMenuEntry<String>> _buildMenuItems(String current) => [
-    PopupMenuItem(
+    _buildSelectorMenuItem(
       value: 'wimp',
-      child: ListTile(
-        dense: true,
-        leading: const Icon(Icons.bolt, color: Colors.tealAccent),
-        title: const Text('⚡ Wasm (Impeller) [Exp]'),
-        subtitle: Text(
-          isWimpSupportedInBrowser
-              ? 'Web Impeller (wimp.wasm) • Experimental (Unstable)'
-              : 'Impeller (Unsupported on Safari/Firefox)',
-          style: TextStyle(
-            fontSize: 11,
-            color: isWimpSupportedInBrowser
-                ? Colors.amberAccent
-                : Colors.redAccent,
-          ),
-        ),
-        trailing: current == 'wimp'
-            ? const Icon(Icons.check, size: 16, color: Colors.tealAccent)
-            : null,
-      ),
+      icon: Icons.bolt,
+      color: Colors.tealAccent,
+      title: '⚡ Wasm (Impeller) [Exp]',
+      subtitle: isWimpSupportedInBrowser
+          ? 'Web Impeller (wimp.wasm) • Experimental (Unstable)'
+          : 'Impeller (Unsupported on Safari/Firefox)',
+      subtitleColor: isWimpSupportedInBrowser
+          ? Colors.amberAccent
+          : Colors.redAccent,
+      isSelected: current == 'wimp',
     ),
-    PopupMenuItem(
+    _buildSelectorMenuItem(
       value: 'wasm',
-      child: ListTile(
-        dense: true,
-        leading: const Icon(Icons.bolt, color: Colors.lightBlueAccent),
-        title: const Text('⚡ Wasm (Skia)'),
-        subtitle: const Text(
-          'Skwasm (skwasm.wasm)',
-          style: TextStyle(fontSize: 11, color: Colors.white54),
-        ),
-        trailing: current == 'wasm'
-            ? const Icon(Icons.check, size: 16, color: Colors.lightBlueAccent)
-            : null,
-      ),
+      icon: Icons.bolt,
+      color: Colors.lightBlueAccent,
+      title: '⚡ Wasm (Skia)',
+      subtitle: 'Skwasm (skwasm.wasm)',
+      isSelected: current == 'wasm',
     ),
-    PopupMenuItem(
+    _buildSelectorMenuItem(
       value: 'js',
-      child: ListTile(
-        dense: true,
-        leading: const Icon(Icons.javascript, color: Color(0xFFF1E05A)),
-        title: const Text('📜 JavaScript (CanvasKit)'),
-        subtitle: const Text(
-          'CanvasKit (canvaskit.wasm)',
-          style: TextStyle(fontSize: 11, color: Colors.white54),
-        ),
-        trailing: current == 'js'
-            ? const Icon(Icons.check, size: 16, color: Color(0xFFF1E05A))
-            : null,
-      ),
+      icon: Icons.javascript,
+      color: const Color(0xFFF1E05A),
+      title: '📜 JavaScript (CanvasKit)',
+      subtitle: 'CanvasKit (canvaskit.wasm)',
+      isSelected: current == 'js',
     ),
-    PopupMenuItem(
+    _buildSelectorMenuItem(
       value: 'webparagraph',
-      child: ListTile(
-        dense: true,
-        leading: const Icon(Icons.text_fields, color: Colors.orangeAccent),
-        title: const Text('📜 JS (WebParagraph) [Exp]'),
-        subtitle: Text(
-          isWebParagraphSupportedInBrowser
-              ? 'CanvasKit WebParagraph (3.6MB) • Experimental'
-              : 'Requires Chrome + Experimental Web Platform Features flag',
-          style: TextStyle(
-            fontSize: 11,
-            color: isWebParagraphSupportedInBrowser
-                ? Colors.amberAccent
-                : Colors.redAccent,
-          ),
-        ),
-        trailing: current == 'webparagraph'
-            ? const Icon(Icons.check, size: 16, color: Colors.orangeAccent)
-            : null,
-      ),
+      icon: Icons.text_fields,
+      color: Colors.orangeAccent,
+      title: '📜 JS (WebParagraph) [Exp]',
+      subtitle: isWebParagraphSupportedInBrowser
+          ? 'CanvasKit WebParagraph (3.6MB) • Experimental'
+          : 'Requires Chrome + Experimental Web Platform Features flag',
+      subtitleColor: isWebParagraphSupportedInBrowser
+          ? Colors.amberAccent
+          : Colors.redAccent,
+      isSelected: current == 'webparagraph',
     ),
   ];
 }
@@ -590,20 +526,13 @@ class const _WorkloadSelectorButton({
     String currentId,
   ) {
     final itemColor = _workloadColor(workload.id);
-    return PopupMenuItem<String>(
+    return _buildSelectorMenuItem(
       value: workload.id,
-      child: ListTile(
-        dense: true,
-        leading: Icon(_workloadIcon(workload.id), color: itemColor),
-        title: Text(workload.title),
-        subtitle: Text(
-          workload.subtitle,
-          style: const TextStyle(fontSize: 11, color: Colors.white54),
-        ),
-        trailing: workload.id == currentId
-            ? Icon(Icons.check, size: 16, color: itemColor)
-            : null,
-      ),
+      icon: _workloadIcon(workload.id),
+      color: itemColor,
+      title: workload.title,
+      subtitle: workload.subtitle,
+      isSelected: workload.id == currentId,
     );
   }
 
@@ -615,6 +544,45 @@ class const _WorkloadSelectorButton({
         child: Icon(iconData, size: 18, color: color),
       );
     }
+    return _DropdownPillTrigger(
+      icon: iconData,
+      label: current.title,
+      color: color,
+    );
+  }
+}
+
+PopupMenuItem<String> _buildSelectorMenuItem({
+  required String value,
+  required IconData icon,
+  required Color color,
+  required String title,
+  required String subtitle,
+  Color subtitleColor = Colors.white54,
+  required bool isSelected,
+}) {
+  return PopupMenuItem<String>(
+    value: value,
+    child: ListTile(
+      dense: true,
+      leading: Icon(icon, color: color),
+      title: Text(title),
+      subtitle: Text(
+        subtitle,
+        style: TextStyle(fontSize: 11, color: subtitleColor),
+      ),
+      trailing: isSelected ? Icon(Icons.check, size: 16, color: color) : null,
+    ),
+  );
+}
+
+class const _DropdownPillTrigger({
+  required final IconData icon,
+  required final String label,
+  required final Color color,
+}) extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -625,10 +593,10 @@ class const _WorkloadSelectorButton({
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(iconData, size: 14, color: color),
+          Icon(icon, size: 14, color: color),
           const SizedBox(width: 4),
           Text(
-            current.title,
+            label,
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,

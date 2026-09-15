@@ -9,12 +9,14 @@ import '../scene/stress_controller.dart';
 import 'engine_mode.dart';
 import 'url_helper.dart';
 
-typedef _BenefitBadge = ({String title, String detail});
+@visibleForTesting
+typedef BenefitBadge = ({String title, String detail});
 
-typedef _ComparisonData = ({
+@visibleForTesting
+typedef ComparisonData = ({
   bool hasBothRuns,
-  _BenefitBadge? speedBadge,
-  _BenefitBadge? jitterBadge,
+  BenefitBadge? speedBadge,
+  BenefitBadge? jitterBadge,
   String? promptBadge,
   double budgetRatio,
   String budgetPct,
@@ -22,40 +24,6 @@ typedef _ComparisonData = ({
   Color budgetColor,
   Color fpsColor,
 });
-
-@visibleForTesting
-({
-  bool hasBothRuns,
-  ({String title, String detail})? speedBadge,
-  ({String title, String detail})? jitterBadge,
-  String? promptBadge,
-  double budgetRatio,
-  String budgetPct,
-  String budgetLabel,
-  Color budgetColor,
-  Color fpsColor,
-})
-evaluateComparisonForTest({
-  required double currentActive,
-  required double currentJitter,
-  required double currentFps,
-  required double targetRefreshRate,
-  required BenchmarkRun? wasmRun,
-  required BenchmarkRun? jsRun,
-  required bool isCurrentWasm,
-  required int nodeCount,
-  bool isSingleThreaded = false,
-}) => _evaluateComparison(
-  currentActive: currentActive,
-  currentJitter: currentJitter,
-  currentFps: currentFps,
-  targetRefreshRate: targetRefreshRate,
-  wasmRun: wasmRun,
-  jsRun: jsRun,
-  isCurrentWasm: isCurrentWasm,
-  nodeCount: nodeCount,
-  isSingleThreaded: isSingleThreaded,
-);
 
 Color _getFpsColor(double fps, double targetHz) {
   final ratio = fps / targetHz;
@@ -87,7 +55,7 @@ double _activeTimeForRun(BenchmarkRun? run, {bool? isPipelined}) {
       : (run.buildTimeMs + run.rasterTimeMs);
 }
 
-_BenefitBadge? _computeSpeedBadge({
+BenefitBadge? _computeSpeedBadge({
   required double wasmActive,
   required double jsActive,
   bool isWasmSingleThreaded = false,
@@ -103,7 +71,7 @@ _BenefitBadge? _computeSpeedBadge({
   );
 }
 
-_BenefitBadge? _computeJitterBadge({
+BenefitBadge? _computeJitterBadge({
   required double wasmJitter,
   required double jsJitter,
 }) {
@@ -121,7 +89,8 @@ _BenefitBadge? _computeJitterBadge({
   );
 }
 
-_ComparisonData _evaluateComparison({
+@visibleForTesting
+ComparisonData evaluateComparisonForTest({
   required double currentActive,
   required double currentJitter,
   required double currentFps,
@@ -261,7 +230,7 @@ class _PerformanceHudState() extends State<PerformanceHud> {
           workloadId: stressCtrl.workload.id,
         );
 
-        final comparison = _evaluateComparison(
+        final comparison = evaluateComparisonForTest(
           currentActive: currentActive,
           currentJitter: metrics.jitterMs,
           currentFps: metrics.fps,
@@ -379,59 +348,61 @@ class _PerformanceHudState() extends State<PerformanceHud> {
     );
   }
 
-  static BenchmarkRun? _resolveWasmRun({
+  static BenchmarkRun? _resolveEngineRun({
+    required bool isExperimental,
+    required String defaultMode,
+    required String experimentalMode,
     required int nodeCount,
     required String stressLevel,
     required String workloadId,
   }) {
-    if (isCurrentlyWimp()) {
+    if (isExperimental) {
       return BenchmarkStorage.getRunForMode(
-        mode: 'wimp',
+        mode: experimentalMode,
         nodeCount: nodeCount,
         stressLevel: stressLevel,
         workloadId: workloadId,
       );
     }
     return BenchmarkStorage.getRunForMode(
-          mode: 'wasm',
+          mode: defaultMode,
           nodeCount: nodeCount,
           stressLevel: stressLevel,
           workloadId: workloadId,
         ) ??
         BenchmarkStorage.getRunForMode(
-          mode: 'wimp',
+          mode: experimentalMode,
           nodeCount: nodeCount,
           stressLevel: stressLevel,
           workloadId: workloadId,
         );
   }
 
+  static BenchmarkRun? _resolveWasmRun({
+    required int nodeCount,
+    required String stressLevel,
+    required String workloadId,
+  }) => _resolveEngineRun(
+    isExperimental: isCurrentlyWimp(),
+    defaultMode: 'wasm',
+    experimentalMode: 'wimp',
+    nodeCount: nodeCount,
+    stressLevel: stressLevel,
+    workloadId: workloadId,
+  );
+
   static BenchmarkRun? _resolveJsRun({
     required int nodeCount,
     required String stressLevel,
     required String workloadId,
-  }) {
-    if (isCurrentlyWebParagraph()) {
-      return BenchmarkStorage.getRunForMode(
-        mode: 'webparagraph',
-        nodeCount: nodeCount,
-        stressLevel: stressLevel,
-        workloadId: workloadId,
-      );
-    }
-    return BenchmarkStorage.getRunForMode(
-          mode: 'js',
-          nodeCount: nodeCount,
-          stressLevel: stressLevel,
-          workloadId: workloadId,
-        ) ??
-        BenchmarkStorage.getRunForMode(
-          mode: 'webparagraph',
-          nodeCount: nodeCount,
-          stressLevel: stressLevel,
-          workloadId: workloadId,
-        );
-  }
+  }) => _resolveEngineRun(
+    isExperimental: isCurrentlyWebParagraph(),
+    defaultMode: 'js',
+    experimentalMode: 'webparagraph',
+    nodeCount: nodeCount,
+    stressLevel: stressLevel,
+    workloadId: workloadId,
+  );
 }
 
 class const _EngineTogglePill({
@@ -1091,8 +1062,8 @@ class const _MiniMetricRow({
 }
 
 class const _BenefitBadges({
-  required final _BenefitBadge? speedBadge,
-  required final _BenefitBadge? jitterBadge,
+  required final BenefitBadge? speedBadge,
+  required final BenefitBadge? jitterBadge,
   final String? promptBadge,
   final VoidCallback? onPromptTap,
 }) extends StatelessWidget {
@@ -1156,7 +1127,7 @@ class const _BenefitBadges({
   }
 }
 
-class const _BenefitPill({required final _BenefitBadge badge})
+class const _BenefitPill({required final BenefitBadge badge})
     extends StatelessWidget {
   @override
   Widget build(BuildContext context) {

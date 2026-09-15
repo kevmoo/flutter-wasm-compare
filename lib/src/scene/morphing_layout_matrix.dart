@@ -2,83 +2,50 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'animated_stress_matrix.dart';
 import 'polymorphic_widgets.dart';
 
 class const MorphingLayoutMatrix({super.key, required final int nodeCount})
-    extends StatefulWidget {
-  @override
-  State<MorphingLayoutMatrix> createState() => _MorphingLayoutMatrixState();
-}
-
-class _MorphingLayoutMatrixState()
-    extends State<MorphingLayoutMatrix>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 4),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
+    extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    if (widget.nodeCount <= 0) {
-      return const Center(
-        child: Text(
-          'Zero Stress (Idle)',
-          style: TextStyle(color: Colors.white38, fontSize: 16),
-        ),
-      );
-    }
+    return AnimatedStressMatrix(
+      nodeCount: nodeCount,
+      duration: const Duration(seconds: 4),
+      builder: (context, animation) {
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final w = constraints.maxWidth;
+            final h = constraints.maxHeight;
+            final aspect = (w > 0 && h > 0) ? (w / h) : 1.6;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final w = constraints.maxWidth;
-        final h = constraints.maxHeight;
-        final aspect = (w > 0 && h > 0) ? (w / h) : 1.6;
+            final rawCols = math.sqrt(nodeCount * aspect);
+            final columns = rawCols.ceil().clamp(1, nodeCount);
+            final rows = (nodeCount / columns).ceil().clamp(1, nodeCount);
 
-        final rawCols = math.sqrt(widget.nodeCount * aspect);
-        final columns = rawCols.ceil().clamp(1, widget.nodeCount);
-        final rows = (widget.nodeCount / columns).ceil().clamp(
-          1,
-          widget.nodeCount,
-        );
+            final itemWidth = w / columns;
+            final itemHeight = h / rows;
+            final childAspectRatio = (itemWidth > 0 && itemHeight > 0)
+                ? (itemWidth / itemHeight)
+                : 1.6;
 
-        final itemWidth = w / columns;
-        final itemHeight = h / rows;
-        final childAspectRatio = (itemWidth > 0 && itemHeight > 0)
-            ? (itemWidth / itemHeight)
-            : 1.6;
+            final t = animation.value * 2 * math.pi;
+            final spacing = 8.0 + 4.0 * math.sin(t);
+            final dynamicAspect = childAspectRatio + 0.08 * math.cos(t);
 
-        return AnimatedBuilder(
-          animation: _controller,
-          builder: (context, _) {
             return GridView.builder(
-              key: ValueKey('grid_${widget.nodeCount}'),
-              physics: const NeverScrollableScrollPhysics(),
-              padding: const EdgeInsets.all(2.0),
+              padding: EdgeInsets.all(spacing),
               gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: columns,
-                childAspectRatio: childAspectRatio,
-                crossAxisSpacing: 2.0,
-                mainAxisSpacing: 2.0,
+                mainAxisSpacing: spacing,
+                crossAxisSpacing: spacing,
+                childAspectRatio: dynamicAspect.clamp(0.4, 5.0),
               ),
-              itemCount: widget.nodeCount,
+              itemCount: nodeCount,
               itemBuilder: (context, index) {
                 return PolymorphicCard(
-                  key: ValueKey('card_$index'),
                   index: index,
-                  animationValue: _controller.value,
+                  animationValue: animation.value,
                 );
               },
             );
