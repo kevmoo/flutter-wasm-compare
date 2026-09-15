@@ -722,7 +722,7 @@ const _capabilityProbeScript = '''(() => {
 enum BrowserType(final String label) {
   chrome('Chrome'),
   safari('Safari'),
-  firefox('Firefox'),
+  firefox('Firefox')
 }
 
 enum BenchmarkMode(
@@ -732,7 +732,7 @@ enum BenchmarkMode(
 ) {
   wasmMultithreaded('Wasm MT (st=0)', 'Wasm MT', 'wasm_compare_last_wasm_run'),
   wasmSingleThreaded('Wasm ST (st=1)', 'Wasm ST', 'wasm_compare_last_wasm_run'),
-  jsCanvasKit('JS CanvasKit', 'JS', 'wasm_compare_last_js_run'),
+  jsCanvasKit('JS CanvasKit', 'JS', 'wasm_compare_last_js_run')
 }
 
 class const BenchmarkKey(final BenchmarkMode mode, final int nodes) {

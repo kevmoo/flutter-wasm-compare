@@ -26,12 +26,12 @@ enum StressPreset(final int nodeCount) {
   light(100),
   medium(500),
   heavy(1500),
-  extreme(4000),
+  extreme(4000)
 }
 
 enum StressMode() {
   preset,
-  manual,
+  manual
 }
 
 class StressController({Uri? initialUri}) extends ChangeNotifier {
