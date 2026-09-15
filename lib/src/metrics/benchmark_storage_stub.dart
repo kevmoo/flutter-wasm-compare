@@ -1,3 +1,5 @@
+import 'package:meta/meta.dart';
+
 import 'benchmark_run.dart';
 import 'frame_timing_service.dart';
 
@@ -8,6 +10,7 @@ class BenchmarkStorage() {
   static final Map<String, BenchmarkRun> _cachedJsRuns = {};
   static final Map<String, BenchmarkRun> _cachedWebParagraphRuns = {};
 
+  @visibleForTesting
   static void resetInMemoryCacheForTesting() {
     _cachedNodesByWorkload.clear();
     _cachedWasmRuns.clear();

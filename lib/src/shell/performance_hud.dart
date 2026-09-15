@@ -9,12 +9,12 @@ import '../scene/stress_controller.dart';
 import 'engine_mode.dart';
 import 'url_helper.dart';
 
-typedef BenefitBadge = ({String title, String detail});
+typedef _BenefitBadge = ({String title, String detail});
 
-typedef ComparisonData = ({
+typedef _ComparisonData = ({
   bool hasBothRuns,
-  BenefitBadge? speedBadge,
-  BenefitBadge? jitterBadge,
+  _BenefitBadge? speedBadge,
+  _BenefitBadge? jitterBadge,
   String? promptBadge,
   double budgetRatio,
   String budgetPct,
@@ -24,7 +24,18 @@ typedef ComparisonData = ({
 });
 
 @visibleForTesting
-ComparisonData evaluateComparisonForTest({
+({
+  bool hasBothRuns,
+  ({String title, String detail})? speedBadge,
+  ({String title, String detail})? jitterBadge,
+  String? promptBadge,
+  double budgetRatio,
+  String budgetPct,
+  String budgetLabel,
+  Color budgetColor,
+  Color fpsColor,
+})
+evaluateComparisonForTest({
   required double currentActive,
   required double currentJitter,
   required double currentFps,
@@ -76,7 +87,7 @@ double _activeTimeForRun(BenchmarkRun? run, {bool? isPipelined}) {
       : (run.buildTimeMs + run.rasterTimeMs);
 }
 
-BenefitBadge? _computeSpeedBadge({
+_BenefitBadge? _computeSpeedBadge({
   required double wasmActive,
   required double jsActive,
   bool isWasmSingleThreaded = false,
@@ -92,7 +103,7 @@ BenefitBadge? _computeSpeedBadge({
   );
 }
 
-BenefitBadge? _computeJitterBadge({
+_BenefitBadge? _computeJitterBadge({
   required double wasmJitter,
   required double jsJitter,
 }) {
@@ -110,7 +121,7 @@ BenefitBadge? _computeJitterBadge({
   );
 }
 
-ComparisonData _evaluateComparison({
+_ComparisonData _evaluateComparison({
   required double currentActive,
   required double currentJitter,
   required double currentFps,
@@ -1080,8 +1091,8 @@ class const _MiniMetricRow({
 }
 
 class const _BenefitBadges({
-  required final BenefitBadge? speedBadge,
-  required final BenefitBadge? jitterBadge,
+  required final _BenefitBadge? speedBadge,
+  required final _BenefitBadge? jitterBadge,
   final String? promptBadge,
   final VoidCallback? onPromptTap,
 }) extends StatelessWidget {
@@ -1145,7 +1156,7 @@ class const _BenefitBadges({
   }
 }
 
-class const _BenefitPill({required final BenefitBadge badge})
+class const _BenefitPill({required final _BenefitBadge badge})
     extends StatelessWidget {
   @override
   Widget build(BuildContext context) {

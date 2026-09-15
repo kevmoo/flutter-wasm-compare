@@ -36,7 +36,7 @@ bool get isWimpActive {
   return false;
 }
 
-bool get isChromiumBrowser {
+bool get _isChromiumBrowser {
   try {
     final vendor = web.window.navigator.vendor;
     final ua = web.window.navigator.userAgent;
@@ -46,7 +46,7 @@ bool get isChromiumBrowser {
   }
 }
 
-bool get isWimpSupportedInBrowser => isChromiumBrowser;
+bool get isWimpSupportedInBrowser => _isChromiumBrowser;
 
 bool get isWebParagraphActive {
   try {
@@ -57,7 +57,7 @@ bool get isWebParagraphActive {
 
 bool get isWebParagraphSupportedInBrowser {
   try {
-    return isChromiumBrowser && _textClusterConstructor != null;
+    return _isChromiumBrowser && _textClusterConstructor != null;
   } catch (_) {
     return false;
   }
