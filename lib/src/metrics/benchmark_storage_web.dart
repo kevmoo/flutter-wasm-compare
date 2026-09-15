@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:meta/meta.dart';
 import 'package:web/web.dart' as web;
 
 import 'benchmark_run.dart';
@@ -26,6 +27,7 @@ class BenchmarkStorage() {
   static final Map<String, BenchmarkRun> _cachedWebParagraphRuns = {};
   static bool _cacheLoaded = false;
 
+  @visibleForTesting
   static void resetInMemoryCacheForTesting() {
     _cachedNodesByWorkload.clear();
     _cachedWasmRuns.clear();

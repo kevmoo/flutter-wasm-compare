@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-enum WidgetCategory() {
+enum _WidgetCategory() {
   sparklineCard,
   gaugeCard,
   progressCard,
@@ -18,7 +18,7 @@ class const PolymorphicCard({
 }) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final categories = WidgetCategory.values;
+    final categories = _WidgetCategory.values;
     final category = categories[index % categories.length];
 
     return Container(
@@ -41,12 +41,12 @@ class const PolymorphicCard({
           child: Padding(
             padding: const EdgeInsets.all(6.0),
             child: switch (category) {
-              WidgetCategory.sparklineCard => _buildSparklineCard(context),
-              WidgetCategory.gaugeCard => _buildGaugeCard(context),
-              WidgetCategory.progressCard => _buildProgressCard(context),
-              WidgetCategory.chipCard => _buildChipCard(context),
-              WidgetCategory.statusCard => _buildStatusCard(context),
-              WidgetCategory.waveCard => _buildWaveCard(context),
+              _WidgetCategory.sparklineCard => _buildSparklineCard(context),
+              _WidgetCategory.gaugeCard => _buildGaugeCard(context),
+              _WidgetCategory.progressCard => _buildProgressCard(context),
+              _WidgetCategory.chipCard => _buildChipCard(context),
+              _WidgetCategory.statusCard => _buildStatusCard(context),
+              _WidgetCategory.waveCard => _buildWaveCard(context),
             },
           ),
         ),

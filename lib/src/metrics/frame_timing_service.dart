@@ -61,15 +61,6 @@ class FrameTimingService() extends ChangeNotifier {
     _timingsLog.clear();
   }
 
-  FrameTimingMetrics sampleRecentMetrics({int frameCount = 15}) {
-    if (_timingsLog.isEmpty) {
-      return FrameTimingMetrics(fps: 60.0);
-    }
-    final count = math.min(_timingsLog.length, frameCount);
-    final recent = _timingsLog.toList().sublist(_timingsLog.length - count);
-    return _calculateMetricsForSlice(recent);
-  }
-
   void _computeMetrics() {
     if (_timingsLog.isEmpty) return;
 

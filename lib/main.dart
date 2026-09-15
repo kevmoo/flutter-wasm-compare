@@ -37,15 +37,15 @@ class const WasmCompareApp({super.key}) extends StatelessWidget {
   }
 }
 
-const double largeScreenMinWidth = 768.0;
-const double compactAppBarBreakpoint = 960.0;
+const double _largeScreenMinWidth = 768.0;
+const double _compactAppBarBreakpoint = 960.0;
 
 class const DemoDashboard({super.key}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final stressCtrl = context.watch<StressController>();
     final isCompactScreen =
-        MediaQuery.sizeOf(context).width < compactAppBarBreakpoint;
+        MediaQuery.sizeOf(context).width < _compactAppBarBreakpoint;
 
     return CallbackShortcuts(
       bindings: <ShortcutActivator, VoidCallback>{
@@ -99,7 +99,8 @@ class const DemoDashboard({super.key}) extends StatelessWidget {
           ),
           body: LayoutBuilder(
             builder: (context, constraints) {
-              final isLargeScreen = constraints.maxWidth >= largeScreenMinWidth;
+              final isLargeScreen =
+                  constraints.maxWidth >= _largeScreenMinWidth;
 
               return Stack(
                 children: [
