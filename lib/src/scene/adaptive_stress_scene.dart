@@ -2,12 +2,11 @@ import 'package:flutter/material.dart';
 
 import 'stress_workload.dart';
 
-class AdaptiveStressScene extends StatelessWidget {
-  final StressWorkload workload;
-  final int nodeCount;
-
-  const new({super.key, required this.workload, required this.nodeCount});
-
+class const AdaptiveStressScene({
+  super.key,
+  required final StressWorkload workload,
+  required final int nodeCount,
+}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(

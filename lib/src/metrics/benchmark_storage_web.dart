@@ -5,7 +5,7 @@ import 'package:web/web.dart' as web;
 import 'benchmark_run.dart';
 import 'frame_timing_service.dart';
 
-class BenchmarkStorage {
+class BenchmarkStorage() {
   static const String _activeNodesKey = 'wasm_compare_active_node_count';
   static const String _activeWorkloadKey = 'wasm_compare_active_workload_id';
   static const String _wasmRunKey = 'wasm_compare_last_wasm_run';

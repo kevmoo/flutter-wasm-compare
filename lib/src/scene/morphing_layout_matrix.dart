@@ -4,16 +4,14 @@ import 'package:flutter/material.dart';
 
 import 'polymorphic_widgets.dart';
 
-class MorphingLayoutMatrix extends StatefulWidget {
-  final int nodeCount;
-
-  const new({super.key, required this.nodeCount});
-
+class const MorphingLayoutMatrix({super.key, required final int nodeCount})
+    extends StatefulWidget {
   @override
   State<MorphingLayoutMatrix> createState() => _MorphingLayoutMatrixState();
 }
 
-class _MorphingLayoutMatrixState extends State<MorphingLayoutMatrix>
+class _MorphingLayoutMatrixState()
+    extends State<MorphingLayoutMatrix>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
 

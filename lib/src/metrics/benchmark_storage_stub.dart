@@ -1,7 +1,7 @@
 import 'benchmark_run.dart';
 import 'frame_timing_service.dart';
 
-class BenchmarkStorage {
+class BenchmarkStorage() {
   static final Map<String, int> _cachedNodesByWorkload = {};
   static final Map<String, BenchmarkRun> _cachedWasmRuns = {};
   static final Map<String, BenchmarkRun> _cachedWimpRuns = {};

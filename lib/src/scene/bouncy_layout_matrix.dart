@@ -11,16 +11,14 @@ import 'package:flutter/material.dart';
 /// invalidating `ParentData` and forcing a full-tree
 /// `RenderFlex.performLayout()` cascade down to all [nodeCount] Material and
 /// Cupertino leaf widgets.
-class BouncyLayoutMatrix extends StatefulWidget {
-  final int nodeCount;
-
-  const new({super.key, required this.nodeCount});
-
+class const BouncyLayoutMatrix({super.key, required final int nodeCount})
+    extends StatefulWidget {
   @override
   State<BouncyLayoutMatrix> createState() => _BouncyLayoutMatrixState();
 }
 
-class _BouncyLayoutMatrixState extends State<BouncyLayoutMatrix>
+class _BouncyLayoutMatrixState()
+    extends State<BouncyLayoutMatrix>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
 
@@ -115,7 +113,7 @@ class _BouncyLayoutMatrixState extends State<BouncyLayoutMatrix>
   }
 }
 
-enum _BouncyWidgetKind {
+enum _BouncyWidgetKind() {
   button,
   checkbox,
   plainText,
@@ -125,11 +123,8 @@ enum _BouncyWidgetKind {
   appBar,
 }
 
-class _BouncyLeafWidget extends StatelessWidget {
-  final int index;
-
-  const new({super.key, required this.index});
-
+class const _BouncyLeafWidget({super.key, required final int index})
+    extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final kind =
