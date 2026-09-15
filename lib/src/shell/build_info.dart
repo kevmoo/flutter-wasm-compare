@@ -33,7 +33,7 @@ class BuildInfo {
 class BuildInfoButton extends StatelessWidget {
   final bool isCompact;
 
-  const BuildInfoButton({super.key, this.isCompact = false});
+  const new({super.key, this.isCompact = false});
 
   @override
   Widget build(BuildContext context) {
@@ -54,7 +54,7 @@ class BuildInfoDialog extends StatelessWidget {
   final bool? isSingleThreadedOverride;
   final bool? hasGitInfoOverride;
 
-  const BuildInfoDialog({
+  const new({
     super.key,
     this.isWasmOverride,
     this.isWimpOverride,
@@ -287,7 +287,7 @@ class _BuildInfoRow extends StatelessWidget {
   final String label;
   final Widget child;
 
-  const _BuildInfoRow({required this.label, required this.child});
+  const new({required this.label, required this.child});
 
   @override
   Widget build(BuildContext context) {

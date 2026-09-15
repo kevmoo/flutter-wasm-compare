@@ -179,7 +179,7 @@ ComparisonData _evaluateComparison({
 class PerformanceHud extends StatefulWidget {
   final bool initiallyCollapsed;
 
-  const PerformanceHud({super.key, this.initiallyCollapsed = false});
+  const new({super.key, this.initiallyCollapsed = false});
 
   @override
   State<PerformanceHud> createState() => _PerformanceHudState();
@@ -389,10 +389,7 @@ class _EngineTogglePill extends StatelessWidget {
   final bool isCurrentWasm;
   final bool isSingleThreaded;
 
-  const _EngineTogglePill({
-    required this.isCurrentWasm,
-    this.isSingleThreaded = false,
-  });
+  const new({required this.isCurrentWasm, this.isSingleThreaded = false});
 
   @override
   Widget build(BuildContext context) {
@@ -456,7 +453,7 @@ class _EnginePillButton extends StatelessWidget {
   final VoidCallback? onTap;
   final String? tooltip;
 
-  const _EnginePillButton({
+  const new({
     required this.label,
     required this.isSelected,
     required this.selectedColor,
@@ -510,7 +507,7 @@ class _EnginePillButton extends StatelessWidget {
 class _HeaderTitle extends StatelessWidget {
   final VoidCallback onCollapse;
 
-  const _HeaderTitle({required this.onCollapse});
+  const new({required this.onCollapse});
 
   @override
   Widget build(BuildContext context) {
@@ -555,7 +552,7 @@ class _BudgetBar extends StatelessWidget {
   final String budgetLabel;
   final Color budgetColor;
 
-  const _BudgetBar({
+  const new({
     required this.budgetRatio,
     required this.budgetPct,
     required this.budgetLabel,
@@ -607,7 +604,7 @@ class _DualEngineCards extends StatelessWidget {
   final BenchmarkRun? jsRun;
   final double targetHz;
 
-  const _DualEngineCards({
+  const new({
     required this.isCurrentWasm,
     required this.isCurrentST,
     required this.liveMetrics,
@@ -756,7 +753,7 @@ class _EngineMiniCard extends StatelessWidget {
   final bool isSingleThreaded;
   final VoidCallback? onTap;
 
-  const _EngineMiniCard({
+  const new({
     required this.title,
     this.subtitle,
     required this.titleColor,
@@ -897,7 +894,7 @@ class _EngineStatusBadge extends StatelessWidget {
   final Color titleColor;
   final String liveLabel;
 
-  const _EngineStatusBadge({
+  const new({
     required this.isLive,
     required this.hasData,
     required this.titleColor,
@@ -969,7 +966,7 @@ class _EngineMetricsContent extends StatelessWidget {
   final double? rasterMs;
   final double targetHz;
 
-  const _EngineMetricsContent({
+  const new({
     required this.hasData,
     required this.fps,
     required this.activeMs,
@@ -1037,7 +1034,7 @@ class _MiniMetricRow extends StatelessWidget {
   final String value;
   final Color valueColor;
 
-  const _MiniMetricRow({
+  const new({
     required this.label,
     required this.value,
     required this.valueColor,
@@ -1079,7 +1076,7 @@ class _BenefitBadges extends StatelessWidget {
   final String? promptBadge;
   final VoidCallback? onPromptTap;
 
-  const _BenefitBadges({
+  const new({
     required this.speedBadge,
     required this.jitterBadge,
     this.promptBadge,
@@ -1149,7 +1146,7 @@ class _BenefitBadges extends StatelessWidget {
 class _BenefitPill extends StatelessWidget {
   final BenefitBadge badge;
 
-  const _BenefitPill({required this.badge});
+  const new({required this.badge});
 
   @override
   Widget build(BuildContext context) {

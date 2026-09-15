@@ -700,7 +700,7 @@ Map<String, Object?> fiellerToJson({
 class _ReportColumn {
   final BrowserType browser;
   final BenchmarkMode mode;
-  _ReportColumn(this.browser, this.mode);
+  new(this.browser, this.mode);
 
   String get header => '${browser.label} ${mode.shortLabel}';
 }
@@ -729,7 +729,7 @@ enum BrowserType {
   firefox('Firefox');
 
   final String label;
-  const BrowserType(this.label);
+  new(this.label);
 }
 
 enum BenchmarkMode {
@@ -740,13 +740,13 @@ enum BenchmarkMode {
   final String label;
   final String shortLabel;
   final String storageKey;
-  const BenchmarkMode(this.label, this.shortLabel, this.storageKey);
+  new(this.label, this.shortLabel, this.storageKey);
 }
 
 class BenchmarkKey {
   final BenchmarkMode mode;
   final int nodes;
-  const BenchmarkKey(this.mode, this.nodes);
+  const new(this.mode, this.nodes);
 
   @override
   bool operator ==(Object other) =>
@@ -768,7 +768,7 @@ class BenchmarkRecord {
   final String mode;
   final String workloadId;
 
-  BenchmarkRecord({
+  new({
     required this.fps,
     required this.buildTimeMs,
     required this.rasterTimeMs,
@@ -780,7 +780,7 @@ class BenchmarkRecord {
     this.workloadId = 'bouncy',
   });
 
-  factory BenchmarkRecord.fromJson(Map<String, dynamic> json) {
+  factory fromJson(Map<String, dynamic> json) {
     return BenchmarkRecord(
       fps: (json['fps'] as num?)?.toDouble() ?? 0.0,
       buildTimeMs: (json['buildTimeMs'] as num?)?.toDouble() ?? 0.0,
@@ -846,7 +846,7 @@ class MultiSampleRecord {
   final List<double> rawBuildMs;
   final List<double> rawRasterMs;
 
-  MultiSampleRecord({
+  new({
     required this.samplesCount,
     required this.isPipelined,
     required this.fps,
@@ -859,7 +859,7 @@ class MultiSampleRecord {
     required this.rawRasterMs,
   });
 
-  factory MultiSampleRecord.fromRecords(List<BenchmarkRecord> records) {
+  factory fromRecords(List<BenchmarkRecord> records) {
     final rawFps = records.map((r) => r.effectiveFps).toList();
     final rawBuild = records.map((r) => r.buildTimeMs).toList();
     final rawRaster = records.map((r) => r.rasterTimeMs).toList();
@@ -894,13 +894,13 @@ class CapabilityRecord {
   final bool crossOriginIsolated;
   final bool invertedProbe;
 
-  CapabilityRecord({
+  new({
     required this.userAgent,
     required this.crossOriginIsolated,
     required this.invertedProbe,
   });
 
-  factory CapabilityRecord.parse(dynamic raw) {
+  factory parse(dynamic raw) {
     final map = (raw is String ? jsonDecode(raw) : raw) as Map<String, dynamic>;
     return CapabilityRecord(
       userAgent: map['userAgent'] as String? ?? '',
@@ -1467,7 +1467,7 @@ class BenchmarkArgs {
   final String? jsonOutputPath;
   final bool skipCapabilityProbe;
 
-  BenchmarkArgs({
+  new({
     required this.showHelp,
     required this.baseUrl,
     this.workload = 'bouncy',
@@ -1499,7 +1499,7 @@ class BenchmarkArgs {
     }
   }
 
-  factory BenchmarkArgs.parse(List<String> args) {
+  factory parse(List<String> args) {
     if (args.contains('--help') || args.contains('-h')) {
       return BenchmarkArgs(
         showHelp: true,

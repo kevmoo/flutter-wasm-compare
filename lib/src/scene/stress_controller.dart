@@ -30,7 +30,7 @@ enum StressPreset {
 
   final int nodeCount;
 
-  const StressPreset(this.nodeCount);
+  new(this.nodeCount);
 }
 
 enum StressMode { preset, manual }
@@ -84,7 +84,7 @@ class StressController extends ChangeNotifier {
     StressMode.manual => 'MANUAL ($formattedNodeCount)',
   };
 
-  StressController({Uri? initialUri}) {
+  new({Uri? initialUri}) {
     _parseInitialQuery(initialUri ?? Uri.base);
     BenchmarkStorage.invalidateIfNodeCountChanged(
       _nodeCount,

@@ -6,11 +6,7 @@ class AdaptiveStressScene extends StatelessWidget {
   final StressWorkload workload;
   final int nodeCount;
 
-  const AdaptiveStressScene({
-    super.key,
-    required this.workload,
-    required this.nodeCount,
-  });
+  const new({super.key, required this.workload, required this.nodeCount});
 
   @override
   Widget build(BuildContext context) {

@@ -10,7 +10,7 @@ external bool? get _experimentallyBlocked;
 class CompatibilityShield extends StatelessWidget {
   final Widget child;
 
-  const CompatibilityShield({super.key, required this.child});
+  const new({super.key, required this.child});
 
   bool get isBlocked {
     return _experimentallyBlocked == true;

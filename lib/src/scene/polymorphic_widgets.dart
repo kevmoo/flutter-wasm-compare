@@ -15,11 +15,7 @@ class PolymorphicCard extends StatelessWidget {
   final int index;
   final double animationValue;
 
-  const PolymorphicCard({
-    super.key,
-    required this.index,
-    required this.animationValue,
-  });
+  const new({super.key, required this.index, required this.animationValue});
 
   @override
   Widget build(BuildContext context) {
@@ -274,11 +270,7 @@ class _SparklinePainter extends CustomPainter {
   final int index;
   final Color color;
 
-  _SparklinePainter({
-    required this.animationValue,
-    required this.index,
-    required this.color,
-  });
+  new({required this.animationValue, required this.index, required this.color});
 
   @override
   void paint(Canvas canvas, Size size) {

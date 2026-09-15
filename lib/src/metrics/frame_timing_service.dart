@@ -14,7 +14,7 @@ class FrameTimingMetrics {
   final double totalFrameTimeMs;
   final double jitterMs;
 
-  FrameTimingMetrics({
+  new({
     this.fps = 0.0,
     this.buildTimeMs = 0.0,
     this.rasterTimeMs = 0.0,
@@ -45,7 +45,7 @@ class FrameTimingService extends ChangeNotifier {
   FrameTimingMetrics _metrics = FrameTimingMetrics();
   FrameTimingMetrics get metrics => _metrics;
 
-  FrameTimingService() {
+  new() {
     SchedulerBinding.instance.addTimingsCallback(_onTimings);
   }
 

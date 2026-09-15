@@ -10,7 +10,7 @@ import 'stress_controller.dart';
 /// engine pipeline (e.g., deep `RenderFlex` layout invalidation vs. canvas
 /// paint/rasterization) and defines its own calibrated difficulty ladder.
 abstract class StressWorkload {
-  const StressWorkload();
+  const new();
 
   /// Unique URL and storage identifier (e.g. `'bouncy'`, `'grid'`).
   String get id;
@@ -37,7 +37,7 @@ abstract class StressWorkload {
 /// Exercises deep recursive `RenderFlex` layout invalidation (`performLayout`)
 /// and Material/Cupertino widget churn, modeled after Yegor's `bouncy_demo`.
 class BouncyLayoutWorkload extends StressWorkload {
-  const BouncyLayoutWorkload();
+  const new();
 
   static const List<int> kBouncyLadder = [
     0,
@@ -89,7 +89,7 @@ class BouncyLayoutWorkload extends StressWorkload {
 /// Exercises high-density vector path painting and Skwasm/CanvasKit rasterization
 /// across a responsive grid of polymorphic dashboard cards.
 class PolymorphicGridWorkload extends StressWorkload {
-  const PolymorphicGridWorkload();
+  const new();
 
   @override
   String get id => 'grid';

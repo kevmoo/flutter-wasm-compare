@@ -14,7 +14,7 @@ import 'package:flutter/material.dart';
 class BouncyLayoutMatrix extends StatefulWidget {
   final int nodeCount;
 
-  const BouncyLayoutMatrix({super.key, required this.nodeCount});
+  const new({super.key, required this.nodeCount});
 
   @override
   State<BouncyLayoutMatrix> createState() => _BouncyLayoutMatrixState();
@@ -128,7 +128,7 @@ enum _BouncyWidgetKind {
 class _BouncyLeafWidget extends StatelessWidget {
   final int index;
 
-  const _BouncyLeafWidget({super.key, required this.index});
+  const new({super.key, required this.index});
 
   @override
   Widget build(BuildContext context) {

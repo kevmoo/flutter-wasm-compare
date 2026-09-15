@@ -7,7 +7,7 @@ import 'polymorphic_widgets.dart';
 class MorphingLayoutMatrix extends StatefulWidget {
   final int nodeCount;
 
-  const MorphingLayoutMatrix({super.key, required this.nodeCount});
+  const new({super.key, required this.nodeCount});
 
   @override
   State<MorphingLayoutMatrix> createState() => _MorphingLayoutMatrixState();
