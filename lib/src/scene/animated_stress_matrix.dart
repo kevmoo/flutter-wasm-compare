@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
 
-class const AnimatedStressMatrix({
+abstract class const AnimatedStressMatrix({
   super.key,
   required final int nodeCount,
-  required final Duration duration,
-  required final Widget Function(
-    BuildContext context,
-    Animation<double> animation,
-  )
-  builder,
 }) extends StatefulWidget {
+  int get periodSeconds;
+
+  Widget buildAnimated(BuildContext context, double animationValue);
+
   @override
   State<AnimatedStressMatrix> createState() => _AnimatedStressMatrixState();
 }
@@ -22,8 +20,10 @@ class _AnimatedStressMatrixState()
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(vsync: this, duration: widget.duration)
-      ..repeat();
+    _controller = AnimationController(
+      vsync: this,
+      duration: Duration(seconds: widget.periodSeconds),
+    )..repeat();
   }
 
   @override
@@ -45,7 +45,7 @@ class _AnimatedStressMatrixState()
 
     return AnimatedBuilder(
       animation: _controller,
-      builder: (context, _) => widget.builder(context, _controller),
+      builder: (context, _) => widget.buildAnimated(context, _controller.value),
     );
   }
 }

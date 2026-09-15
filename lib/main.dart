@@ -87,11 +87,7 @@ class const DemoDashboard({super.key}) extends StatelessWidget {
                 stressCtrl: stressCtrl,
                 isCompact: isCompactScreen,
               ),
-              _StressStepperPill(
-                stressCtrl: stressCtrl,
-                isCompact: isCompactScreen,
-              ),
-              _PresetDropdown(
+              _StressControls(
                 stressCtrl: stressCtrl,
                 isCompact: isCompactScreen,
               ),
@@ -362,21 +358,24 @@ class const _DeviceDetailsButton({
   }
 }
 
-class const _StressStepperPill({
+class const _StressControls({
   required final StressController stressCtrl,
   final bool isCompact = false,
 }) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [_buildStepper(context), _buildPresetDropdown(context)],
+    );
+  }
+
+  Widget _buildStepper(BuildContext context) {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: isCompact ? 1.0 : 4.0),
       child: Container(
         height: isCompact ? 28 : 36,
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white12),
-        ),
+        decoration: buildPillDecoration(),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -421,35 +420,8 @@ class const _StressStepperPill({
       ),
     );
   }
-}
 
-class const _StepperButton({
-  required final IconData icon,
-  required final bool isCompact,
-  required final String tooltip,
-  required final VoidCallback? onPressed,
-}) extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final size = isCompact ? 22.0 : 32.0;
-    return IconButton(
-      iconSize: isCompact ? 13 : 16,
-      visualDensity: VisualDensity.compact,
-      padding: EdgeInsets.zero,
-      constraints: BoxConstraints(minWidth: size, minHeight: size),
-      icon: Icon(icon),
-      onPressed: onPressed,
-      tooltip: tooltip,
-    );
-  }
-}
-
-class const _PresetDropdown({
-  required final StressController stressCtrl,
-  final bool isCompact = false,
-}) extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildPresetDropdown(BuildContext context) {
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: isCompact ? 1.0 : 6.0),
       child: DropdownButton<StressPreset>(
@@ -479,6 +451,27 @@ class const _PresetDropdown({
           );
         }).toList(),
       ),
+    );
+  }
+}
+
+class const _StepperButton({
+  required final IconData icon,
+  required final bool isCompact,
+  required final String tooltip,
+  required final VoidCallback? onPressed,
+}) extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final size = isCompact ? 22.0 : 32.0;
+    return IconButton(
+      iconSize: isCompact ? 13 : 16,
+      visualDensity: VisualDensity.compact,
+      padding: EdgeInsets.zero,
+      constraints: BoxConstraints(minWidth: size, minHeight: size),
+      icon: Icon(icon),
+      onPressed: onPressed,
+      tooltip: tooltip,
     );
   }
 }

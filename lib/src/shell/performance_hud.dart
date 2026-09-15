@@ -405,6 +405,12 @@ class _PerformanceHudState() extends State<PerformanceHud> {
   );
 }
 
+BoxDecoration buildPillDecoration() => BoxDecoration(
+  color: Colors.white.withValues(alpha: 0.08),
+  borderRadius: BorderRadius.circular(20),
+  border: Border.all(color: Colors.white12),
+);
+
 class const _EngineTogglePill({
   required final bool isCurrentWasm,
   final bool isSingleThreaded = false,
@@ -420,11 +426,7 @@ class const _EngineTogglePill({
         ? isCurrentlyWebParagraph()
         : jsRun?.mode.toLowerCase() == 'webparagraph';
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white12),
-      ),
+      decoration: buildPillDecoration(),
       padding: const EdgeInsets.all(2),
       child: Row(
         mainAxisSize: MainAxisSize.min,

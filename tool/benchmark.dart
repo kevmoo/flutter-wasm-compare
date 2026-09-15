@@ -1139,6 +1139,7 @@ abstract class _W3cWebDriver() implements BrowserDriver {
     if (val is Map<String, dynamic>) {
       _sessionId = val['sessionId'] as String?;
     }
+    _sessionId ??= res['sessionId'] as String?;
     if (_sessionId == null) {
       throw StateError('Failed to create $driverName WebDriver session');
     }
@@ -1206,7 +1207,7 @@ abstract class _W3cWebDriver() implements BrowserDriver {
     }
     _driverProcess?.kill();
     _driverProcess = null;
-    _client.close();
+    _client.close(force: true);
   }
 
   Future<Map<String, dynamic>> _wdRequest(

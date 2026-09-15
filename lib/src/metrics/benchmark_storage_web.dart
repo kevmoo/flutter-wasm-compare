@@ -20,48 +20,38 @@ class BenchmarkStoragePersistence() {
 
   static void loadAll(
     Map<String, int> nodesByWorkload,
-    Map<String, BenchmarkRun> wasmRuns,
-    Map<String, BenchmarkRun> wimpRuns,
-    Map<String, BenchmarkRun> jsRuns,
-    Map<String, BenchmarkRun> webParagraphRuns,
-    BenchmarkRun? Function(Map<String, dynamic>) parseRun,
+    Map<String, Map<String, BenchmarkRun>> runsByKey,
   ) {
     try {
       final storage = web.window.localStorage;
       for (final workloadId in const ['bouncy', 'grid']) {
-        final nodesStr = storage.getItem(_nodesKeyFor(workloadId));
-        final nodes = nodesStr != null ? int.tryParse(nodesStr) : null;
-        if (nodes != null) {
-          nodesByWorkload[workloadId] = nodes;
-        }
-        _loadCachedRun(storage, _wasmRunKey, workloadId, wasmRuns, parseRun);
-        _loadCachedRun(storage, _wimpRunKey, workloadId, wimpRuns, parseRun);
-        _loadCachedRun(storage, _jsRunKey, workloadId, jsRuns, parseRun);
-        _loadCachedRun(
-          storage,
-          _webParagraphRunKey,
-          workloadId,
-          webParagraphRuns,
-          parseRun,
-        );
+        _loadWorkloadRuns(storage, workloadId, nodesByWorkload, runsByKey);
       }
     } catch (_) {
       // Ignore
     }
   }
 
-  static void _loadCachedRun(
+  static void _loadWorkloadRuns(
     web.Storage storage,
-    String baseKey,
     String workloadId,
-    Map<String, BenchmarkRun> targetCache,
-    BenchmarkRun? Function(Map<String, dynamic>) parseRun,
+    Map<String, int> nodesByWorkload,
+    Map<String, Map<String, BenchmarkRun>> runsByKey,
   ) {
-    final rawStr = storage.getItem(_runKeyFor(baseKey, workloadId));
-    if (rawStr == null || rawStr.isEmpty) return;
-    final parsed = parseRun(jsonDecode(rawStr) as Map<String, dynamic>);
-    if (parsed != null) {
-      targetCache[workloadId] = parsed;
+    final nodesStr = storage.getItem(_nodesKeyFor(workloadId));
+    final nodes = nodesStr != null ? int.tryParse(nodesStr) : null;
+    if (nodes != null) {
+      nodesByWorkload[workloadId] = nodes;
+    }
+    for (final entry in runsByKey.entries) {
+      final rawStr = storage.getItem(_runKeyFor(entry.key, workloadId));
+      if (rawStr == null || rawStr.isEmpty) continue;
+      final parsed = BenchmarkRun.fromJson(
+        jsonDecode(rawStr) as Map<String, dynamic>,
+      );
+      if (parsed != null) {
+        entry.value[workloadId] = parsed;
+      }
     }
   }
 

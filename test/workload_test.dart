@@ -72,32 +72,41 @@ void main() {
   });
 
   group('StressController query parameter parsing & per-workload storage', () {
-    test('honors ?nodes=<N> query parameter without stress=manual', () {
-      final ctrl = StressController(
-        initialUri: Uri.parse('https://example.com/?workload=bouncy&nodes=120'),
-      );
+    StressController parseCtrl(String query) =>
+        StressController(initialUri: Uri.parse('https://example.com/?$query'));
+
+    void expectBouncyCtrl(
+      String query,
+      StressMode mode,
+      int nodes, [
+      StressPreset? preset,
+    ]) {
+      final ctrl = parseCtrl(query);
       expect(ctrl.workload.id, equals('bouncy'));
-      expect(ctrl.mode, equals(StressMode.manual));
-      expect(ctrl.nodeCount, equals(120));
+      expect(ctrl.mode, equals(mode));
+      if (preset != null) expect(ctrl.preset, equals(preset));
+      expect(ctrl.nodeCount, equals(nodes));
+    }
+
+    test('honors ?nodes=<N> query parameter without stress=manual', () {
+      expectBouncyCtrl('workload=bouncy&nodes=120', StressMode.manual, 120);
     });
 
     test('matches preset when ?nodes=<N> matches workload preset', () {
-      final ctrl = StressController(
-        initialUri: Uri.parse('https://example.com/?workload=bouncy&nodes=128'),
+      expectBouncyCtrl(
+        'workload=bouncy&nodes=128',
+        StressMode.preset,
+        128,
+        StressPreset.heavy,
       );
-      expect(ctrl.workload.id, equals('bouncy'));
-      expect(ctrl.mode, equals(StressMode.preset));
-      expect(ctrl.preset, equals(StressPreset.heavy));
-      expect(ctrl.nodeCount, equals(128));
     });
 
     test('clamps manual node count to activeLadder.last', () {
-      final ctrl = StressController(
-        initialUri: Uri.parse(
-          'https://example.com/?workload=bouncy&nodes=99999',
-        ),
+      expectBouncyCtrl(
+        'workload=bouncy&nodes=99999',
+        StressMode.manual,
+        const BouncyLayoutWorkload().ladder.last,
       );
-      expect(ctrl.nodeCount, equals(const BouncyLayoutWorkload().ladder.last));
     });
 
     test('BenchmarkStorage isolates runs per workloadId', () {

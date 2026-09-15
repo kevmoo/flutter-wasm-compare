@@ -23,11 +23,66 @@ Future<void> _pumpApp(
 }
 
 Future<void> _pumpBuildInfoDialog(
-  WidgetTester tester,
-  BuildInfoDialog dialog,
-) async {
-  await tester.pumpWidget(MaterialApp(home: Scaffold(body: dialog)));
+  WidgetTester tester, {
+  bool isWasm = true,
+  bool isWimp = false,
+  bool isSingleThreaded = false,
+  bool isWebParagraph = false,
+  bool hasGitInfo = false,
+}) async {
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        body: BuildInfoDialog(
+          isWasmOverride: isWasm,
+          isWimpOverride: isWimp,
+          isSingleThreadedOverride: isSingleThreaded,
+          isWebParagraphOverride: isWebParagraph,
+          hasGitInfoOverride: hasGitInfo,
+        ),
+      ),
+    ),
+  );
   await tester.pump();
+}
+
+void _expectTexts(List<String> texts) {
+  for (final text in texts) {
+    expect(find.text(text), findsOneWidget);
+  }
+}
+
+Future<void> _tapAndExpectTexts(
+  WidgetTester tester,
+  Finder trigger,
+  List<String> texts,
+) async {
+  expect(trigger, findsOneWidget);
+  await tester.tap(trigger);
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 500));
+  _expectTexts(texts);
+}
+
+Future<void> _tapTextAndPump(
+  WidgetTester tester,
+  String text, [
+  int ms = 300,
+]) async {
+  await tester.tap(find.text(text));
+  await tester.pump();
+  await tester.pump(Duration(milliseconds: ms));
+}
+
+void _expectDefaultBouncyScene({
+  required String expectedTitle,
+  required IconData hudToggleIcon,
+}) {
+  expect(find.text(expectedTitle), findsOneWidget);
+  expect(find.byType(AdaptiveStressScene), findsOneWidget);
+  expect(find.byType(BouncyLayoutMatrix), findsOneWidget);
+  expect(find.byType(PerformanceHud), findsOneWidget);
+  expect(find.byIcon(hudToggleIcon), findsOneWidget);
 }
 
 Future<void> _selectWorkload(WidgetTester tester, String workloadTitle) async {
@@ -58,18 +113,11 @@ void main() {
   ) async {
     await _pumpApp(tester, size: const Size(400, 800));
 
-    // Verify compact title is used
-    expect(find.text('Wasm vs JS'), findsOneWidget);
-
-    // Verify default BouncyLayoutMatrix is rendered inside AdaptiveStressScene
-    expect(find.byType(AdaptiveStressScene), findsOneWidget);
-    expect(find.byType(BouncyLayoutMatrix), findsOneWidget);
-
-    // Verify PerformanceHud is collapsed on compact screens initially
-    expect(find.byType(PerformanceHud), findsOneWidget);
-    expect(find.text('⚡ Wasm'), findsOneWidget);
-    expect(find.text('📜 JS'), findsOneWidget);
-    expect(find.byIcon(Icons.expand_more), findsOneWidget);
+    _expectDefaultBouncyScene(
+      expectedTitle: 'Wasm vs JS',
+      hudToggleIcon: Icons.expand_more,
+    );
+    _expectTexts(['⚡ Wasm', '📜 JS']);
 
     // Expand HUD
     await tester.tap(find.byIcon(Icons.expand_more));
@@ -77,7 +125,6 @@ void main() {
     expect(find.byIcon(Icons.expand_less), findsOneWidget);
 
     // Verify compact preset dropdown displays calibrated Bouncy label
-    // (Medium (64))
     expect(find.text('Medium (64)'), findsOneWidget);
 
     // Verify compact workload selector button exists and switches workloads
@@ -90,16 +137,10 @@ void main() {
   ) async {
     await _pumpApp(tester);
 
-    // Verify full title is used
-    expect(find.text('Wasm vs JS Performance'), findsOneWidget);
-
-    // Verify default BouncyLayoutMatrix is used inside AdaptiveStressScene
-    expect(find.byType(AdaptiveStressScene), findsOneWidget);
-    expect(find.byType(BouncyLayoutMatrix), findsOneWidget);
-
-    // Verify expanded PerformanceHud
-    expect(find.byType(PerformanceHud), findsOneWidget);
-    expect(find.byIcon(Icons.expand_less), findsOneWidget);
+    _expectDefaultBouncyScene(
+      expectedTitle: 'Wasm vs JS Performance',
+      hudToggleIcon: Icons.expand_less,
+    );
   });
 
   testWidgets(
@@ -125,23 +166,15 @@ void main() {
     await tester.pumpWidget(const WasmCompareApp());
     await tester.pump();
 
-    final infoButton = find.byIcon(Icons.info_outline);
-    expect(infoButton, findsOneWidget);
-
-    await tester.tap(infoButton);
-    await tester.pump(const Duration(milliseconds: 300));
-
-    expect(find.text('About & Build Info'), findsOneWidget);
-    expect(
-      find.text('Flutter Wasm vs JS Performance Comparison Benchmark'),
-      findsOneWidget,
-    );
-    expect(find.text('Commit'), findsOneWidget);
-    expect(find.text('Active Engine'), findsOneWidget);
+    await _tapAndExpectTexts(tester, find.byIcon(Icons.info_outline), [
+      'About & Build Info',
+      'Flutter Wasm vs JS Performance Comparison Benchmark',
+      'Commit',
+      'Active Engine',
+    ]);
 
     // Dismiss dialog
-    await tester.tap(find.text('Close'));
-    await tester.pump(const Duration(milliseconds: 300));
+    await _tapTextAndPump(tester, 'Close');
 
     expect(find.text('About & Build Info'), findsNothing);
   });
@@ -187,59 +220,38 @@ void main() {
       'and handles selection', (WidgetTester tester) async {
     await _pumpApp(tester);
 
-    // Find engine selector button in AppBar
-    final engineSelector = find.byTooltip(
-      'Select Rendering Engine (Impeller [Exp] / Skia / JS)',
+    await _tapAndExpectTexts(
+      tester,
+      find.byTooltip('Select Rendering Engine (Impeller [Exp] / Skia / JS)'),
+      [
+        '⚡ Wasm (Impeller) [Exp]',
+        '⚡ Wasm (Skia)',
+        '📜 JavaScript (CanvasKit)',
+        '📜 JS (WebParagraph) [Exp]',
+      ],
     );
-    expect(engineSelector, findsOneWidget);
-
-    // Tap to open popup menu
-    await tester.tap(engineSelector);
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
-
-    expect(find.text('⚡ Wasm (Impeller) [Exp]'), findsOneWidget);
-    expect(find.text('⚡ Wasm (Skia)'), findsOneWidget);
-    expect(find.text('📜 JavaScript (CanvasKit)'), findsOneWidget);
-    expect(find.text('📜 JS (WebParagraph) [Exp]'), findsOneWidget);
 
     // Tap Wasm Impeller: test stub (non-Chromium) should show SnackBar
-    await tester.tap(find.text('⚡ Wasm (Impeller) [Exp]'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
+    await _tapTextAndPump(tester, '⚡ Wasm (Impeller) [Exp]', 500);
     expect(find.textContaining('requires Chromium'), findsOneWidget);
   });
 
   testWidgets('BuildInfoDialog renders Wasm + Skia MT and Git info', (
     WidgetTester tester,
   ) async {
-    await _pumpBuildInfoDialog(
-      tester,
-      const BuildInfoDialog(
-        isWasmOverride: true,
-        isWimpOverride: false,
-        isSingleThreadedOverride: false,
-        hasGitInfoOverride: true,
-      ),
-    );
-
-    expect(find.text('⚡ WASM + Skia'), findsOneWidget);
-    expect(find.text('Skia (skwasm.wasm)'), findsOneWidget);
-    expect(find.text('Multi-threaded (Toggle)'), findsOneWidget);
-    expect(find.text('Commit'), findsOneWidget);
+    await _pumpBuildInfoDialog(tester, hasGitInfo: true);
+    _expectTexts([
+      '⚡ WASM + Skia',
+      'Skia (skwasm.wasm)',
+      'Multi-threaded (Toggle)',
+      'Commit',
+    ]);
   });
 
   testWidgets('BuildInfoDialog renders Wasm + Skia ST and handles toggle', (
     WidgetTester tester,
   ) async {
-    await _pumpBuildInfoDialog(
-      tester,
-      const BuildInfoDialog(
-        isWasmOverride: true,
-        isWimpOverride: false,
-        isSingleThreadedOverride: true,
-      ),
-    );
+    await _pumpBuildInfoDialog(tester, isSingleThreaded: true);
 
     expect(find.text('⚡ WASM + Skia (ST)'), findsOneWidget);
     final chip = find.text('Single-threaded (Toggle)');
@@ -252,39 +264,22 @@ void main() {
   testWidgets('BuildInfoDialog renders Wasm + Impeller (Exp)', (
     WidgetTester tester,
   ) async {
-    await _pumpBuildInfoDialog(
-      tester,
-      const BuildInfoDialog(
-        isWasmOverride: true,
-        isWimpOverride: true,
-        isSingleThreadedOverride: false,
-      ),
-    );
-
-    expect(find.text('⚡ WASM + Impeller (Exp)'), findsOneWidget);
-    expect(find.text('Impeller (wimp.wasm) • Experimental'), findsOneWidget);
-    expect(find.text('Single-threaded (forced by engine)'), findsOneWidget);
+    await _pumpBuildInfoDialog(tester, isWimp: true);
+    _expectTexts([
+      '⚡ WASM + Impeller (Exp)',
+      'Impeller (wimp.wasm) • Experimental',
+      'Single-threaded (forced by engine)',
+    ]);
   });
 
   testWidgets('BuildInfoDialog renders JS + WebParagraph (Exp)', (
     WidgetTester tester,
   ) async {
-    await _pumpBuildInfoDialog(
-      tester,
-      const BuildInfoDialog(
-        isWasmOverride: false,
-        isWebParagraphOverride: true,
-      ),
-    );
-
-    expect(find.text('📜 JS (WebParagraph) [Exp]'), findsOneWidget);
-    expect(
-      find.text('CanvasKit (webparagraph/canvaskit.wasm • 3.6MB) • Exp'),
-      findsOneWidget,
-    );
-    expect(
-      find.text('WebParagraph (Chrome TextCluster API) • Experimental'),
-      findsOneWidget,
-    );
+    await _pumpBuildInfoDialog(tester, isWasm: false, isWebParagraph: true);
+    _expectTexts([
+      '📜 JS (WebParagraph) [Exp]',
+      'CanvasKit (webparagraph/canvaskit.wasm • 3.6MB) • Exp',
+      'WebParagraph (Chrome TextCluster API) • Experimental',
+    ]);
   });
 }

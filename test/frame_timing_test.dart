@@ -28,21 +28,48 @@ BenchmarkRun _makeRun({
   required double rasterTimeMs,
   required double totalFrameTimeMs,
   double jitterMs = 0.3,
-  String stressLevel = 'Manual (200)',
-  int nodeCount = 200,
-  String workloadId = 'bouncy',
-  bool? isPipelined,
-}) => (
+}) => BenchmarkRun(
   mode: mode,
   fps: fps,
   buildTimeMs: buildTimeMs,
   rasterTimeMs: rasterTimeMs,
   totalFrameTimeMs: totalFrameTimeMs,
   jitterMs: jitterMs,
-  stressLevel: stressLevel,
+  stressLevel: 'Manual (200)',
+);
+
+FrameTimingMetrics _metrics(
+  double fps,
+  double build,
+  double raster,
+  double total,
+) => FrameTimingMetrics(
+  fps: fps,
+  buildTimeMs: build,
+  rasterTimeMs: raster,
+  totalFrameTimeMs: total,
+);
+
+ComparisonData _eval({
+  double currentActive = 11.0,
+  double currentJitter = 0.3,
+  double currentFps = 60.0,
+  double targetRefreshRate = 60.0,
+  BenchmarkRun? wasmRun,
+  BenchmarkRun? jsRun,
+  bool isCurrentWasm = true,
+  int nodeCount = 200,
+  bool isSingleThreaded = false,
+}) => evaluateComparisonForTest(
+  currentActive: currentActive,
+  currentJitter: currentJitter,
+  currentFps: currentFps,
+  targetRefreshRate: targetRefreshRate,
+  wasmRun: wasmRun,
+  jsRun: jsRun,
+  isCurrentWasm: isCurrentWasm,
   nodeCount: nodeCount,
-  workloadId: workloadId,
-  isPipelined: isPipelined ?? (mode == 'wasm' || mode == 'wimp'),
+  isSingleThreaded: isSingleThreaded,
 );
 
 void _expectSpeedBadge(
@@ -59,39 +86,24 @@ void _expectSpeedBadge(
 void main() {
   group('FrameTimingMetrics activeFrameTimeMs', () {
     test('computes max(build, raster) when isPipelined is true (Wasm)', () {
-      final metrics = FrameTimingMetrics(
-        fps: 60.0,
-        buildTimeMs: 11.7,
-        rasterTimeMs: 6.0,
-        totalFrameTimeMs: 18.0,
+      expect(
+        _metrics(60.0, 11.7, 6.0, 18.0).activeFrameTimeMs(isPipelined: true),
+        equals(11.7),
       );
-
-      expect(metrics.activeFrameTimeMs(isPipelined: true), equals(11.7));
     });
 
     test('computes build + raster when isPipelined is false (JS)', () {
-      final metrics = FrameTimingMetrics(
-        fps: 27.3,
-        buildTimeMs: 30.9,
-        rasterTimeMs: 3.9,
-        totalFrameTimeMs: 36.4,
-      );
-
       expect(
-        metrics.activeFrameTimeMs(isPipelined: false),
+        _metrics(27.3, 30.9, 3.9, 36.4).activeFrameTimeMs(isPipelined: false),
         closeTo(34.8, 0.01),
       );
     });
 
     test('handles raster-heavy frames in pipelined mode', () {
-      final metrics = FrameTimingMetrics(
-        fps: 60.0,
-        buildTimeMs: 4.5,
-        rasterTimeMs: 12.8,
-        totalFrameTimeMs: 17.5,
+      expect(
+        _metrics(60.0, 4.5, 12.8, 17.5).activeFrameTimeMs(isPipelined: true),
+        equals(12.8),
       );
-
-      expect(metrics.activeFrameTimeMs(isPipelined: true), equals(12.8));
     });
   });
 
@@ -174,18 +186,7 @@ void main() {
     );
 
     test('generates both speed and jitter benefit badges when Wasm leads', () {
-      // Live WASM (active: 11.0ms, jitter: 0.3ms) vs
-      // Saved JS (active: 32.0ms, jitter: 5.2ms)
-      final comparison = evaluateComparisonForTest(
-        currentActive: 11.0,
-        currentJitter: 0.3,
-        currentFps: 60.0,
-        targetRefreshRate: 60.0,
-        wasmRun: wasmSavedRun,
-        jsRun: jsSavedRun,
-        isCurrentWasm: true,
-        nodeCount: 200,
-      );
+      final comparison = _eval(wasmRun: wasmSavedRun, jsRun: jsSavedRun);
 
       _expectSpeedBadge(
         comparison,
@@ -198,20 +199,17 @@ void main() {
       expect(comparison.jitterBadge?.detail, equals('±0.3ms vs ±5.2ms'));
 
       expect(comparison.promptBadge, isNull);
-      expect(comparison.budgetPct, equals('66')); // 11.0 / 16.666ms = 66%
+      expect(comparison.budgetPct, equals('66'));
     });
 
     test('generates speed badge with (ST) tag when Wasm is in '
         'single-threaded mode', () {
-      final comparison = evaluateComparisonForTest(
+      final comparison = _eval(
         currentActive: 18.0,
         currentJitter: 0.4,
         currentFps: 55.0,
-        targetRefreshRate: 60.0,
         wasmRun: wasmSavedRun,
         jsRun: jsSavedRun,
-        isCurrentWasm: true,
-        nodeCount: 200,
         isSingleThreaded: true,
       );
 
@@ -225,22 +223,17 @@ void main() {
     test('does not show badges when Wasm is worse or same', () {
       final fasterJsRun = _makeRun(
         mode: 'js',
-        fps: 60.0,
         buildTimeMs: 8.0,
         rasterTimeMs: 4.0,
         totalFrameTimeMs: 13.0,
         jitterMs: 0.2,
       );
 
-      final comparison = evaluateComparisonForTest(
+      final comparison = _eval(
         currentActive: 15.0,
         currentJitter: 1.5,
         currentFps: 50.0,
-        targetRefreshRate: 60.0,
-        wasmRun: null,
         jsRun: fasterJsRun,
-        isCurrentWasm: true,
-        nodeCount: 200,
       );
 
       expect(comparison.hasBothRuns, isTrue);
@@ -259,15 +252,10 @@ void main() {
         jitterMs: 0.35,
       );
 
-      final comparison = evaluateComparisonForTest(
-        currentActive: 11.0,
+      final comparison = _eval(
         currentJitter: 0.32,
-        currentFps: 60.0,
-        targetRefreshRate: 60.0,
         wasmRun: wasmSavedRun,
         jsRun: similarJitterJsRun,
-        isCurrentWasm: true,
-        nodeCount: 200,
       );
 
       _expectSpeedBadge(
@@ -279,16 +267,7 @@ void main() {
     });
 
     test('prompts to switch engines when other run is missing', () {
-      final comparison = evaluateComparisonForTest(
-        currentActive: 11.0,
-        currentJitter: 0.3,
-        currentFps: 60.0,
-        targetRefreshRate: 60.0,
-        wasmRun: null,
-        jsRun: null,
-        isCurrentWasm: true,
-        nodeCount: 200,
-      );
+      final comparison = _eval();
 
       expect(comparison.hasBothRuns, isFalse);
       expect(comparison.speedBadge, isNull);
@@ -302,22 +281,17 @@ void main() {
     test('generates comparison when wasmRun is from Impeller (wimp mode)', () {
       final wimpSavedRun = _makeRun(
         mode: 'wimp',
-        fps: 60.0,
         buildTimeMs: 10.0,
         rasterTimeMs: 5.0,
         totalFrameTimeMs: 15.0,
         jitterMs: 0.25,
       );
 
-      final comparison = evaluateComparisonForTest(
+      final comparison = _eval(
         currentActive: 10.0,
         currentJitter: 0.25,
-        currentFps: 60.0,
-        targetRefreshRate: 60.0,
         wasmRun: wimpSavedRun,
         jsRun: jsSavedRun,
-        isCurrentWasm: true,
-        nodeCount: 200,
       );
 
       _expectSpeedBadge(

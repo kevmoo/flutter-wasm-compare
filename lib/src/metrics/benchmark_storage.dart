@@ -17,19 +17,30 @@ class BenchmarkStorage() {
       'wasm_compare_last_webparagraph_run';
 
   static final Map<String, int> _cachedNodesByWorkload = {};
-  static final Map<String, BenchmarkRun> _cachedWasmRuns = {};
-  static final Map<String, BenchmarkRun> _cachedWimpRuns = {};
-  static final Map<String, BenchmarkRun> _cachedJsRuns = {};
-  static final Map<String, BenchmarkRun> _cachedWebParagraphRuns = {};
+  static final Map<String, Map<String, BenchmarkRun>> _cachedRunsByKey = {
+    _wasmRunKey: {},
+    _wimpRunKey: {},
+    _jsRunKey: {},
+    _webParagraphRunKey: {},
+  };
   static bool _cacheLoaded = false;
+
+  static String? _baseKeyForMode(String mode) => switch (mode.toLowerCase()) {
+    'wimp' || 'impeller' => _wimpRunKey,
+    'wasm' || 'skwasm' => _wasmRunKey,
+    'webparagraph' ||
+    'js-webparagraph' ||
+    'canvaskit-webparagraph' => _webParagraphRunKey,
+    'js' || 'canvaskit' => _jsRunKey,
+    _ => null,
+  };
 
   @visibleForTesting
   static void resetInMemoryCacheForTesting() {
     _cachedNodesByWorkload.clear();
-    _cachedWasmRuns.clear();
-    _cachedWimpRuns.clear();
-    _cachedJsRuns.clear();
-    _cachedWebParagraphRuns.clear();
+    for (final cache in _cachedRunsByKey.values) {
+      cache.clear();
+    }
     _cacheLoaded = false;
   }
 
@@ -38,11 +49,7 @@ class BenchmarkStorage() {
     _cacheLoaded = true;
     BenchmarkStoragePersistence.loadAll(
       _cachedNodesByWorkload,
-      _cachedWasmRuns,
-      _cachedWimpRuns,
-      _cachedJsRuns,
-      _cachedWebParagraphRuns,
-      _parseBenchmarkRun,
+      _cachedRunsByKey,
     );
   }
 
@@ -50,19 +57,17 @@ class BenchmarkStorage() {
     _ensureCacheLoaded();
     if (workloadId != null) {
       _cachedNodesByWorkload.remove(workloadId);
-      _cachedWasmRuns.remove(workloadId);
-      _cachedWimpRuns.remove(workloadId);
-      _cachedJsRuns.remove(workloadId);
-      _cachedWebParagraphRuns.remove(workloadId);
+      for (final cache in _cachedRunsByKey.values) {
+        cache.remove(workloadId);
+      }
       BenchmarkStoragePersistence.clearWorkload(workloadId);
       return;
     }
 
     _cachedNodesByWorkload.clear();
-    _cachedWasmRuns.clear();
-    _cachedWimpRuns.clear();
-    _cachedJsRuns.clear();
-    _cachedWebParagraphRuns.clear();
+    for (final cache in _cachedRunsByKey.values) {
+      cache.clear();
+    }
     _cacheLoaded = true;
     BenchmarkStoragePersistence.clearAll();
   }
@@ -87,7 +92,6 @@ class BenchmarkStorage() {
     String workloadId = 'bouncy',
     bool? isPipelined,
   }) {
-    final normMode = mode.toLowerCase();
     saveRun(
       mode: mode,
       fps: metrics.fps,
@@ -98,7 +102,30 @@ class BenchmarkStorage() {
       stressLevel: stressLevel,
       nodeCount: nodeCount,
       workloadId: workloadId,
-      isPipelined: isPipelined ?? (normMode == 'wasm'),
+      isPipelined: isPipelined ?? (mode.toLowerCase() == 'wasm'),
+    );
+  }
+
+  static void save(BenchmarkRun run) {
+    invalidateIfNodeCountChanged(run.nodeCount, workloadId: run.workloadId);
+    _cachedNodesByWorkload[run.workloadId] = run.nodeCount;
+
+    final baseKey = _baseKeyForMode(run.mode);
+    if (baseKey == null) {
+      throw ArgumentError.value(
+        run.mode,
+        'mode',
+        'Unsupported benchmark engine mode',
+      );
+    }
+
+    _cachedRunsByKey[baseKey]![run.workloadId] = run;
+
+    BenchmarkStoragePersistence.saveRun(
+      baseKey: baseKey,
+      workloadId: run.workloadId,
+      nodeCount: run.nodeCount,
+      jsonStr: jsonEncode(run.toJson()),
     );
   }
 
@@ -113,65 +140,20 @@ class BenchmarkStorage() {
     required int nodeCount,
     String workloadId = 'bouncy',
     bool isPipelined = false,
-  }) {
-    invalidateIfNodeCountChanged(nodeCount, workloadId: workloadId);
-    _cachedNodesByWorkload[workloadId] = nodeCount;
-
-    final run = (
-      mode: mode,
-      fps: fps,
-      buildTimeMs: buildTimeMs,
-      rasterTimeMs: rasterTimeMs,
-      totalFrameTimeMs: totalFrameTimeMs,
-      jitterMs: jitterMs,
+  }) => save(
+    BenchmarkRun.sample(
+      mode,
+      fps,
+      buildTimeMs,
+      rasterTimeMs,
+      totalFrameTimeMs,
+      jitterMs,
       stressLevel: stressLevel,
       nodeCount: nodeCount,
       workloadId: workloadId,
       isPipelined: isPipelined,
-    );
-
-    final normMode = mode.toLowerCase();
-    final String baseKey;
-    switch (normMode) {
-      case 'wimp' || 'impeller':
-        _cachedWimpRuns[workloadId] = run;
-        baseKey = _wimpRunKey;
-      case 'wasm' || 'skwasm':
-        _cachedWasmRuns[workloadId] = run;
-        baseKey = _wasmRunKey;
-      case 'webparagraph' || 'js-webparagraph' || 'canvaskit-webparagraph':
-        _cachedWebParagraphRuns[workloadId] = run;
-        baseKey = _webParagraphRunKey;
-      case 'js' || 'canvaskit':
-        _cachedJsRuns[workloadId] = run;
-        baseKey = _jsRunKey;
-      default:
-        throw ArgumentError.value(
-          mode,
-          'mode',
-          'Unsupported benchmark engine mode',
-        );
-    }
-
-    final data = {
-      'mode': mode,
-      'fps': fps,
-      'buildTimeMs': buildTimeMs,
-      'rasterTimeMs': rasterTimeMs,
-      'totalFrameTimeMs': totalFrameTimeMs,
-      'jitterMs': jitterMs,
-      'stressLevel': stressLevel,
-      'nodeCount': nodeCount,
-      'workloadId': workloadId,
-      'isPipelined': isPipelined,
-    };
-    BenchmarkStoragePersistence.saveRun(
-      baseKey: baseKey,
-      workloadId: workloadId,
-      nodeCount: nodeCount,
-      jsonStr: jsonEncode(data),
-    );
-  }
+    ),
+  );
 
   static BenchmarkRun? getRunForMode({
     required String mode,
@@ -186,16 +168,8 @@ class BenchmarkStorage() {
       return null;
     }
 
-    final normMode = mode.toLowerCase();
-    final run = switch (normMode) {
-      'wimp' || 'impeller' => _cachedWimpRuns[id],
-      'wasm' || 'skwasm' => _cachedWasmRuns[id],
-      'webparagraph' ||
-      'js-webparagraph' ||
-      'canvaskit-webparagraph' => _cachedWebParagraphRuns[id],
-      'js' || 'canvaskit' => _cachedJsRuns[id],
-      _ => null,
-    };
+    final baseKey = _baseKeyForMode(mode);
+    final run = baseKey != null ? (_cachedRunsByKey[baseKey]?[id]) : null;
     if (run == null) return null;
 
     if (nodeCount != null && run.nodeCount != nodeCount) return null;
@@ -206,42 +180,5 @@ class BenchmarkStorage() {
     }
 
     return run;
-  }
-
-  static BenchmarkRun? _parseBenchmarkRun(
-    Map<String, dynamic> map, {
-    int? expectedNodeCount,
-    String? expectedStressLevel,
-  }) {
-    final nodes = (map['nodeCount'] as num?)?.toInt() ?? 500;
-    if (expectedNodeCount != null && nodes != expectedNodeCount) return null;
-
-    final stress = (map['stressLevel'] as String?) ?? 'medium';
-    if (expectedStressLevel != null &&
-        stress.toLowerCase() != expectedStressLevel.toLowerCase()) {
-      return null;
-    }
-
-    final workloadId = (map['workloadId'] as String?) ?? 'bouncy';
-
-    final runMode = map['mode'] as String?;
-    final fps = (map['fps'] as num?)?.toDouble();
-    if (runMode == null || fps == null) return null;
-
-    final isPipelined =
-        (map['isPipelined'] as bool?) ?? (runMode.toLowerCase() == 'wasm');
-
-    return (
-      mode: runMode,
-      fps: fps,
-      buildTimeMs: (map['buildTimeMs'] as num?)?.toDouble() ?? 0.0,
-      rasterTimeMs: (map['rasterTimeMs'] as num?)?.toDouble() ?? 0.0,
-      totalFrameTimeMs: (map['totalFrameTimeMs'] as num?)?.toDouble() ?? 0.0,
-      jitterMs: (map['jitterMs'] as num?)?.toDouble() ?? 0.0,
-      stressLevel: stress,
-      nodeCount: nodes,
-      workloadId: workloadId,
-      isPipelined: isPipelined,
-    );
   }
 }

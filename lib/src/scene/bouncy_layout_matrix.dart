@@ -13,22 +13,19 @@ import 'animated_stress_matrix.dart';
 /// invalidating `ParentData` and forcing a full-tree
 /// `RenderFlex.performLayout()` cascade down to all [nodeCount] Material and
 /// Cupertino leaf widgets.
-class const BouncyLayoutMatrix({super.key, required final int nodeCount})
-    extends StatelessWidget {
+class const BouncyLayoutMatrix({super.key, required super.nodeCount})
+    extends AnimatedStressMatrix {
   @override
-  Widget build(BuildContext context) {
-    return AnimatedStressMatrix(
-      nodeCount: nodeCount,
-      duration: const Duration(seconds: 5),
-      builder: (context, animation) {
-        return _buildSubtree(
-          context,
-          animationValue: animation.value,
-          nodeIndex: 1,
-          count: nodeCount,
-          depth: 0,
-        );
-      },
+  int get periodSeconds => 5;
+
+  @override
+  Widget buildAnimated(BuildContext context, double animationValue) {
+    return _buildSubtree(
+      context,
+      animationValue: animationValue,
+      nodeIndex: 1,
+      count: nodeCount,
+      depth: 0,
     );
   }
 
