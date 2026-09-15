@@ -13,7 +13,14 @@ void main() {
       expect(args.baseUrl, equals('https://flutter-wasm-compare.web.app/'));
       expect(args.workload, equals('bouncy'));
       expect(args.browsers, equals(BrowserType.values));
-      expect(args.modes, equals(BenchmarkMode.values));
+      expect(
+        args.modes,
+        equals([
+          BenchmarkMode.wasmMultithreaded,
+          BenchmarkMode.wasmSingleThreaded,
+          BenchmarkMode.jsCanvasKit,
+        ]),
+      );
       expect(args.nodeCounts, equals([32, 64, 128]));
       expect(args.viewportWidth, equals(1280));
       expect(args.viewportHeight, equals(720));
@@ -133,6 +140,19 @@ void main() {
         jsUrl,
         equals(
           'https://example.com/?workload=grid&stress=manual&nodes=500&mode=js',
+        ),
+      );
+
+      final wpUrl = buildBenchmarkUrl(
+        'https://example.com/?optin=true&st=1',
+        BenchmarkMode.jsWebParagraph,
+        500,
+        workload: 'bouncy',
+      );
+      expect(
+        wpUrl,
+        equals(
+          'https://example.com/?workload=bouncy&stress=manual&nodes=500&mode=webparagraph',
         ),
       );
     });
@@ -371,6 +391,24 @@ void main() {
       expect(recordJS.matches(BenchmarkMode.jsCanvasKit, 1000), isTrue);
       expect(recordJS.matches(BenchmarkMode.wasmMultithreaded, 1000), isFalse);
       expect(recordJS.matches(BenchmarkMode.wasmSingleThreaded, 1000), isFalse);
+    });
+
+    test('matches JS WebParagraph when mode is webparagraph', () {
+      final recordWP = BenchmarkRecord.fromJson({
+        'mode': 'webparagraph',
+        'nodeCount': 1000,
+        'isPipelined': false,
+        'fps': 52.0,
+        'buildTimeMs': 11.0,
+        'rasterTimeMs': 2.0,
+        'totalFrameTimeMs': 13.0,
+        'jitterMs': 0.8,
+      });
+
+      expect(recordWP.matches(BenchmarkMode.jsWebParagraph, 1000), isTrue);
+      expect(recordWP.matches(BenchmarkMode.jsCanvasKit, 1000), isFalse);
+      expect(recordWP.matches(BenchmarkMode.wasmMultithreaded, 1000), isFalse);
+      expect(recordWP.matches(BenchmarkMode.wasmSingleThreaded, 1000), isFalse);
     });
   });
 

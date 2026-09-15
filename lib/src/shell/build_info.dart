@@ -49,6 +49,7 @@ class const BuildInfoDialog({
   super.key,
   final bool? isWasmOverride,
   final bool? isWimpOverride,
+  final bool? isWebParagraphOverride,
   final bool? isSingleThreadedOverride,
   final bool? hasGitInfoOverride,
 }) extends StatelessWidget {
@@ -56,6 +57,7 @@ class const BuildInfoDialog({
   Widget build(BuildContext context) {
     final isWasm = isWasmOverride ?? isCurrentlyWasm();
     final isWimp = isWimpOverride ?? isCurrentlyWimp();
+    final isWebParagraph = isWebParagraphOverride ?? isCurrentlyWebParagraph();
     final isSingleThreaded =
         isSingleThreadedOverride ?? isCurrentlySingleThreaded();
     final hasGitInfo = hasGitInfoOverride ?? BuildInfo.hasGitInfo;
@@ -113,28 +115,43 @@ class const BuildInfoDialog({
                 _activeEngineLabel(
                   isWasm: isWasm,
                   isWimp: isWimp,
+                  isWebParagraph: isWebParagraph,
                   isSingleThreaded: isSingleThreaded,
                 ),
                 style: TextStyle(
-                  color: isWasm
-                      ? Colors.lightBlueAccent
-                      : const Color(0xFFF1E05A),
+                  color: _activeEngineColor(
+                    isWasm: isWasm,
+                    isWimp: isWimp,
+                    isWebParagraph: isWebParagraph,
+                  ),
                   fontWeight: FontWeight.bold,
                   fontSize: 13,
                 ),
               ),
             ),
-            if (isWasm) ...[
-              const SizedBox(height: 8),
-              _BuildInfoRow(
-                label: 'Renderer',
-                child: Text(
-                  isWimp
-                      ? 'Impeller (wimp.wasm) • Experimental'
-                      : 'Skia (skwasm.wasm)',
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+            const SizedBox(height: 8),
+            _BuildInfoRow(
+              label: 'Renderer',
+              child: Text(
+                _rendererLabel(
+                  isWasm: isWasm,
+                  isWimp: isWimp,
+                  isWebParagraph: isWebParagraph,
                 ),
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
               ),
+            ),
+            const SizedBox(height: 8),
+            _BuildInfoRow(
+              label: 'Text Layout',
+              child: Text(
+                isWebParagraph
+                    ? 'WebParagraph (Chrome TextCluster API) • Experimental'
+                    : 'SkParagraph (HarfBuzz + ICU)',
+                style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+              ),
+            ),
+            if (isWasm) ...[
               const SizedBox(height: 8),
               _BuildInfoRow(
                 label: 'Threading',
@@ -189,16 +206,40 @@ class const BuildInfoDialog({
     );
   }
 
+  static Color _activeEngineColor({
+    required bool isWasm,
+    required bool isWimp,
+    required bool isWebParagraph,
+  }) => switch ((isWasm, isWimp, isWebParagraph)) {
+    (true, true, _) => Colors.tealAccent,
+    (true, false, _) => Colors.lightBlueAccent,
+    (false, _, true) => Colors.orangeAccent,
+    (false, _, false) => const Color(0xFFF1E05A),
+  };
+
+  static String _rendererLabel({
+    required bool isWasm,
+    required bool isWimp,
+    required bool isWebParagraph,
+  }) => switch ((isWasm, isWimp, isWebParagraph)) {
+    (true, true, _) => 'Impeller (wimp.wasm) • Experimental',
+    (true, false, _) => 'Skia (skwasm.wasm)',
+    (false, _, true) => 'CanvasKit (webparagraph/canvaskit.wasm • 3.6MB) • Exp',
+    (false, _, false) => 'CanvasKit (canvaskit.wasm)',
+  };
+
   static String _activeEngineLabel({
     required bool isWasm,
     required bool isWimp,
+    required bool isWebParagraph,
     required bool isSingleThreaded,
-  }) => switch ((isWasm, isWimp, isSingleThreaded)) {
-    (false, _, _) => '📜 JS (CanvasKit)',
-    (true, true, true) => '⚡ WASM + Impeller (Exp, ST)',
-    (true, true, false) => '⚡ WASM + Impeller (Exp)',
-    (true, false, true) => '⚡ WASM + Skia (ST)',
-    (true, false, false) => '⚡ WASM + Skia',
+  }) => switch ((isWasm, isWimp, isWebParagraph, isSingleThreaded)) {
+    (false, _, true, _) => '📜 JS (WebParagraph) [Exp]',
+    (false, _, false, _) => '📜 JS (CanvasKit)',
+    (true, true, _, true) => '⚡ WASM + Impeller (Exp, ST)',
+    (true, true, _, false) => '⚡ WASM + Impeller (Exp)',
+    (true, false, _, true) => '⚡ WASM + Skia (ST)',
+    (true, false, _, false) => '⚡ WASM + Skia',
   };
 
   Widget _buildCommitValue(bool hasGitInfo) {

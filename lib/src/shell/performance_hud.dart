@@ -238,28 +238,13 @@ class _PerformanceHudState() extends State<PerformanceHud> {
           }
         }
 
-        final wasmRun = isCurrentlyWimp()
-            ? BenchmarkStorage.getRunForMode(
-                mode: 'wimp',
-                nodeCount: stressCtrl.nodeCount,
-                stressLevel: stressCtrl.currentLabel,
-                workloadId: stressCtrl.workload.id,
-              )
-            : (BenchmarkStorage.getRunForMode(
-                    mode: 'wasm',
-                    nodeCount: stressCtrl.nodeCount,
-                    stressLevel: stressCtrl.currentLabel,
-                    workloadId: stressCtrl.workload.id,
-                  ) ??
-                  BenchmarkStorage.getRunForMode(
-                    mode: 'wimp',
-                    nodeCount: stressCtrl.nodeCount,
-                    stressLevel: stressCtrl.currentLabel,
-                    workloadId: stressCtrl.workload.id,
-                  ));
+        final wasmRun = _resolveWasmRun(
+          nodeCount: stressCtrl.nodeCount,
+          stressLevel: stressCtrl.currentLabel,
+          workloadId: stressCtrl.workload.id,
+        );
 
-        final jsRun = BenchmarkStorage.getRunForMode(
-          mode: 'js',
+        final jsRun = _resolveJsRun(
           nodeCount: stressCtrl.nodeCount,
           stressLevel: stressCtrl.currentLabel,
           workloadId: stressCtrl.workload.id,
@@ -287,6 +272,8 @@ class _PerformanceHudState() extends State<PerformanceHud> {
                 _EngineTogglePill(
                   isCurrentWasm: isCurrentWasm,
                   isSingleThreaded: isCurrentST,
+                  wasmRun: wasmRun,
+                  jsRun: jsRun,
                 ),
                 const SizedBox(width: 6),
                 Container(width: 1, height: 18, color: Colors.white12),
@@ -380,15 +367,76 @@ class _PerformanceHudState() extends State<PerformanceHud> {
       },
     );
   }
+
+  static BenchmarkRun? _resolveWasmRun({
+    required int nodeCount,
+    required String stressLevel,
+    required String workloadId,
+  }) {
+    if (isCurrentlyWimp()) {
+      return BenchmarkStorage.getRunForMode(
+        mode: 'wimp',
+        nodeCount: nodeCount,
+        stressLevel: stressLevel,
+        workloadId: workloadId,
+      );
+    }
+    return BenchmarkStorage.getRunForMode(
+          mode: 'wasm',
+          nodeCount: nodeCount,
+          stressLevel: stressLevel,
+          workloadId: workloadId,
+        ) ??
+        BenchmarkStorage.getRunForMode(
+          mode: 'wimp',
+          nodeCount: nodeCount,
+          stressLevel: stressLevel,
+          workloadId: workloadId,
+        );
+  }
+
+  static BenchmarkRun? _resolveJsRun({
+    required int nodeCount,
+    required String stressLevel,
+    required String workloadId,
+  }) {
+    if (isCurrentlyWebParagraph()) {
+      return BenchmarkStorage.getRunForMode(
+        mode: 'webparagraph',
+        nodeCount: nodeCount,
+        stressLevel: stressLevel,
+        workloadId: workloadId,
+      );
+    }
+    return BenchmarkStorage.getRunForMode(
+          mode: 'js',
+          nodeCount: nodeCount,
+          stressLevel: stressLevel,
+          workloadId: workloadId,
+        ) ??
+        BenchmarkStorage.getRunForMode(
+          mode: 'webparagraph',
+          nodeCount: nodeCount,
+          stressLevel: stressLevel,
+          workloadId: workloadId,
+        );
+  }
 }
 
 class const _EngineTogglePill({
   required final bool isCurrentWasm,
   final bool isSingleThreaded = false,
+  final BenchmarkRun? wasmRun,
+  final BenchmarkRun? jsRun,
 }) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final isWimp = isCurrentlyWimp();
+    final isWimp = isCurrentWasm
+        ? isCurrentlyWimp()
+        : wasmRun?.mode.toLowerCase() == 'wimp';
+    final isWebParagraph = !isCurrentWasm
+        ? isCurrentlyWebParagraph()
+        : jsRun?.mode.toLowerCase() == 'webparagraph';
     return Container(
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.08),
@@ -405,20 +453,24 @@ class const _EngineTogglePill({
             selectedColor: Colors.lightBlueAccent,
             onTap: isCurrentWasm
                 ? (isWimp ? null : () => toggleSingleThreadedMode(context))
-                : () => switchEngineMode(context, mode: 'wasm'),
+                : () =>
+                      switchEngineMode(context, mode: isWimp ? 'wimp' : 'wasm'),
             tooltip: _wasmTooltip(isWimp),
           ),
           const SizedBox(width: 2),
           _EnginePillButton(
-            label: '📜 JS',
+            label: isWebParagraph ? '📜 WebParagraph (Exp)' : '📜 JS',
             isSelected: !isCurrentWasm,
-            selectedColor: const Color(0xFFF1E05A),
+            selectedColor: isWebParagraph
+                ? Colors.orangeAccent
+                : const Color(0xFFF1E05A),
             onTap: !isCurrentWasm
                 ? null
-                : () => switchEngineMode(context, mode: 'js'),
-            tooltip: !isCurrentWasm
-                ? 'Running JavaScript (CanvasKit)'
-                : 'Switch to JavaScript',
+                : () => switchEngineMode(
+                    context,
+                    mode: isWebParagraph ? 'webparagraph' : 'js',
+                  ),
+            tooltip: _jsTooltip(isWebParagraph),
           ),
         ],
       ),
@@ -438,6 +490,13 @@ class const _EngineTogglePill({
     return isSingleThreaded
         ? 'Wasm + Skia (Single-threaded) • Tap to toggle threading'
         : 'Wasm + Skia (Multi-threaded) • Tap to toggle threading';
+  }
+
+  String _jsTooltip(bool isWebParagraph) {
+    if (isCurrentWasm) return 'Switch to JavaScript';
+    return isWebParagraph
+        ? 'Running JavaScript (WebParagraph • Experimental)'
+        : 'Running JavaScript (CanvasKit)';
   }
 }
 
@@ -625,8 +684,8 @@ class const _DualEngineCards({
         Expanded(
           child: _EngineMiniCard(
             title: '📜 JS',
-            subtitle: 'CanvasKit (Serial)',
-            titleColor: const Color(0xFFF1E05A),
+            subtitle: _jsSubtitle(),
+            titleColor: _jsTitleColor(),
             isLive: !isCurrentWasm,
             fps: jsMetrics.fps,
             activeMs: jsMetrics.activeMs,
@@ -634,9 +693,7 @@ class const _DualEngineCards({
             buildMs: jsMetrics.buildMs,
             rasterMs: jsMetrics.rasterMs,
             targetHz: targetHz,
-            onTap: !isCurrentWasm
-                ? null
-                : () => switchEngineMode(context, mode: 'js'),
+            onTap: _jsOnTap(context),
           ),
         ),
       ],
@@ -662,6 +719,28 @@ class const _DualEngineCards({
     return () => switchEngineMode(
       context,
       mode: wasmRun?.mode.toLowerCase() == 'wimp' ? 'wimp' : 'wasm',
+    );
+  }
+
+  String _jsSubtitle() {
+    final isWp = !isCurrentWasm
+        ? isCurrentlyWebParagraph()
+        : jsRun?.mode.toLowerCase() == 'webparagraph';
+    return isWp ? 'WebParagraph (Exp)' : 'CanvasKit (Serial)';
+  }
+
+  Color _jsTitleColor() {
+    final isWp = !isCurrentWasm
+        ? isCurrentlyWebParagraph()
+        : jsRun?.mode.toLowerCase() == 'webparagraph';
+    return isWp ? Colors.orangeAccent : const Color(0xFFF1E05A);
+  }
+
+  VoidCallback? _jsOnTap(BuildContext context) {
+    if (!isCurrentWasm) return null;
+    return () => switchEngineMode(
+      context,
+      mode: jsRun?.mode.toLowerCase() == 'webparagraph' ? 'webparagraph' : 'js',
     );
   }
 }

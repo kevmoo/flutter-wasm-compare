@@ -6,12 +6,14 @@ class BenchmarkStorage() {
   static final Map<String, BenchmarkRun> _cachedWasmRuns = {};
   static final Map<String, BenchmarkRun> _cachedWimpRuns = {};
   static final Map<String, BenchmarkRun> _cachedJsRuns = {};
+  static final Map<String, BenchmarkRun> _cachedWebParagraphRuns = {};
 
   static void resetInMemoryCacheForTesting() {
     _cachedNodesByWorkload.clear();
     _cachedWasmRuns.clear();
     _cachedWimpRuns.clear();
     _cachedJsRuns.clear();
+    _cachedWebParagraphRuns.clear();
   }
 
   static void clearRuns({String? workloadId}) {
@@ -20,12 +22,14 @@ class BenchmarkStorage() {
       _cachedWasmRuns.remove(workloadId);
       _cachedWimpRuns.remove(workloadId);
       _cachedJsRuns.remove(workloadId);
+      _cachedWebParagraphRuns.remove(workloadId);
       return;
     }
     _cachedNodesByWorkload.clear();
     _cachedWasmRuns.clear();
     _cachedWimpRuns.clear();
     _cachedJsRuns.clear();
+    _cachedWebParagraphRuns.clear();
   }
 
   static void invalidateIfNodeCountChanged(
@@ -70,6 +74,8 @@ class BenchmarkStorage() {
         _cachedWimpRuns[workloadId] = run;
       case 'wasm' || 'skwasm':
         _cachedWasmRuns[workloadId] = run;
+      case 'webparagraph' || 'js-webparagraph' || 'canvaskit-webparagraph':
+        _cachedWebParagraphRuns[workloadId] = run;
       case 'js' || 'canvaskit':
         _cachedJsRuns[workloadId] = run;
     }
@@ -111,6 +117,9 @@ class BenchmarkStorage() {
     final run = switch (mode.toLowerCase()) {
       'wimp' || 'impeller' => _cachedWimpRuns[id],
       'wasm' || 'skwasm' => _cachedWasmRuns[id],
+      'webparagraph' ||
+      'js-webparagraph' ||
+      'canvaskit-webparagraph' => _cachedWebParagraphRuns[id],
       'js' || 'canvaskit' => _cachedJsRuns[id],
       _ => null,
     };

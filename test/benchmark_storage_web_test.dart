@@ -52,6 +52,17 @@ void main() {
       nodeCount: 500,
       workloadId: 'bouncy',
     );
+    BenchmarkStorage.saveRun(
+      mode: 'webparagraph',
+      fps: 52.4,
+      buildTimeMs: 7.4,
+      rasterTimeMs: 2.2,
+      totalFrameTimeMs: 9.6,
+      jitterMs: 0.9,
+      stressLevel: 'medium',
+      nodeCount: 500,
+      workloadId: 'bouncy',
+    );
 
     // Save a run for grid as well
     BenchmarkStorage.saveRun(
@@ -91,6 +102,13 @@ void main() {
     );
     expect(jsBouncy, isNotNull);
     expect(jsBouncy!.fps, 34.0);
+
+    final wpBouncy = BenchmarkStorage.getRunForMode(
+      mode: 'webparagraph',
+      workloadId: 'bouncy',
+    );
+    expect(wpBouncy, isNotNull);
+    expect(wpBouncy!.fps, 52.4);
 
     final wasmGrid = BenchmarkStorage.getRunForMode(
       mode: 'wasm',

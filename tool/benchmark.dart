@@ -99,6 +99,14 @@ Future<Map<BenchmarkKey, MultiSampleRecord>?> _runBrowserSuite({
 
     final browserMap = <BenchmarkKey, MultiSampleRecord>{};
     for (final mode in args.modes) {
+      if (mode == BenchmarkMode.jsWebParagraph &&
+          browserType != BrowserType.chrome) {
+        print(
+          '  ⚠️ Skipping ${mode.label} on ${browserType.label} '
+          '(requires Chrome with experimental TextCluster API).',
+        );
+        continue;
+      }
       for (final nodes in args.nodeCounts) {
         final multi = await _runWorkloadForModeAndNodes(
           driver: driver,
@@ -318,6 +326,10 @@ String buildBenchmarkUrl(
       query['st'] = '1';
     case BenchmarkMode.jsCanvasKit:
       query['mode'] = 'js';
+      query.remove('optin');
+      query.remove('st');
+    case BenchmarkMode.jsWebParagraph:
+      query['mode'] = 'webparagraph';
       query.remove('optin');
       query.remove('st');
   }
@@ -722,7 +734,7 @@ const _capabilityProbeScript = '''(() => {
 enum BrowserType(final String label) {
   chrome('Chrome'),
   safari('Safari'),
-  firefox('Firefox')
+  firefox('Firefox'),
 }
 
 enum BenchmarkMode(
@@ -732,7 +744,12 @@ enum BenchmarkMode(
 ) {
   wasmMultithreaded('Wasm MT (st=0)', 'Wasm MT', 'wasm_compare_last_wasm_run'),
   wasmSingleThreaded('Wasm ST (st=1)', 'Wasm ST', 'wasm_compare_last_wasm_run'),
-  jsCanvasKit('JS CanvasKit', 'JS', 'wasm_compare_last_js_run')
+  jsCanvasKit('JS CanvasKit', 'JS', 'wasm_compare_last_js_run'),
+  jsWebParagraph(
+    'JS WebParagraph',
+    'JS WP',
+    'wasm_compare_last_webparagraph_run',
+  ),
 }
 
 class const BenchmarkKey(final BenchmarkMode mode, final int nodes) {
@@ -792,6 +809,10 @@ class BenchmarkRecord({
         return normMode == 'wasm' && !isPipelined;
       case BenchmarkMode.jsCanvasKit:
         return normMode == 'js';
+      case BenchmarkMode.jsWebParagraph:
+        return normMode == 'webparagraph' ||
+            normMode == 'js-webparagraph' ||
+            normMode == 'canvaskit-webparagraph';
     }
   }
 
@@ -947,6 +968,7 @@ class _ChromeCdpDriver() implements BrowserDriver {
         '--no-sandbox',
         '--no-proxy-server',
       ],
+      '--enable-experimental-web-platform-features',
       '--remote-debugging-port=$_port',
       if (!Platform.isLinux) '--user-data-dir=${_tempDir!.path}',
       '--disable-background-timer-throttling',
@@ -1467,10 +1489,16 @@ class BenchmarkArgs({
 }
 
 class _MutableBenchmarkArgs() {
+  static const List<BenchmarkMode> _defaultModes = [
+    BenchmarkMode.wasmMultithreaded,
+    BenchmarkMode.wasmSingleThreaded,
+    BenchmarkMode.jsCanvasKit,
+  ];
+
   String baseUrl = 'https://flutter-wasm-compare.web.app/';
   String workload = 'bouncy';
   List<BrowserType> browsers = BrowserType.values.toList();
-  List<BenchmarkMode> modes = BenchmarkMode.values.toList();
+  List<BenchmarkMode> modes = _defaultModes.toList();
   List<int>? explicitNodeCounts;
   String? presetVal;
   int viewportWidth = 1280;
@@ -1544,8 +1572,10 @@ class _MutableBenchmarkArgs() {
   }
 
   static List<BenchmarkMode> _parseModes(String val) {
+    final lower = val.toLowerCase().trim();
+    if (lower == 'all') return BenchmarkMode.values.toList();
     final result = <BenchmarkMode>[];
-    for (final token in val.toLowerCase().split(',')) {
+    for (final token in lower.split(',')) {
       switch (token.trim()) {
         case 'wasm_mt' || 'mt':
           result.add(BenchmarkMode.wasmMultithreaded);
@@ -1553,6 +1583,8 @@ class _MutableBenchmarkArgs() {
           result.add(BenchmarkMode.wasmSingleThreaded);
         case 'js':
           result.add(BenchmarkMode.jsCanvasKit);
+        case 'webparagraph' || 'wp' || 'js_wp':
+          result.add(BenchmarkMode.jsWebParagraph);
       }
     }
     return result;
@@ -1586,7 +1618,7 @@ class _MutableBenchmarkArgs() {
       baseUrl: baseUrl,
       workload: workload,
       browsers: browsers.isEmpty ? BrowserType.values.toList() : browsers,
-      modes: modes.isEmpty ? BenchmarkMode.values.toList() : modes,
+      modes: modes.isEmpty ? _defaultModes.toList() : modes,
       nodeCounts: resolvedNodeCounts,
       viewportWidth: viewportWidth,
       viewportHeight: viewportHeight,
@@ -1618,7 +1650,7 @@ Options:
                            (bouncy: 32, 64, 128; grid: 100, 1000, 8000)
   --nodes=<counts>         Comma-separated list of stress node counts.
                            Default: 32,64,128 (bouncy) or 100,1000,8000 (grid)
-  --modes=<modes>          Comma-separated list of engine modes: wasm_mt, wasm_st, js.
+  --modes=<modes>          Comma-separated list of engine modes: wasm_mt, wasm_st, js, wp (or all).
                            Default: wasm_mt,wasm_st,js
   --viewport=<WxH>         Enforced inner viewport size in pixels across all browsers.
                            Default: 1280x720
