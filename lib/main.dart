@@ -155,7 +155,11 @@ class const _EngineSelectorButton() extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(
-                current == 'js' ? Icons.javascript : Icons.bolt,
+                switch (current) {
+                  'js' => Icons.javascript,
+                  'webparagraph' => Icons.text_fields,
+                  _ => Icons.bolt,
+                },
                 size: 14,
                 color: color,
               ),

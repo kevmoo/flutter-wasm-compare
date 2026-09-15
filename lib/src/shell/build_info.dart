@@ -121,6 +121,7 @@ class const BuildInfoDialog({
                 style: TextStyle(
                   color: _activeEngineColor(
                     isWasm: isWasm,
+                    isWimp: isWimp,
                     isWebParagraph: isWebParagraph,
                   ),
                   fontWeight: FontWeight.bold,
@@ -207,11 +208,13 @@ class const BuildInfoDialog({
 
   static Color _activeEngineColor({
     required bool isWasm,
+    required bool isWimp,
     required bool isWebParagraph,
-  }) => switch ((isWasm, isWebParagraph)) {
-    (true, _) => Colors.lightBlueAccent,
-    (false, true) => Colors.orangeAccent,
-    (false, false) => const Color(0xFFF1E05A),
+  }) => switch ((isWasm, isWimp, isWebParagraph)) {
+    (true, true, _) => Colors.tealAccent,
+    (true, false, _) => Colors.lightBlueAccent,
+    (false, _, true) => Colors.orangeAccent,
+    (false, _, false) => const Color(0xFFF1E05A),
   };
 
   static String _rendererLabel({

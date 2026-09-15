@@ -272,6 +272,8 @@ class _PerformanceHudState() extends State<PerformanceHud> {
                 _EngineTogglePill(
                   isCurrentWasm: isCurrentWasm,
                   isSingleThreaded: isCurrentST,
+                  wasmRun: wasmRun,
+                  jsRun: jsRun,
                 ),
                 const SizedBox(width: 6),
                 Container(width: 1, height: 18, color: Colors.white12),
@@ -424,11 +426,17 @@ class _PerformanceHudState() extends State<PerformanceHud> {
 class const _EngineTogglePill({
   required final bool isCurrentWasm,
   final bool isSingleThreaded = false,
+  final BenchmarkRun? wasmRun,
+  final BenchmarkRun? jsRun,
 }) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final isWimp = isCurrentlyWimp();
-    final isWebParagraph = isCurrentlyWebParagraph();
+    final isWimp = isCurrentWasm
+        ? isCurrentlyWimp()
+        : wasmRun?.mode.toLowerCase() == 'wimp';
+    final isWebParagraph = !isCurrentWasm
+        ? isCurrentlyWebParagraph()
+        : jsRun?.mode.toLowerCase() == 'webparagraph';
     return Container(
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: 0.08),
@@ -445,7 +453,8 @@ class const _EngineTogglePill({
             selectedColor: Colors.lightBlueAccent,
             onTap: isCurrentWasm
                 ? (isWimp ? null : () => toggleSingleThreadedMode(context))
-                : () => switchEngineMode(context, mode: 'wasm'),
+                : () =>
+                      switchEngineMode(context, mode: isWimp ? 'wimp' : 'wasm'),
             tooltip: _wasmTooltip(isWimp),
           ),
           const SizedBox(width: 2),
@@ -457,7 +466,10 @@ class const _EngineTogglePill({
                 : const Color(0xFFF1E05A),
             onTap: !isCurrentWasm
                 ? null
-                : () => switchEngineMode(context, mode: 'js'),
+                : () => switchEngineMode(
+                    context,
+                    mode: isWebParagraph ? 'webparagraph' : 'js',
+                  ),
             tooltip: _jsTooltip(isWebParagraph),
           ),
         ],

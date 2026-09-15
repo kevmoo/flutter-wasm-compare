@@ -99,6 +99,14 @@ Future<Map<BenchmarkKey, MultiSampleRecord>?> _runBrowserSuite({
 
     final browserMap = <BenchmarkKey, MultiSampleRecord>{};
     for (final mode in args.modes) {
+      if (mode == BenchmarkMode.jsWebParagraph &&
+          browserType != BrowserType.chrome) {
+        print(
+          '  ⚠️ Skipping ${mode.label} on ${browserType.label} '
+          '(requires Chrome with experimental TextCluster API).',
+        );
+        continue;
+      }
       for (final nodes in args.nodeCounts) {
         final multi = await _runWorkloadForModeAndNodes(
           driver: driver,
@@ -1642,7 +1650,7 @@ Options:
                            (bouncy: 32, 64, 128; grid: 100, 1000, 8000)
   --nodes=<counts>         Comma-separated list of stress node counts.
                            Default: 32,64,128 (bouncy) or 100,1000,8000 (grid)
-  --modes=<modes>          Comma-separated list of engine modes: wasm_mt, wasm_st, js.
+  --modes=<modes>          Comma-separated list of engine modes: wasm_mt, wasm_st, js, wp (or all).
                            Default: wasm_mt,wasm_st,js
   --viewport=<WxH>         Enforced inner viewport size in pixels across all browsers.
                            Default: 1280x720
