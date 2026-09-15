@@ -221,54 +221,62 @@ void main() {
         workloadId: 'bouncy',
       );
 
-      final mtMulti = MultiSampleRecord.fromRecords([
+      MultiSampleRecord multiPair({
+        required String mode,
+        required bool pipelined,
+        required double fpsA,
+        required double buildA,
+        required double rasterA,
+        required double fpsB,
+        required double buildB,
+        required double rasterB,
+      }) => MultiSampleRecord.fromRecords([
         rec(
-          mode: 'wasm',
-          pipelined: true,
-          fps: 58.0,
-          buildMs: 11.0,
-          rasterMs: 2.0,
+          mode: mode,
+          pipelined: pipelined,
+          fps: fpsA,
+          buildMs: buildA,
+          rasterMs: rasterA,
         ),
         rec(
-          mode: 'wasm',
-          pipelined: true,
-          fps: 57.5,
-          buildMs: 11.5,
-          rasterMs: 2.2,
-        ),
-      ]);
-      final stMulti = MultiSampleRecord.fromRecords([
-        rec(
-          mode: 'wasm',
-          pipelined: false,
-          fps: 38.0,
-          buildMs: 12.0,
-          rasterMs: 2.1,
-        ),
-        rec(
-          mode: 'wasm',
-          pipelined: false,
-          fps: 37.5,
-          buildMs: 12.2,
-          rasterMs: 2.3,
+          mode: mode,
+          pipelined: pipelined,
+          fps: fpsB,
+          buildMs: buildB,
+          rasterMs: rasterB,
         ),
       ]);
-      final jsMulti = MultiSampleRecord.fromRecords([
-        rec(
-          mode: 'js',
-          pipelined: false,
-          fps: 16.0,
-          buildMs: 38.0,
-          rasterMs: 4.0,
-        ),
-        rec(
-          mode: 'js',
-          pipelined: false,
-          fps: 15.5,
-          buildMs: 39.0,
-          rasterMs: 4.2,
-        ),
-      ]);
+
+      final mtMulti = multiPair(
+        mode: 'wasm',
+        pipelined: true,
+        fpsA: 58.0,
+        buildA: 11.0,
+        rasterA: 2.0,
+        fpsB: 57.5,
+        buildB: 11.5,
+        rasterB: 2.2,
+      );
+      final stMulti = multiPair(
+        mode: 'wasm',
+        pipelined: false,
+        fpsA: 38.0,
+        buildA: 12.0,
+        rasterA: 2.1,
+        fpsB: 37.5,
+        buildB: 12.2,
+        rasterB: 2.3,
+      );
+      final jsMulti = multiPair(
+        mode: 'js',
+        pipelined: false,
+        fpsA: 16.0,
+        buildA: 38.0,
+        rasterA: 4.0,
+        fpsB: 15.5,
+        buildB: 39.0,
+        rasterB: 4.2,
+      );
 
       final results = {
         BrowserType.chrome: {
@@ -310,20 +318,40 @@ void main() {
   });
 
   group('BenchmarkRecord matching & filtering', () {
+    BenchmarkRecord makeRecord({
+      required String mode,
+      int nodeCount = 1000,
+      String workloadId = 'bouncy',
+      required bool isPipelined,
+      required double fps,
+      required double buildTimeMs,
+      required double rasterTimeMs,
+      required double totalFrameTimeMs,
+      double jitterMs = 1.0,
+    }) => BenchmarkRecord.fromJson({
+      'mode': mode,
+      'nodeCount': nodeCount,
+      'workloadId': workloadId,
+      'isPipelined': isPipelined,
+      'fps': fps,
+      'buildTimeMs': buildTimeMs,
+      'rasterTimeMs': rasterTimeMs,
+      'totalFrameTimeMs': totalFrameTimeMs,
+      'jitterMs': jitterMs,
+    });
+
     test(
       'matches Wasm Multithreaded only when mode is wasm and isPipelined',
       () {
-        final recordMT = BenchmarkRecord.fromJson({
-          'mode': 'wasm',
-          'nodeCount': 1000,
-          'workloadId': 'grid',
-          'isPipelined': true,
-          'fps': 50.0,
-          'buildTimeMs': 18.0,
-          'rasterTimeMs': 17.0,
-          'totalFrameTimeMs': 19.0,
-          'jitterMs': 1.0,
-        });
+        final recordMT = makeRecord(
+          mode: 'wasm',
+          workloadId: 'grid',
+          isPipelined: true,
+          fps: 50.0,
+          buildTimeMs: 18.0,
+          rasterTimeMs: 17.0,
+          totalFrameTimeMs: 19.0,
+        );
 
         expect(
           recordMT.matches(
@@ -353,16 +381,14 @@ void main() {
     test(
       'matches Wasm Single-Threaded only when mode is wasm and !isPipelined',
       () {
-        final recordST = BenchmarkRecord.fromJson({
-          'mode': 'wasm',
-          'nodeCount': 1000,
-          'isPipelined': false,
-          'fps': 40.0,
-          'buildTimeMs': 18.0,
-          'rasterTimeMs': 5.0,
-          'totalFrameTimeMs': 23.0,
-          'jitterMs': 1.0,
-        });
+        final recordST = makeRecord(
+          mode: 'wasm',
+          isPipelined: false,
+          fps: 40.0,
+          buildTimeMs: 18.0,
+          rasterTimeMs: 5.0,
+          totalFrameTimeMs: 23.0,
+        );
 
         expect(
           recordST.matches(BenchmarkMode.wasmSingleThreaded, 1000),
@@ -377,16 +403,15 @@ void main() {
     );
 
     test('matches JS CanvasKit when mode is js', () {
-      final recordJS = BenchmarkRecord.fromJson({
-        'mode': 'js',
-        'nodeCount': 1000,
-        'isPipelined': false,
-        'fps': 20.0,
-        'buildTimeMs': 40.0,
-        'rasterTimeMs': 6.0,
-        'totalFrameTimeMs': 46.0,
-        'jitterMs': 2.0,
-      });
+      final recordJS = makeRecord(
+        mode: 'js',
+        isPipelined: false,
+        fps: 20.0,
+        buildTimeMs: 40.0,
+        rasterTimeMs: 6.0,
+        totalFrameTimeMs: 46.0,
+        jitterMs: 2.0,
+      );
 
       expect(recordJS.matches(BenchmarkMode.jsCanvasKit, 1000), isTrue);
       expect(recordJS.matches(BenchmarkMode.wasmMultithreaded, 1000), isFalse);
@@ -394,16 +419,15 @@ void main() {
     });
 
     test('matches JS WebParagraph when mode is webparagraph', () {
-      final recordWP = BenchmarkRecord.fromJson({
-        'mode': 'webparagraph',
-        'nodeCount': 1000,
-        'isPipelined': false,
-        'fps': 52.0,
-        'buildTimeMs': 11.0,
-        'rasterTimeMs': 2.0,
-        'totalFrameTimeMs': 13.0,
-        'jitterMs': 0.8,
-      });
+      final recordWP = makeRecord(
+        mode: 'webparagraph',
+        isPipelined: false,
+        fps: 52.0,
+        buildTimeMs: 11.0,
+        rasterTimeMs: 2.0,
+        totalFrameTimeMs: 13.0,
+        jitterMs: 0.8,
+      );
 
       expect(recordWP.matches(BenchmarkMode.jsWebParagraph, 1000), isTrue);
       expect(recordWP.matches(BenchmarkMode.jsCanvasKit, 1000), isFalse);

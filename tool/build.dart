@@ -122,19 +122,24 @@ String _runGit(List<String> args) {
 
 bool _isWorkingTreeClean() => _runGit(['status', '--porcelain']).isEmpty;
 
+String? _readJsonField(String path, String key) {
+  final file = File(path);
+  if (!file.existsSync()) return null;
+  try {
+    final json = jsonDecode(file.readAsStringSync()) as Map<String, dynamic>;
+    return json[key] as String?;
+  } catch (_) {
+    return null;
+  }
+}
+
 String _getDartVersion() {
-  final fvmVersionJson = File(
+  final dartSdkVersion = _readJsonField(
     '.fvm/flutter_sdk/bin/cache/flutter.version.json',
+    'dartSdkVersion',
   );
-  if (fvmVersionJson.existsSync()) {
-    try {
-      final json =
-          jsonDecode(fvmVersionJson.readAsStringSync()) as Map<String, dynamic>;
-      if (json['dartSdkVersion'] != null) {
-        final ver = json['dartSdkVersion'] as String;
-        return ver.split(' ').first;
-      }
-    } catch (_) {}
+  if (dartSdkVersion != null) {
+    return dartSdkVersion.split(' ').first;
   }
 
   final fvmDartSdk = File('.fvm/flutter_sdk/bin/cache/dart-sdk/version');
@@ -148,28 +153,10 @@ String _getDartVersion() {
 }
 
 String _getFlutterVersion() {
-  final fvmVersionJson = File(
-    '.fvm/flutter_sdk/bin/cache/flutter.version.json',
-  );
-  if (fvmVersionJson.existsSync()) {
-    try {
-      final json =
-          jsonDecode(fvmVersionJson.readAsStringSync()) as Map<String, dynamic>;
-      if (json['flutterVersion'] != null) {
-        return json['flutterVersion'] as String;
-      }
-    } catch (_) {}
-  }
-
-  final fvmrc = File('.fvmrc');
-  if (fvmrc.existsSync()) {
-    try {
-      final json = jsonDecode(fvmrc.readAsStringSync()) as Map<String, dynamic>;
-      if (json['flutter'] != null) {
-        return json['flutter'] as String;
-      }
-    } catch (_) {}
-  }
-
-  return '3.47.0';
+  return _readJsonField(
+        '.fvm/flutter_sdk/bin/cache/flutter.version.json',
+        'flutterVersion',
+      ) ??
+      _readJsonField('.fvmrc', 'flutter') ??
+      '3.47.0';
 }

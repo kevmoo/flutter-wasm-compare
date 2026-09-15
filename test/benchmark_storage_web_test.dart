@@ -18,65 +18,26 @@ void main() {
   });
 
   test('BenchmarkStorage persists to localStorage and reloads cache', () {
-    BenchmarkStorage.saveRun(
-      mode: 'wasm',
-      fps: 59.5,
-      buildTimeMs: 4.1,
-      rasterTimeMs: 1.5,
-      totalFrameTimeMs: 5.6,
-      jitterMs: 0.4,
-      stressLevel: 'medium',
-      nodeCount: 500,
-      workloadId: 'bouncy',
-      isPipelined: true,
-    );
-    BenchmarkStorage.saveRun(
-      mode: 'wimp',
-      fps: 58.2,
-      buildTimeMs: 4.5,
-      rasterTimeMs: 1.8,
-      totalFrameTimeMs: 6.3,
-      jitterMs: 0.6,
-      stressLevel: 'medium',
-      nodeCount: 500,
-      workloadId: 'bouncy',
-    );
-    BenchmarkStorage.saveRun(
-      mode: 'js',
-      fps: 34.0,
-      buildTimeMs: 18.2,
-      rasterTimeMs: 3.1,
-      totalFrameTimeMs: 21.3,
-      jitterMs: 3.2,
-      stressLevel: 'medium',
-      nodeCount: 500,
-      workloadId: 'bouncy',
-    );
-    BenchmarkStorage.saveRun(
-      mode: 'webparagraph',
-      fps: 52.4,
-      buildTimeMs: 7.4,
-      rasterTimeMs: 2.2,
-      totalFrameTimeMs: 9.6,
-      jitterMs: 0.9,
-      stressLevel: 'medium',
-      nodeCount: 500,
-      workloadId: 'bouncy',
-    );
-
-    // Save a run for grid as well
-    BenchmarkStorage.saveRun(
-      mode: 'wasm',
-      fps: 60.0,
-      buildTimeMs: 2.1,
-      rasterTimeMs: 1.0,
-      totalFrameTimeMs: 3.1,
-      jitterMs: 0.2,
-      stressLevel: 'light',
-      nodeCount: 250,
-      workloadId: 'grid',
-      isPipelined: true,
-    );
+    for (final run in [
+      BenchmarkRun.sample('wasm', 59.5, 4.1, 1.5, 5.6, 0.4, isPipelined: true),
+      BenchmarkRun.sample('wimp', 58.2, 4.5, 1.8, 6.3, 0.6),
+      BenchmarkRun.sample('js', 34.0, 18.2, 3.1, 21.3, 3.2),
+      BenchmarkRun.sample('webparagraph', 52.4, 7.4, 2.2, 9.6, 0.9),
+      BenchmarkRun.sample(
+        'wasm',
+        60.0,
+        2.1,
+        1.0,
+        3.1,
+        0.2,
+        stressLevel: 'light',
+        nodeCount: 250,
+        workloadId: 'grid',
+        isPipelined: true,
+      ),
+    ]) {
+      BenchmarkStorage.save(run);
+    }
 
     // Reset in-memory cache so _ensureCacheLoaded parses from localStorage
     BenchmarkStorage.resetInMemoryCacheForTesting();

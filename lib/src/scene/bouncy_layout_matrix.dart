@@ -3,6 +3,8 @@ import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
+import 'animated_stress_matrix.dart';
+
 /// A recursive binary space partitioning (`Row`/`Column`) layout stress scene
 /// modeled after Yegor's `bouncy_demo` (`kevmoo/holdings/bouncy_demo`).
 ///
@@ -11,58 +13,25 @@ import 'package:flutter/material.dart';
 /// invalidating `ParentData` and forcing a full-tree
 /// `RenderFlex.performLayout()` cascade down to all [nodeCount] Material and
 /// Cupertino leaf widgets.
-class const BouncyLayoutMatrix({super.key, required final int nodeCount})
-    extends StatefulWidget {
+class const BouncyLayoutMatrix({super.key, required super.nodeCount})
+    extends AnimatedStressMatrix {
   @override
-  State<BouncyLayoutMatrix> createState() => _BouncyLayoutMatrixState();
-}
-
-class _BouncyLayoutMatrixState()
-    extends State<BouncyLayoutMatrix>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
+  int get periodSeconds => 5;
 
   @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 5),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (widget.nodeCount <= 0) {
-      return const Center(
-        child: Text(
-          'Zero Stress (Idle)',
-          style: TextStyle(color: Colors.white38, fontSize: 16),
-        ),
-      );
-    }
-
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) {
-        return _buildSubtree(
-          context,
-          nodeIndex: 1,
-          count: widget.nodeCount,
-          depth: 0,
-        );
-      },
+  Widget buildAnimated(BuildContext context, double animationValue) {
+    return _buildSubtree(
+      context,
+      animationValue: animationValue,
+      nodeIndex: 1,
+      count: nodeCount,
+      depth: 0,
     );
   }
 
   Widget _buildSubtree(
     BuildContext context, {
+    required double animationValue,
     required int nodeIndex,
     required int count,
     required int depth,
@@ -78,7 +47,7 @@ class _BouncyLayoutMatrixState()
     // bouncy_demo.
     final isReversed = ((nodeIndex * 2654435761) >>> 16).isOdd;
     final phaseOffset = (nodeIndex * 0.17) % 1.0;
-    final animVal = (_controller.value + phaseOffset) % 1.0;
+    final animVal = (animationValue + phaseOffset) % 1.0;
     final delta =
         ((animVal - 0.5).abs() * 3000).toInt() * (isReversed ? -1 : 1);
 
@@ -88,6 +57,7 @@ class _BouncyLayoutMatrixState()
         flex: 5000 + delta,
         child: _buildSubtree(
           context,
+          animationValue: animationValue,
           nodeIndex: nodeIndex * 2,
           count: firstCount,
           depth: depth + 1,
@@ -98,6 +68,7 @@ class _BouncyLayoutMatrixState()
         flex: 5000 - delta,
         child: _buildSubtree(
           context,
+          animationValue: animationValue,
           nodeIndex: nodeIndex * 2 + 1,
           count: secondCount,
           depth: depth + 1,
