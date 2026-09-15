@@ -697,11 +697,7 @@ Map<String, Object?> fiellerToJson({
   },
 };
 
-class _ReportColumn {
-  final BrowserType browser;
-  final BenchmarkMode mode;
-  _ReportColumn(this.browser, this.mode);
-
+class _ReportColumn(final BrowserType browser, final BenchmarkMode mode) {
   String get header => '${browser.label} ${mode.shortLabel}';
 }
 
@@ -723,31 +719,23 @@ const _capabilityProbeScript = '''(() => {
   });
 })()''';
 
-enum BrowserType {
+enum BrowserType(final String label) {
   chrome('Chrome'),
   safari('Safari'),
-  firefox('Firefox');
-
-  final String label;
-  const BrowserType(this.label);
+  firefox('Firefox')
 }
 
-enum BenchmarkMode {
+enum BenchmarkMode(
+  final String label,
+  final String shortLabel,
+  final String storageKey,
+) {
   wasmMultithreaded('Wasm MT (st=0)', 'Wasm MT', 'wasm_compare_last_wasm_run'),
   wasmSingleThreaded('Wasm ST (st=1)', 'Wasm ST', 'wasm_compare_last_wasm_run'),
-  jsCanvasKit('JS CanvasKit', 'JS', 'wasm_compare_last_js_run');
-
-  final String label;
-  final String shortLabel;
-  final String storageKey;
-  const BenchmarkMode(this.label, this.shortLabel, this.storageKey);
+  jsCanvasKit('JS CanvasKit', 'JS', 'wasm_compare_last_js_run')
 }
 
-class BenchmarkKey {
-  final BenchmarkMode mode;
-  final int nodes;
-  const BenchmarkKey(this.mode, this.nodes);
-
+class const BenchmarkKey(final BenchmarkMode mode, final int nodes) {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -757,30 +745,18 @@ class BenchmarkKey {
   int get hashCode => Object.hash(mode, nodes);
 }
 
-class BenchmarkRecord {
-  final double fps;
-  final double buildTimeMs;
-  final double rasterTimeMs;
-  final double totalFrameTimeMs;
-  final double jitterMs;
-  final bool isPipelined;
-  final int nodeCount;
-  final String mode;
-  final String workloadId;
-
-  BenchmarkRecord({
-    required this.fps,
-    required this.buildTimeMs,
-    required this.rasterTimeMs,
-    required this.totalFrameTimeMs,
-    required this.jitterMs,
-    required this.isPipelined,
-    required this.nodeCount,
-    required this.mode,
-    this.workloadId = 'bouncy',
-  });
-
-  factory BenchmarkRecord.fromJson(Map<String, dynamic> json) {
+class BenchmarkRecord({
+  required final double fps,
+  required final double buildTimeMs,
+  required final double rasterTimeMs,
+  required final double totalFrameTimeMs,
+  required final double jitterMs,
+  required final bool isPipelined,
+  required final int nodeCount,
+  required final String mode,
+  final String workloadId = 'bouncy',
+}) {
+  factory fromJson(Map<String, dynamic> json) {
     return BenchmarkRecord(
       fps: (json['fps'] as num?)?.toDouble() ?? 0.0,
       buildTimeMs: (json['buildTimeMs'] as num?)?.toDouble() ?? 0.0,
@@ -833,33 +809,19 @@ class BenchmarkRecord {
 }
 
 /// Aggregates multi-sample benchmark trials into statistical metrics.
-class MultiSampleRecord {
-  final int samplesCount;
-  final bool isPipelined;
-  final BenchmarkMetrics fps;
-  final BenchmarkMetrics buildTime;
-  final BenchmarkMetrics rasterTime;
-  final BenchmarkMetrics totalFrameTime;
-  final BenchmarkMetrics jitter;
-
-  final List<double> rawFps;
-  final List<double> rawBuildMs;
-  final List<double> rawRasterMs;
-
-  MultiSampleRecord({
-    required this.samplesCount,
-    required this.isPipelined,
-    required this.fps,
-    required this.buildTime,
-    required this.rasterTime,
-    required this.totalFrameTime,
-    required this.jitter,
-    required this.rawFps,
-    required this.rawBuildMs,
-    required this.rawRasterMs,
-  });
-
-  factory MultiSampleRecord.fromRecords(List<BenchmarkRecord> records) {
+class MultiSampleRecord({
+  required final int samplesCount,
+  required final bool isPipelined,
+  required final BenchmarkMetrics fps,
+  required final BenchmarkMetrics buildTime,
+  required final BenchmarkMetrics rasterTime,
+  required final BenchmarkMetrics totalFrameTime,
+  required final BenchmarkMetrics jitter,
+  required final List<double> rawFps,
+  required final List<double> rawBuildMs,
+  required final List<double> rawRasterMs,
+}) {
+  factory fromRecords(List<BenchmarkRecord> records) {
     final rawFps = records.map((r) => r.effectiveFps).toList();
     final rawBuild = records.map((r) => r.buildTimeMs).toList();
     final rawRaster = records.map((r) => r.rasterTimeMs).toList();
@@ -889,18 +851,12 @@ class MultiSampleRecord {
   }
 }
 
-class CapabilityRecord {
-  final String userAgent;
-  final bool crossOriginIsolated;
-  final bool invertedProbe;
-
-  CapabilityRecord({
-    required this.userAgent,
-    required this.crossOriginIsolated,
-    required this.invertedProbe,
-  });
-
-  factory CapabilityRecord.parse(dynamic raw) {
+class CapabilityRecord({
+  required final String userAgent,
+  required final bool crossOriginIsolated,
+  required final bool invertedProbe,
+}) {
+  factory parse(dynamic raw) {
     final map = (raw is String ? jsonDecode(raw) : raw) as Map<String, dynamic>;
     return CapabilityRecord(
       userAgent: map['userAgent'] as String? ?? '',
@@ -910,7 +866,7 @@ class CapabilityRecord {
   }
 }
 
-abstract interface class BrowserDriver {
+abstract interface class BrowserDriver() {
   Future<bool> isAvailable();
   Future<void> start({
     required int viewportWidth,
@@ -944,7 +900,7 @@ String? selectCdpPageTargetWsUrl(List<dynamic> targets) {
 }
 
 /// Drives Chrome via native Chrome DevTools Protocol (CDP) WebSocket.
-class _ChromeCdpDriver implements BrowserDriver {
+class _ChromeCdpDriver() implements BrowserDriver {
   Process? _process;
   WebSocket? _ws;
   Directory? _tempDir;
@@ -1151,7 +1107,7 @@ class _ChromeCdpDriver implements BrowserDriver {
 }
 
 /// Drives Safari via `/usr/bin/safaridriver` (W3C WebDriver HTTP API).
-class _SafariWebDriver implements BrowserDriver {
+class _SafariWebDriver() implements BrowserDriver {
   Process? _driverProcess;
   int? _port;
   String? _sessionId;
@@ -1277,7 +1233,7 @@ class _SafariWebDriver implements BrowserDriver {
 
 /// Drives Firefox via `geckodriver` (W3C WebDriver HTTP API) with
 /// unthrottled prefs.
-class _FirefoxWebDriver implements BrowserDriver {
+class _FirefoxWebDriver() implements BrowserDriver {
   Process? _driverProcess;
   int? _port;
   String? _sessionId;
@@ -1450,41 +1406,23 @@ Future<int> _findAvailablePort() async {
   return port;
 }
 
-class BenchmarkArgs {
-  final bool showHelp;
-  final String baseUrl;
-  final String workload;
-  final List<BrowserType> browsers;
-  final List<BenchmarkMode> modes;
-  final List<int> nodeCounts;
-  final int viewportWidth;
-  final int viewportHeight;
-  final int settleSeconds;
-  final int samples;
-  final int sampleIntervalMs;
-  final String? outputPath;
-  final bool jsonOutput;
-  final String? jsonOutputPath;
-  final bool skipCapabilityProbe;
-
-  BenchmarkArgs({
-    required this.showHelp,
-    required this.baseUrl,
-    this.workload = 'bouncy',
-    required this.browsers,
-    required this.modes,
-    required this.nodeCounts,
-    required this.viewportWidth,
-    required this.viewportHeight,
-    required this.settleSeconds,
-    required this.samples,
-    this.sampleIntervalMs = 1200,
-    required this.outputPath,
-    required this.jsonOutput,
-    required this.jsonOutputPath,
-    required this.skipCapabilityProbe,
-  });
-
+class BenchmarkArgs({
+  required final bool showHelp,
+  required final String baseUrl,
+  final String workload = 'bouncy',
+  required final List<BrowserType> browsers,
+  required final List<BenchmarkMode> modes,
+  required final List<int> nodeCounts,
+  required final int viewportWidth,
+  required final int viewportHeight,
+  required final int settleSeconds,
+  required final int samples,
+  final int sampleIntervalMs = 1200,
+  required final String? outputPath,
+  required final bool jsonOutput,
+  required final String? jsonOutputPath,
+  required final bool skipCapabilityProbe,
+}) {
   static List<int> _defaultNodesForWorkload(String workload, [String? preset]) {
     final isGrid = workload == 'grid';
     switch (preset) {
@@ -1499,7 +1437,7 @@ class BenchmarkArgs {
     }
   }
 
-  factory BenchmarkArgs.parse(List<String> args) {
+  factory parse(List<String> args) {
     if (args.contains('--help') || args.contains('-h')) {
       return BenchmarkArgs(
         showHelp: true,
@@ -1528,7 +1466,7 @@ class BenchmarkArgs {
   }
 }
 
-class _MutableBenchmarkArgs {
+class _MutableBenchmarkArgs() {
   String baseUrl = 'https://flutter-wasm-compare.web.app/';
   String workload = 'bouncy';
   List<BrowserType> browsers = BrowserType.values.toList();

@@ -21,21 +21,20 @@ const List<int> kDecadeEngineeringLadder = [
   5000,
 ];
 
-enum StressPreset {
+enum StressPreset(final int nodeCount) {
   none(0),
   light(100),
   medium(500),
   heavy(1500),
-  extreme(4000);
-
-  final int nodeCount;
-
-  const StressPreset(this.nodeCount);
+  extreme(4000)
 }
 
-enum StressMode { preset, manual }
+enum StressMode() {
+  preset,
+  manual
+}
 
-class StressController extends ChangeNotifier {
+class StressController({Uri? initialUri}) extends ChangeNotifier {
   StressWorkload _workload = const BouncyLayoutWorkload();
   StressMode _mode = StressMode.preset;
   StressPreset _preset = StressPreset.medium;
@@ -84,7 +83,7 @@ class StressController extends ChangeNotifier {
     StressMode.manual => 'MANUAL ($formattedNodeCount)',
   };
 
-  StressController({Uri? initialUri}) {
+  this {
     _parseInitialQuery(initialUri ?? Uri.base);
     BenchmarkStorage.invalidateIfNodeCountChanged(
       _nodeCount,

@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'engine_mode.dart';
 import 'url_helper.dart';
 
-class BuildInfo {
+class BuildInfo() {
   static const gitSha = String.fromEnvironment('GIT_SHA', defaultValue: '');
   static const dartVersion = String.fromEnvironment(
     'DART_VERSION',
@@ -30,11 +30,8 @@ class BuildInfo {
   static const repoUrl = 'https://github.com/kevmoo/flutter-wasm-compare';
 }
 
-class BuildInfoButton extends StatelessWidget {
-  final bool isCompact;
-
-  const BuildInfoButton({super.key, this.isCompact = false});
-
+class const BuildInfoButton({super.key, final bool isCompact = false})
+    extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton(
@@ -48,20 +45,13 @@ class BuildInfoButton extends StatelessWidget {
   }
 }
 
-class BuildInfoDialog extends StatelessWidget {
-  final bool? isWasmOverride;
-  final bool? isWimpOverride;
-  final bool? isSingleThreadedOverride;
-  final bool? hasGitInfoOverride;
-
-  const BuildInfoDialog({
-    super.key,
-    this.isWasmOverride,
-    this.isWimpOverride,
-    this.isSingleThreadedOverride,
-    this.hasGitInfoOverride,
-  });
-
+class const BuildInfoDialog({
+  super.key,
+  final bool? isWasmOverride,
+  final bool? isWimpOverride,
+  final bool? isSingleThreadedOverride,
+  final bool? hasGitInfoOverride,
+}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isWasm = isWasmOverride ?? isCurrentlyWasm();
@@ -283,12 +273,10 @@ class BuildInfoDialog extends StatelessWidget {
   }
 }
 
-class _BuildInfoRow extends StatelessWidget {
-  final String label;
-  final Widget child;
-
-  const _BuildInfoRow({required this.label, required this.child});
-
+class const _BuildInfoRow({
+  required final String label,
+  required final Widget child,
+}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(

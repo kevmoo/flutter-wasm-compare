@@ -176,16 +176,13 @@ ComparisonData _evaluateComparison({
   );
 }
 
-class PerformanceHud extends StatefulWidget {
-  final bool initiallyCollapsed;
-
-  const PerformanceHud({super.key, this.initiallyCollapsed = false});
-
+class const PerformanceHud({super.key, final bool initiallyCollapsed = false})
+    extends StatefulWidget {
   @override
   State<PerformanceHud> createState() => _PerformanceHudState();
 }
 
-class _PerformanceHudState extends State<PerformanceHud> {
+class _PerformanceHudState() extends State<PerformanceHud> {
   late bool _isCollapsed;
   DateTime _lastSaved = DateTime.fromMillisecondsSinceEpoch(0);
 
@@ -385,15 +382,10 @@ class _PerformanceHudState extends State<PerformanceHud> {
   }
 }
 
-class _EngineTogglePill extends StatelessWidget {
-  final bool isCurrentWasm;
-  final bool isSingleThreaded;
-
-  const _EngineTogglePill({
-    required this.isCurrentWasm,
-    this.isSingleThreaded = false,
-  });
-
+class const _EngineTogglePill({
+  required final bool isCurrentWasm,
+  final bool isSingleThreaded = false,
+}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isWimp = isCurrentlyWimp();
@@ -449,21 +441,13 @@ class _EngineTogglePill extends StatelessWidget {
   }
 }
 
-class _EnginePillButton extends StatelessWidget {
-  final String label;
-  final bool isSelected;
-  final Color selectedColor;
-  final VoidCallback? onTap;
-  final String? tooltip;
-
-  const _EnginePillButton({
-    required this.label,
-    required this.isSelected,
-    required this.selectedColor,
-    required this.onTap,
-    this.tooltip,
-  });
-
+class const _EnginePillButton({
+  required final String label,
+  required final bool isSelected,
+  required final Color selectedColor,
+  required final VoidCallback? onTap,
+  final String? tooltip,
+}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bgColor = isSelected
@@ -507,11 +491,8 @@ class _EnginePillButton extends StatelessWidget {
   }
 }
 
-class _HeaderTitle extends StatelessWidget {
-  final VoidCallback onCollapse;
-
-  const _HeaderTitle({required this.onCollapse});
-
+class const _HeaderTitle({required final VoidCallback onCollapse})
+    extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -549,19 +530,12 @@ class _HeaderTitle extends StatelessWidget {
   }
 }
 
-class _BudgetBar extends StatelessWidget {
-  final double budgetRatio;
-  final String budgetPct;
-  final String budgetLabel;
-  final Color budgetColor;
-
-  const _BudgetBar({
-    required this.budgetRatio,
-    required this.budgetPct,
-    required this.budgetLabel,
-    required this.budgetColor,
-  });
-
+class const _BudgetBar({
+  required final double budgetRatio,
+  required final String budgetPct,
+  required final String budgetLabel,
+  required final Color budgetColor,
+}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -599,23 +573,14 @@ class _BudgetBar extends StatelessWidget {
   }
 }
 
-class _DualEngineCards extends StatelessWidget {
-  final bool isCurrentWasm;
-  final bool isCurrentST;
-  final FrameTimingMetrics liveMetrics;
-  final BenchmarkRun? wasmRun;
-  final BenchmarkRun? jsRun;
-  final double targetHz;
-
-  const _DualEngineCards({
-    required this.isCurrentWasm,
-    required this.isCurrentST,
-    required this.liveMetrics,
-    required this.wasmRun,
-    required this.jsRun,
-    required this.targetHz,
-  });
-
+class const _DualEngineCards({
+  required final bool isCurrentWasm,
+  required final bool isCurrentST,
+  required final FrameTimingMetrics liveMetrics,
+  required final BenchmarkRun? wasmRun,
+  required final BenchmarkRun? jsRun,
+  required final double targetHz,
+}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isWasmST = isCurrentWasm
@@ -742,35 +707,20 @@ _CardMetrics _resolveCardMetrics({
   );
 }
 
-class _EngineMiniCard extends StatelessWidget {
-  final String title;
-  final String? subtitle;
-  final Color titleColor;
-  final bool isLive;
-  final double? fps;
-  final double? activeMs;
-  final double? jitterMs;
-  final double? buildMs;
-  final double? rasterMs;
-  final double targetHz;
-  final bool isSingleThreaded;
-  final VoidCallback? onTap;
-
-  const _EngineMiniCard({
-    required this.title,
-    this.subtitle,
-    required this.titleColor,
-    required this.isLive,
-    required this.fps,
-    required this.activeMs,
-    this.jitterMs,
-    required this.buildMs,
-    required this.rasterMs,
-    required this.targetHz,
-    this.isSingleThreaded = false,
-    this.onTap,
-  });
-
+class const _EngineMiniCard({
+  required final String title,
+  final String? subtitle,
+  required final Color titleColor,
+  required final bool isLive,
+  required final double? fps,
+  required final double? activeMs,
+  final double? jitterMs,
+  required final double? buildMs,
+  required final double? rasterMs,
+  required final double targetHz,
+  final bool isSingleThreaded = false,
+  final VoidCallback? onTap,
+}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final hasData = activeMs != null && activeMs! > 0.0;
@@ -891,19 +841,12 @@ class _EngineMiniCard extends StatelessWidget {
   }
 }
 
-class _EngineStatusBadge extends StatelessWidget {
-  final bool isLive;
-  final bool hasData;
-  final Color titleColor;
-  final String liveLabel;
-
-  const _EngineStatusBadge({
-    required this.isLive,
-    required this.hasData,
-    required this.titleColor,
-    this.liveLabel = 'LIVE',
-  });
-
+class const _EngineStatusBadge({
+  required final bool isLive,
+  required final bool hasData,
+  required final Color titleColor,
+  final String liveLabel = 'LIVE',
+}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (isLive) {
@@ -960,25 +903,15 @@ class _EngineStatusBadge extends StatelessWidget {
   }
 }
 
-class _EngineMetricsContent extends StatelessWidget {
-  final bool hasData;
-  final double? fps;
-  final double? activeMs;
-  final double? jitterMs;
-  final double? buildMs;
-  final double? rasterMs;
-  final double targetHz;
-
-  const _EngineMetricsContent({
-    required this.hasData,
-    required this.fps,
-    required this.activeMs,
-    required this.jitterMs,
-    required this.buildMs,
-    required this.rasterMs,
-    required this.targetHz,
-  });
-
+class const _EngineMetricsContent({
+  required final bool hasData,
+  required final double? fps,
+  required final double? activeMs,
+  required final double? jitterMs,
+  required final double? buildMs,
+  required final double? rasterMs,
+  required final double targetHz,
+}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (!hasData) {
@@ -1032,17 +965,11 @@ class _EngineMetricsContent extends StatelessWidget {
   }
 }
 
-class _MiniMetricRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color valueColor;
-
-  const _MiniMetricRow({
-    required this.label,
-    required this.value,
-    required this.valueColor,
-  });
-
+class const _MiniMetricRow({
+  required final String label,
+  required final String value,
+  required final Color valueColor,
+}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -1073,19 +1000,12 @@ class _MiniMetricRow extends StatelessWidget {
   }
 }
 
-class _BenefitBadges extends StatelessWidget {
-  final BenefitBadge? speedBadge;
-  final BenefitBadge? jitterBadge;
-  final String? promptBadge;
-  final VoidCallback? onPromptTap;
-
-  const _BenefitBadges({
-    required this.speedBadge,
-    required this.jitterBadge,
-    this.promptBadge,
-    this.onPromptTap,
-  });
-
+class const _BenefitBadges({
+  required final BenefitBadge? speedBadge,
+  required final BenefitBadge? jitterBadge,
+  final String? promptBadge,
+  final VoidCallback? onPromptTap,
+}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (promptBadge != null) {
@@ -1146,11 +1066,8 @@ class _BenefitBadges extends StatelessWidget {
   }
 }
 
-class _BenefitPill extends StatelessWidget {
-  final BenefitBadge badge;
-
-  const _BenefitPill({required this.badge});
-
+class const _BenefitPill({required final BenefitBadge badge})
+    extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(

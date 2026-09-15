@@ -7,21 +7,13 @@ import 'package:flutter/scheduler.dart';
 
 import '../shell/url_helper.dart';
 
-class FrameTimingMetrics {
-  final double fps;
-  final double buildTimeMs;
-  final double rasterTimeMs;
-  final double totalFrameTimeMs;
-  final double jitterMs;
-
-  FrameTimingMetrics({
-    this.fps = 0.0,
-    this.buildTimeMs = 0.0,
-    this.rasterTimeMs = 0.0,
-    this.totalFrameTimeMs = 0.0,
-    this.jitterMs = 0.0,
-  });
-
+class FrameTimingMetrics({
+  final double fps = 0.0,
+  final double buildTimeMs = 0.0,
+  final double rasterTimeMs = 0.0,
+  final double totalFrameTimeMs = 0.0,
+  final double jitterMs = 0.0,
+}) {
   /// The active execution time on the critical path determining throughput.
   ///
   /// In pipelined/multithreaded mode (Wasm with dedicated raster worker),
@@ -38,14 +30,14 @@ class FrameTimingMetrics {
   }
 }
 
-class FrameTimingService extends ChangeNotifier {
+class FrameTimingService() extends ChangeNotifier {
   final Queue<FrameTiming> _timingsLog = Queue<FrameTiming>();
   static const int _maxFrames = 120;
 
   FrameTimingMetrics _metrics = FrameTimingMetrics();
   FrameTimingMetrics get metrics => _metrics;
 
-  FrameTimingService() {
+  this {
     SchedulerBinding.instance.addTimingsCallback(_onTimings);
   }
 

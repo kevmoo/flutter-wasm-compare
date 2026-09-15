@@ -2,25 +2,20 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-enum WidgetCategory {
+enum WidgetCategory() {
   sparklineCard,
   gaugeCard,
   progressCard,
   chipCard,
   statusCard,
-  waveCard,
+  waveCard
 }
 
-class PolymorphicCard extends StatelessWidget {
-  final int index;
-  final double animationValue;
-
-  const PolymorphicCard({
-    super.key,
-    required this.index,
-    required this.animationValue,
-  });
-
+class const PolymorphicCard({
+  super.key,
+  required final int index,
+  required final double animationValue,
+}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final categories = WidgetCategory.values;
@@ -269,17 +264,11 @@ class PolymorphicCard extends StatelessWidget {
   }
 }
 
-class _SparklinePainter extends CustomPainter {
-  final double animationValue;
-  final int index;
-  final Color color;
-
-  _SparklinePainter({
-    required this.animationValue,
-    required this.index,
-    required this.color,
-  });
-
+class _SparklinePainter({
+  required final double animationValue,
+  required final int index,
+  required final Color color,
+}) extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     if (size.width <= 2 || size.height <= 2) return;

@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 
-class CompatibilityShield extends StatelessWidget {
-  final Widget child;
-  const CompatibilityShield({super.key, required this.child});
-
+class const CompatibilityShield({super.key, required final Widget child})
+    extends StatelessWidget {
   @override
   Widget build(BuildContext context) => child;
 }

@@ -7,11 +7,8 @@ import 'url_helper.dart';
 @JS('window.experimentallyBlocked')
 external bool? get _experimentallyBlocked;
 
-class CompatibilityShield extends StatelessWidget {
-  final Widget child;
-
-  const CompatibilityShield({super.key, required this.child});
-
+class const CompatibilityShield({super.key, required final Widget child})
+    extends StatelessWidget {
   bool get isBlocked {
     return _experimentallyBlocked == true;
   }

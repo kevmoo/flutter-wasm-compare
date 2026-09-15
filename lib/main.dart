@@ -15,9 +15,7 @@ void main() {
   runApp(const WasmCompareApp());
 }
 
-class WasmCompareApp extends StatelessWidget {
-  const WasmCompareApp({super.key});
-
+class const WasmCompareApp({super.key}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
@@ -42,9 +40,7 @@ class WasmCompareApp extends StatelessWidget {
 const double largeScreenMinWidth = 768.0;
 const double compactAppBarBreakpoint = 960.0;
 
-class DemoDashboard extends StatelessWidget {
-  const DemoDashboard({super.key});
-
+class const DemoDashboard({super.key}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final stressCtrl = context.watch<StressController>();
@@ -131,9 +127,7 @@ class DemoDashboard extends StatelessWidget {
   }
 }
 
-class _EngineSelectorButton extends StatelessWidget {
-  const _EngineSelectorButton();
-
+class const _EngineSelectorButton() extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final current = currentEngineMode();
@@ -269,11 +263,8 @@ class _EngineSelectorButton extends StatelessWidget {
   ];
 }
 
-class _ThreadingModeButton extends StatelessWidget {
-  final bool isCompact;
-
-  const _ThreadingModeButton({this.isCompact = false});
-
+class const _ThreadingModeButton({final bool isCompact = false})
+    extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isSt = isCurrentlySingleThreaded();
@@ -332,15 +323,10 @@ class _ThreadingModeButton extends StatelessWidget {
   }
 }
 
-class _DeviceDetailsButton extends StatelessWidget {
-  final StressController stressCtrl;
-  final bool isCompact;
-
-  const _DeviceDetailsButton({
-    required this.stressCtrl,
-    this.isCompact = false,
-  });
-
+class const _DeviceDetailsButton({
+  required final StressController stressCtrl,
+  final bool isCompact = false,
+}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (stressCtrl.hasAllowedDeviceDetails) {
@@ -398,12 +384,10 @@ class _DeviceDetailsButton extends StatelessWidget {
   }
 }
 
-class _StressStepperPill extends StatelessWidget {
-  final StressController stressCtrl;
-  final bool isCompact;
-
-  const _StressStepperPill({required this.stressCtrl, this.isCompact = false});
-
+class const _StressStepperPill({
+  required final StressController stressCtrl,
+  final bool isCompact = false,
+}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -461,19 +445,12 @@ class _StressStepperPill extends StatelessWidget {
   }
 }
 
-class _StepperButton extends StatelessWidget {
-  final IconData icon;
-  final bool isCompact;
-  final String tooltip;
-  final VoidCallback? onPressed;
-
-  const _StepperButton({
-    required this.icon,
-    required this.isCompact,
-    required this.tooltip,
-    required this.onPressed,
-  });
-
+class const _StepperButton({
+  required final IconData icon,
+  required final bool isCompact,
+  required final String tooltip,
+  required final VoidCallback? onPressed,
+}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final size = isCompact ? 22.0 : 32.0;
@@ -489,12 +466,10 @@ class _StepperButton extends StatelessWidget {
   }
 }
 
-class _PresetDropdown extends StatelessWidget {
-  final StressController stressCtrl;
-  final bool isCompact;
-
-  const _PresetDropdown({required this.stressCtrl, this.isCompact = false});
-
+class const _PresetDropdown({
+  required final StressController stressCtrl,
+  final bool isCompact = false,
+}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -530,15 +505,10 @@ class _PresetDropdown extends StatelessWidget {
   }
 }
 
-class _WorkloadSelectorButton extends StatelessWidget {
-  final StressController stressCtrl;
-  final bool isCompact;
-
-  const _WorkloadSelectorButton({
-    required this.stressCtrl,
-    this.isCompact = false,
-  });
-
+class const _WorkloadSelectorButton({
+  required final StressController stressCtrl,
+  final bool isCompact = false,
+}) extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final current = stressCtrl.workload;
