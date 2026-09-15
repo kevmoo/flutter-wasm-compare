@@ -11,6 +11,8 @@ class BenchmarkStorage() {
   static const String _wasmRunKey = 'wasm_compare_last_wasm_run';
   static const String _wimpRunKey = 'wasm_compare_last_wimp_run';
   static const String _jsRunKey = 'wasm_compare_last_js_run';
+  static const String _webParagraphRunKey =
+      'wasm_compare_last_webparagraph_run';
 
   static String _nodesKeyFor(String workloadId) =>
       '${_activeNodesKey}_$workloadId';
@@ -21,6 +23,7 @@ class BenchmarkStorage() {
   static final Map<String, BenchmarkRun> _cachedWasmRuns = {};
   static final Map<String, BenchmarkRun> _cachedWimpRuns = {};
   static final Map<String, BenchmarkRun> _cachedJsRuns = {};
+  static final Map<String, BenchmarkRun> _cachedWebParagraphRuns = {};
   static bool _cacheLoaded = false;
 
   static void resetInMemoryCacheForTesting() {
@@ -28,6 +31,7 @@ class BenchmarkStorage() {
     _cachedWasmRuns.clear();
     _cachedWimpRuns.clear();
     _cachedJsRuns.clear();
+    _cachedWebParagraphRuns.clear();
     _cacheLoaded = false;
   }
 
@@ -54,6 +58,12 @@ class BenchmarkStorage() {
     _loadCachedRun(storage, _wasmRunKey, workloadId, _cachedWasmRuns);
     _loadCachedRun(storage, _wimpRunKey, workloadId, _cachedWimpRuns);
     _loadCachedRun(storage, _jsRunKey, workloadId, _cachedJsRuns);
+    _loadCachedRun(
+      storage,
+      _webParagraphRunKey,
+      workloadId,
+      _cachedWebParagraphRuns,
+    );
   }
 
   static void _loadCachedRun(
@@ -79,12 +89,14 @@ class BenchmarkStorage() {
       _cachedWasmRuns.remove(workloadId);
       _cachedWimpRuns.remove(workloadId);
       _cachedJsRuns.remove(workloadId);
+      _cachedWebParagraphRuns.remove(workloadId);
       try {
         final storage = web.window.localStorage;
         storage.removeItem(_nodesKeyFor(workloadId));
         storage.removeItem(_runKeyFor(_wasmRunKey, workloadId));
         storage.removeItem(_runKeyFor(_wimpRunKey, workloadId));
         storage.removeItem(_runKeyFor(_jsRunKey, workloadId));
+        storage.removeItem(_runKeyFor(_webParagraphRunKey, workloadId));
       } catch (_) {
         // Ignore
       }
@@ -95,6 +107,7 @@ class BenchmarkStorage() {
     _cachedWasmRuns.clear();
     _cachedWimpRuns.clear();
     _cachedJsRuns.clear();
+    _cachedWebParagraphRuns.clear();
     _cacheLoaded = true;
     try {
       final storage = web.window.localStorage;
@@ -103,11 +116,13 @@ class BenchmarkStorage() {
       storage.removeItem(_wasmRunKey);
       storage.removeItem(_wimpRunKey);
       storage.removeItem(_jsRunKey);
+      storage.removeItem(_webParagraphRunKey);
       for (final id in const ['bouncy', 'grid']) {
         storage.removeItem(_nodesKeyFor(id));
         storage.removeItem(_runKeyFor(_wasmRunKey, id));
         storage.removeItem(_runKeyFor(_wimpRunKey, id));
         storage.removeItem(_runKeyFor(_jsRunKey, id));
+        storage.removeItem(_runKeyFor(_webParagraphRunKey, id));
       }
     } catch (_) {
       // Ignore
@@ -186,6 +201,9 @@ class BenchmarkStorage() {
       case 'wasm' || 'skwasm':
         _cachedWasmRuns[workloadId] = run;
         baseKey = _wasmRunKey;
+      case 'webparagraph' || 'js-webparagraph' || 'canvaskit-webparagraph':
+        _cachedWebParagraphRuns[workloadId] = run;
+        baseKey = _webParagraphRunKey;
       case 'js' || 'canvaskit':
         _cachedJsRuns[workloadId] = run;
         baseKey = _jsRunKey;
@@ -243,6 +261,8 @@ class BenchmarkStorage() {
         run = _cachedWimpRuns[id];
       case 'wasm' || 'skwasm':
         run = _cachedWasmRuns[id];
+      case 'webparagraph' || 'js-webparagraph' || 'canvaskit-webparagraph':
+        run = _cachedWebParagraphRuns[id];
       case 'js' || 'canvaskit':
         run = _cachedJsRuns[id];
       default:

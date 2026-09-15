@@ -16,6 +16,10 @@ final bool _isWimp = isCurrentlyWasm() && isWimpActive;
 
 bool isCurrentlyWimp() => _isWimp;
 
+final bool _isWebParagraph = !isCurrentlyWasm() && isWebParagraphActive;
+
+bool isCurrentlyWebParagraph() => _isWebParagraph;
+
 bool isCurrentlySingleThreaded() =>
     isCurrentlyWasm() && (isCurrentlyWimp() || isSingleThreaded());
 
@@ -23,7 +27,9 @@ bool isCurrentlyPipelined() =>
     isCurrentlyWasm() && !isCurrentlySingleThreaded();
 
 String currentEngineMode() {
-  if (!isCurrentlyWasm()) return 'js';
+  if (!isCurrentlyWasm()) {
+    return isCurrentlyWebParagraph() ? 'webparagraph' : 'js';
+  }
   return isCurrentlyWimp() ? 'wimp' : 'wasm';
 }
 

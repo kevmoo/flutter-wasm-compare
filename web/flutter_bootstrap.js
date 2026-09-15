@@ -5,7 +5,8 @@ const searchParams = new URLSearchParams(window.location.search);
 const modeParam = searchParams.get("mode");
 const KNOWN_MODES = new Set([
   "auto", "wasm", "skwasm", "skwasm-st", "skwasm-mt",
-  "wimp", "impeller", "js", "canvaskit"
+  "wimp", "impeller", "js", "canvaskit",
+  "webparagraph", "js-webparagraph", "canvaskit-webparagraph"
 ]);
 
 let mode = modeParam;
@@ -28,13 +29,17 @@ const isExperimentalWasm = isSafari || isFirefox;
 const optin = searchParams.get("optin") === "true";
 
 let forceCanvasKit = false;
+const isWebParagraphMode =
+  mode === "webparagraph" ||
+  mode === "js-webparagraph" ||
+  mode === "canvaskit-webparagraph";
 
 if ((mode === "wasm" || mode === "skwasm" || mode === "wimp" || mode === "impeller" || mode === "auto") && isExperimentalWasm && !optin) {
   forceCanvasKit = true;
   window.experimentallyBlocked = true;
 }
 
-if (mode === "js" || mode === "canvaskit") {
+if (mode === "js" || mode === "canvaskit" || isWebParagraphMode) {
   forceCanvasKit = true;
 }
 
@@ -63,6 +68,9 @@ const userConfig = {
 };
 if (forceCanvasKit) {
   userConfig.renderer = "canvaskit";
+  if (isWebParagraphMode) {
+    userConfig.preferWebParagraph = true;
+  }
 } else {
   if (isSingleThreaded || mode === "skwasm-st") {
     userConfig.forceSingleThreadedSkwasm = true;

@@ -180,12 +180,14 @@ class const _EngineSelectorButton() extends StatelessWidget {
   static Color _engineColor(String mode) => switch (mode) {
     'wimp' => Colors.tealAccent,
     'wasm' => Colors.lightBlueAccent,
+    'webparagraph' => Colors.orangeAccent,
     _ => const Color(0xFFF1E05A),
   };
 
   static String _engineLabel(String mode) => switch (mode) {
     'wimp' => 'Impeller (Exp)',
     'wasm' => 'Skia',
+    'webparagraph' => 'WebParagraph (Exp)',
     _ => 'JS',
   };
 
@@ -198,6 +200,19 @@ class const _EngineSelectorButton() extends StatelessWidget {
             '⚠️ Impeller on Web (wimp) requires Chromium '
             '(ImageDecoder and V8 iterators). '
             'On Safari and Firefox, Flutter Web falls back to Skia.',
+          ),
+          duration: Duration(seconds: 4),
+        ),
+      );
+      return;
+    }
+    if (mode == 'webparagraph' && !isWebParagraphSupportedInBrowser) {
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+        const SnackBar(
+          content: Text(
+            '⚠️ WebParagraph requires Chrome with '
+            'chrome://flags/#enable-experimental-web-platform-features '
+            'enabled (window.TextCluster API).',
           ),
           duration: Duration(seconds: 4),
         ),
@@ -257,6 +272,28 @@ class const _EngineSelectorButton() extends StatelessWidget {
         ),
         trailing: current == 'js'
             ? const Icon(Icons.check, size: 16, color: Color(0xFFF1E05A))
+            : null,
+      ),
+    ),
+    PopupMenuItem(
+      value: 'webparagraph',
+      child: ListTile(
+        dense: true,
+        leading: const Icon(Icons.text_fields, color: Colors.orangeAccent),
+        title: const Text('📜 JS (WebParagraph) [Exp]'),
+        subtitle: Text(
+          isWebParagraphSupportedInBrowser
+              ? 'CanvasKit WebParagraph (3.6MB) • Experimental'
+              : 'Requires Chrome + Experimental Web Platform Features flag',
+          style: TextStyle(
+            fontSize: 11,
+            color: isWebParagraphSupportedInBrowser
+                ? Colors.amberAccent
+                : Colors.redAccent,
+          ),
+        ),
+        trailing: current == 'webparagraph'
+            ? const Icon(Icons.check, size: 16, color: Colors.orangeAccent)
             : null,
       ),
     ),

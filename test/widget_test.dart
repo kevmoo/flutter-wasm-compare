@@ -218,6 +218,7 @@ void main() {
     expect(find.text('⚡ Wasm (Impeller) [Exp]'), findsOneWidget);
     expect(find.text('⚡ Wasm (Skia)'), findsOneWidget);
     expect(find.text('📜 JavaScript (CanvasKit)'), findsOneWidget);
+    expect(find.text('📜 JS (WebParagraph) [Exp]'), findsOneWidget);
 
     // Tap Wasm Impeller: test stub (non-Chromium) should show SnackBar
     await tester.tap(find.text('⚡ Wasm (Impeller) [Exp]'));
@@ -292,5 +293,31 @@ void main() {
     expect(find.text('⚡ WASM + Impeller (Exp)'), findsOneWidget);
     expect(find.text('Impeller (wimp.wasm) • Experimental'), findsOneWidget);
     expect(find.text('Single-threaded (forced by engine)'), findsOneWidget);
+  });
+
+  testWidgets('BuildInfoDialog renders JS + WebParagraph (Exp)', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: BuildInfoDialog(
+            isWasmOverride: false,
+            isWebParagraphOverride: true,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.text('📜 JS (WebParagraph) [Exp]'), findsOneWidget);
+    expect(
+      find.text('CanvasKit (webparagraph/canvaskit.wasm • 3.6MB) • Exp'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('WebParagraph (Chrome TextCluster API) • Experimental'),
+      findsOneWidget,
+    );
   });
 }
