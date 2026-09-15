@@ -120,7 +120,7 @@ enum _BouncyWidgetKind() {
   datePicker,
   progressIndicator,
   slider,
-  appBar
+  appBar,
 }
 
 class const _BouncyLeafWidget({super.key, required final int index})

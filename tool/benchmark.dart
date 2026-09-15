@@ -734,7 +734,7 @@ const _capabilityProbeScript = '''(() => {
 enum BrowserType(final String label) {
   chrome('Chrome'),
   safari('Safari'),
-  firefox('Firefox')
+  firefox('Firefox'),
 }
 
 enum BenchmarkMode(
@@ -749,7 +749,7 @@ enum BenchmarkMode(
     'JS WebParagraph',
     'JS WP',
     'wasm_compare_last_webparagraph_run',
-  )
+  ),
 }
 
 class const BenchmarkKey(final BenchmarkMode mode, final int nodes) {

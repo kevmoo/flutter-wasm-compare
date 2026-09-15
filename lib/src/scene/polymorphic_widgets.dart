@@ -8,7 +8,7 @@ enum WidgetCategory() {
   progressCard,
   chipCard,
   statusCard,
-  waveCard
+  waveCard,
 }
 
 class const PolymorphicCard({
