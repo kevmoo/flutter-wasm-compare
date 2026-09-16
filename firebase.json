@@ -1,47 +1,64 @@
 {
-  "hosting": {
-    "predeploy": "dart run tool/build.dart --deploy --source-maps --dump-info",
-    "site": "flutter-wasm-compare",
-    "public": "build/web",
-    "ignore": [
-      "firebase.json",
-      "**/.*"
-    ],
-    "headers": [
-      {
-        "source": "**/*",
-        "headers": [
-          {
-            "key": "cross-origin-opener-policy",
-            "value": "same-origin"
-          },
-          {
-            "key": "cross-origin-embedder-policy",
-            "value": "require-corp"
-          },
-          {
-            "key": "X-Content-Type-Options",
-            "value": "nosniff"
-          },
-          {
-            "key": "Content-Security-Policy",
-            "value": "frame-ancestors 'none'"
-          },
-          {
-            "key": "X-Frame-Options",
-            "value": "DENY"
-          }
-        ]
-      },
-      {
-        "source": "/?(\\?*)",
-        "headers": [
-          {
-            "key": "Link",
-            "value": "</assets/FontManifest.json>; rel=preload; as=fetch; crossorigin"
-          }
-        ]
-      }
-    ]
-  }
+  "hosting": [
+    {
+      "predeploy": "dart run tool/build.dart --deploy --source-maps --dump-info",
+      "site": "flutter-wasm-compare",
+      "public": "build/web",
+      "ignore": [
+        "firebase.json",
+        "**/.*"
+      ],
+      "headers": [
+        {
+          "source": "**/*",
+          "headers": [
+            {
+              "key": "cross-origin-opener-policy",
+              "value": "same-origin"
+            },
+            {
+              "key": "cross-origin-embedder-policy",
+              "value": "require-corp"
+            },
+            {
+              "key": "X-Content-Type-Options",
+              "value": "nosniff"
+            },
+            {
+              "key": "Content-Security-Policy",
+              "value": "frame-ancestors 'none'"
+            },
+            {
+              "key": "X-Frame-Options",
+              "value": "DENY"
+            }
+          ]
+        },
+        {
+          "source": "/?(\\?*)",
+          "headers": [
+            {
+              "key": "Link",
+              "value": "</assets/FontManifest.json>; rel=preload; as=fetch; crossorigin"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "site": "bouncing",
+      "public": "tool/bouncing_redirect",
+      "ignore": [
+        "firebase.json",
+        "**/.*"
+      ],
+      "redirects": [
+        {
+          "source": "**",
+          "destination": "https://flutter-wasm-compare.web.app",
+          "type": 301
+        }
+      ]
+    }
+  ]
 }
