@@ -19,13 +19,71 @@ class const BouncyLayoutMatrix({super.key, required super.nodeCount})
   int get periodSeconds => 5;
 
   @override
+  State<BouncyLayoutMatrix> createState() => _BouncyLayoutMatrixState();
+
+  @override
   Widget buildAnimated(BuildContext context, double animationValue) {
-    return _buildSubtree(
-      context,
-      animationValue: animationValue,
-      nodeIndex: 1,
-      count: nodeCount,
-      depth: 0,
+    throw UnsupportedError(
+      'buildAnimated is superseded by _BouncyLayoutMatrixState',
+    );
+  }
+}
+
+class _BouncyLayoutMatrixState()
+    extends State<BouncyLayoutMatrix>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  final Map<int, Widget> _leafCache = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: Duration(seconds: widget.periodSeconds),
+    )..repeat();
+  }
+
+  @override
+  void didUpdateWidget(covariant BouncyLayoutMatrix oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.nodeCount != oldWidget.nodeCount) {
+      _leafCache.clear();
+    }
+  }
+
+  @override
+  void reassemble() {
+    super.reassemble();
+    _leafCache.clear();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.nodeCount <= 0) {
+      return const Center(
+        child: Text(
+          'Zero Stress (Idle)',
+          style: TextStyle(color: Colors.white38, fontSize: 16),
+        ),
+      );
+    }
+
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) => _buildSubtree(
+        context,
+        animationValue: _controller.value,
+        nodeIndex: 1,
+        count: widget.nodeCount,
+        depth: 0,
+      ),
     );
   }
 
@@ -37,7 +95,11 @@ class const BouncyLayoutMatrix({super.key, required super.nodeCount})
     required int depth,
   }) {
     if (count <= 1) {
-      return _BouncyLeafWidget(key: ValueKey<int>(nodeIndex), index: nodeIndex);
+      return _leafCache.putIfAbsent(
+        nodeIndex,
+        () =>
+            _BouncyLeafWidget(key: ValueKey<int>(nodeIndex), index: nodeIndex),
+      );
     }
 
     final firstCount = count ~/ 2;
