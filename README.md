@@ -97,6 +97,9 @@ dart tool/benchmark.dart
 # Run on specific browsers with a convenience preset
 dart tool/benchmark.dart --browser=chrome,safari --preset=medium
 
+# Compare skwasm vs. Web Impeller (WIMP), multi-threaded, in Chrome
+dart tool/benchmark.dart --browser=chrome --modes=wasm_mt,wimp_mt
+
 # Benchmark with JSON telemetry output and custom sampling options
 dart tool/benchmark.dart \
   --browser=all \
