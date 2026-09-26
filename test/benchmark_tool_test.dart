@@ -561,6 +561,245 @@ void main() {
     });
   });
 
+  group('fail-closed point results', () {
+    final validMt = RuntimeRecord(
+      isWimp: false,
+      isMultiThreaded: true,
+      crossOriginIsolated: true,
+    );
+
+    BenchmarkRecord sample(
+      double fps, {
+      String mode = 'wasm',
+      bool pipelined = true,
+    }) => BenchmarkRecord(
+      fps: fps,
+      buildTimeMs: 10.0,
+      rasterTimeMs: 5.0,
+      totalFrameTimeMs: 1000 / fps,
+      jitterMs: 0.5,
+      isPipelined: pipelined,
+      nodeCount: 64,
+      mode: mode,
+    );
+
+    test('summarizeSamples errors when no sample arrived', () {
+      final multi = summarizeSamples(
+        const [],
+        requestedSamples: 5,
+        runtime: validMt,
+      );
+      expect(
+        multi.errorMessage,
+        equals('No metrics found in localStorage (0 of 5 requested samples)'),
+      );
+      expect(multi.samplesCount, equals(0));
+      expect(multi.runtime, same(validMt));
+    });
+
+    test('summarizeSamples errors on a short sample count', () {
+      final multi = summarizeSamples(
+        [sample(30.0)],
+        requestedSamples: 5,
+        runtime: validMt,
+      );
+      expect(
+        multi.errorMessage,
+        equals('Incomplete sample count (1 of 5 requested samples)'),
+      );
+      expect(multi.samplesCount, equals(1));
+      expect(multi.runtime, same(validMt));
+      expect(
+        multi.failureReason(BenchmarkMode.wasmMultithreaded),
+        equals(multi.errorMessage),
+      );
+    });
+
+    test('summarizeSamples aggregates a complete run', () {
+      final multi = summarizeSamples(
+        [sample(30.0), sample(31.0), sample(32.0)],
+        requestedSamples: 3,
+        runtime: validMt,
+      );
+      expect(multi.errorMessage, isNull);
+      expect(multi.samplesCount, equals(3));
+      expect(multi.failureReason(BenchmarkMode.wasmMultithreaded), isNull);
+    });
+
+    test('hasFailedRuns counts errors and INVALID runtimes', () {
+      final measured = summarizeSamples(
+        [sample(30.0), sample(31.0)],
+        requestedSamples: 2,
+        runtime: validMt,
+      );
+      Map<BrowserType, Map<BenchmarkKey, MultiSampleRecord>> results(
+        BenchmarkMode mode,
+        MultiSampleRecord multi,
+      ) => {
+        BrowserType.chrome: {BenchmarkKey(mode, 64): multi},
+      };
+
+      expect(
+        hasFailedRuns(results(BenchmarkMode.wasmMultithreaded, measured)),
+        isFalse,
+      );
+      // The same skwasm runtime contradicts a WIMP label.
+      expect(
+        measured.failureReason(BenchmarkMode.wimpMultithreaded),
+        equals('WIMP not active (isWimp=false)'),
+      );
+      expect(
+        hasFailedRuns(results(BenchmarkMode.wimpMultithreaded, measured)),
+        isTrue,
+      );
+      expect(
+        hasFailedRuns(
+          results(BenchmarkMode.jsCanvasKit, MultiSampleRecord.error('crash')),
+        ),
+        isTrue,
+      );
+    });
+
+    test('JSON keeps failed points with error, sample count, and runtime', () {
+      final args = BenchmarkArgs.parse([
+        '--browser=chrome',
+        '--modes=wasm_mt',
+        '--nodes=64',
+      ]);
+      final report = generateJsonReport(
+        args: args,
+        capabilities: const {},
+        results: {
+          BrowserType.chrome: {
+            const BenchmarkKey(
+              BenchmarkMode.wasmMultithreaded,
+              64,
+            ): summarizeSamples(
+              [sample(30.0)],
+              requestedSamples: 5,
+              runtime: validMt,
+            ),
+          },
+        },
+      );
+
+      final decoded = jsonDecode(jsonEncode(report)) as Map<String, dynamic>;
+      final benchmarks = decoded['benchmarks'] as List<dynamic>;
+      expect(benchmarks, hasLength(1));
+      final entry = benchmarks.single as Map<String, dynamic>;
+      expect(entry['mode'], equals('wasmMultithreaded'));
+      expect(entry['nodes'], equals(64));
+      expect(
+        entry['error'],
+        equals('Incomplete sample count (1 of 5 requested samples)'),
+      );
+      expect(entry['samples'], equals(1));
+      final runtime = entry['runtime'] as Map<String, dynamic>;
+      expect(runtime['valid'], isTrue);
+      expect(runtime['is_multi_threaded'], isTrue);
+    });
+
+    test('INVALID runs are excluded from Fieller comparisons', () {
+      final args = BenchmarkArgs.parse([
+        '--browser=chrome',
+        '--modes=wasm_mt,wasm_st,js',
+        '--nodes=64',
+      ]);
+      Map<BrowserType, Map<BenchmarkKey, MultiSampleRecord>> results(
+        RuntimeRecord mtRuntime,
+      ) => {
+        BrowserType.chrome: {
+          const BenchmarkKey(
+            BenchmarkMode.wasmMultithreaded,
+            64,
+          ): MultiSampleRecord.fromRecords([
+            sample(58.0),
+            sample(57.0),
+          ], runtime: mtRuntime),
+          const BenchmarkKey(
+            BenchmarkMode.wasmSingleThreaded,
+            64,
+          ): MultiSampleRecord.fromRecords([
+            sample(38.0, pipelined: false),
+            sample(37.0, pipelined: false),
+          ]),
+          const BenchmarkKey(
+            BenchmarkMode.jsCanvasKit,
+            64,
+          ): MultiSampleRecord.fromRecords([
+            sample(16.0, mode: 'js', pipelined: false),
+            sample(15.0, mode: 'js', pipelined: false),
+          ]),
+        },
+      };
+
+      String markdown(RuntimeRecord mtRuntime) => formatMarkdownReport(
+        args: args,
+        capabilities: const {},
+        results: results(mtRuntime),
+      );
+      List<dynamic> comparisons(RuntimeRecord mtRuntime) =>
+          generateJsonReport(
+                args: args,
+                capabilities: const {},
+                results: results(mtRuntime),
+              )['comparisons']
+              as List<dynamic>;
+
+      expect(markdown(validMt), contains('* **Chrome (at 64 nodes)**:'));
+      expect(comparisons(validMt), isNotEmpty);
+
+      // A wasm_mt point that actually ran single-threaded.
+      final stRuntime = RuntimeRecord(
+        isWimp: false,
+        isMultiThreaded: false,
+        crossOriginIsolated: true,
+      );
+      expect(markdown(stRuntime), contains('⚠️ INVALID'));
+      expect(markdown(stRuntime), isNot(contains('Key Takeaways')));
+      expect(comparisons(stRuntime), isEmpty);
+    });
+
+    test('Runtime Verification shows ⚠️ ERROR on sampling failure', () {
+      final args = BenchmarkArgs.parse([
+        '--browser=chrome',
+        '--modes=wasm_mt',
+        '--nodes=64',
+      ]);
+      final markdown = formatMarkdownReport(
+        args: args,
+        capabilities: const {},
+        results: {
+          BrowserType.chrome: {
+            const BenchmarkKey(
+              BenchmarkMode.wasmMultithreaded,
+              64,
+            ): summarizeSamples(
+              [sample(30.0)],
+              requestedSamples: 5,
+              runtime: validMt,
+            ),
+          },
+        },
+      );
+
+      expect(
+        markdown,
+        contains(
+          '⚠️ ERROR: Incomplete sample count (1 of 5 requested samples)',
+        ),
+      );
+      expect(markdown, isNot(contains('✅ valid')));
+      expect(markdown, contains('| **Nodes (64)** | ⚠️ ERROR |'));
+    });
+
+    test('maxSampleAttempts scales budget for sub-throttle intervals', () {
+      expect(maxSampleAttempts(samples: 5, sampleIntervalMs: 1200), equals(20));
+      expect(maxSampleAttempts(samples: 5, sampleIntervalMs: 2000), equals(20));
+      expect(maxSampleAttempts(samples: 5, sampleIntervalMs: 200), equals(120));
+    });
+  });
+
   group('BenchmarkRecord matching & filtering', () {
     BenchmarkRecord makeRecord({
       required String mode,

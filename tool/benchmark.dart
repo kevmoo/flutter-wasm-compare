@@ -32,19 +32,10 @@ Future<void> main(List<String> rawArgs) async {
     }
   }
 
-  var anyFailed = false;
-  var anySuccess = false;
-  for (final browserMap in benchmarkResults.values) {
-    for (final multi in browserMap.values) {
-      if (multi.errorMessage != null) {
-        anyFailed = true;
-      } else {
-        anySuccess = true;
-      }
-    }
-  }
-
-  if (!anySuccess) {
+  final anyRecorded = benchmarkResults.values.any(
+    (records) => records.isNotEmpty,
+  );
+  if (!anyRecorded) {
     print('\nNo benchmark results collected.');
     exitCode = 1;
     return;
@@ -56,10 +47,21 @@ Future<void> main(List<String> rawArgs) async {
     benchmarkResults: benchmarkResults,
   );
 
-  if (anyFailed) {
+  if (hasFailedRuns(benchmarkResults)) {
     exitCode = 1;
   }
 }
+
+/// Whether any recorded point errored or contradicted its mode at runtime.
+///
+/// Either makes the process exit non-zero after the report is written.
+bool hasFailedRuns(
+  Map<BrowserType, Map<BenchmarkKey, MultiSampleRecord>> results,
+) => results.values.any(
+  (records) => records.entries.any(
+    (entry) => entry.value.failureReason(entry.key.mode) != null,
+  ),
+);
 
 void _printHeader(BenchmarkArgs args) {
   print('=' * 63);
@@ -125,15 +127,15 @@ Future<Map<BenchmarkKey, MultiSampleRecord>?> _runBrowserSuite({
       }
       for (final nodes in args.nodeCounts) {
         try {
-          final multi = await _runWorkloadForModeAndNodes(
+          browserMap[BenchmarkKey(
+            mode,
+            nodes,
+          )] = await _runWorkloadForModeAndNodes(
             driver: driver,
             args: args,
             mode: mode,
             nodes: nodes,
           );
-          if (multi != null) {
-            browserMap[BenchmarkKey(mode, nodes)] = multi;
-          }
         } catch (e) {
           print('    ❌ Workload failed: $e');
           browserMap[BenchmarkKey(mode, nodes)] = MultiSampleRecord.error(
@@ -171,7 +173,7 @@ Future<void> _probeCapabilities({
   print('    - Cross-Origin Isolated:     ${probe.crossOriginIsolated}');
 }
 
-Future<MultiSampleRecord?> _runWorkloadForModeAndNodes({
+Future<MultiSampleRecord> _runWorkloadForModeAndNodes({
   required BrowserDriver driver,
   required BenchmarkArgs args,
   required BenchmarkMode mode,
@@ -222,9 +224,11 @@ Future<MultiSampleRecord?> _runWorkloadForModeAndNodes({
   );
   stdout.write(' done.\r');
 
-  final multi = collected.isNotEmpty
-      ? MultiSampleRecord.fromRecords(collected, runtime: runtime)
-      : null;
+  final multi = summarizeSamples(
+    collected,
+    requestedSamples: args.samples,
+    runtime: runtime,
+  );
   _printWorkloadSummary(mode, nodes, multi, runtime);
   return multi;
 }
@@ -237,7 +241,10 @@ Future<List<BenchmarkRecord>> _collectSamples({
 }) async {
   final collected = <BenchmarkRecord>[];
   final readExpr = "localStorage.getItem('${mode.storageKey}')";
-  final maxAttempts = args.samples * 3 + 5;
+  final maxAttempts = maxSampleAttempts(
+    samples: args.samples,
+    sampleIntervalMs: args.sampleIntervalMs,
+  );
   var attempts = 0;
   var lastTotalFrameTime = -1.0;
 
@@ -261,21 +268,60 @@ Future<List<BenchmarkRecord>> _collectSamples({
   return collected;
 }
 
+/// Maximum `localStorage` poll attempts for [samples] at [sampleIntervalMs].
+///
+/// The app throttles `localStorage` publishes to once per 1000ms, so when
+/// [sampleIntervalMs] is set below the default 1200ms, the attempt count is
+/// scaled up to preserve at least `(samples * 3 + 5) * 1200ms` of wall-clock
+/// budget.
+int maxSampleAttempts({required int samples, required int sampleIntervalMs}) {
+  final baseAttempts = samples * 3 + 5;
+  if (sampleIntervalMs <= 0 || sampleIntervalMs >= 1200) {
+    return baseAttempts;
+  }
+  return (baseAttempts * 1200 + sampleIntervalMs - 1) ~/ sampleIntervalMs;
+}
+
+/// Aggregates the samples collected for one point, failing closed.
+///
+/// Returns an error record when no sample arrived, or when sampling timed out
+/// before [requestedSamples] distinct samples were read: a stalled renderer
+/// keeps republishing the same frame stats, so a short run is a freeze, not a
+/// measurement. Error records keep the sample count and [runtime] for triage.
+MultiSampleRecord summarizeSamples(
+  List<BenchmarkRecord> collected, {
+  required int requestedSamples,
+  RuntimeRecord? runtime,
+}) {
+  final counts = '${collected.length} of $requestedSamples requested samples';
+  if (collected.isEmpty) {
+    return MultiSampleRecord.error(
+      'No metrics found in localStorage ($counts)',
+      runtime: runtime,
+    );
+  }
+  if (collected.length < requestedSamples) {
+    return MultiSampleRecord.error(
+      'Incomplete sample count ($counts)',
+      samplesCount: collected.length,
+      runtime: runtime,
+    );
+  }
+  return MultiSampleRecord.fromRecords(collected, runtime: runtime);
+}
+
 void _printWorkloadSummary(
   BenchmarkMode mode,
   int nodes,
-  MultiSampleRecord? multi,
+  MultiSampleRecord multi,
   RuntimeRecord runtime,
 ) {
   final label = mode.label.padRight(15);
   final nodeStr = nodes.toString().padLeft(4);
   final invalidReason = runtime.invalidReason(mode);
   final invalidTag = invalidReason == null ? '' : ' [INVALID: $invalidReason]';
-  if (multi == null) {
-    print(
-      '  ✗ [$label] @ $nodeStr nodes -> '
-      'No metrics found in localStorage.$invalidTag',
-    );
+  if (multi.errorMessage case final error?) {
+    print('  ✗ [$label] @ $nodeStr nodes -> $error.$invalidTag');
     return;
   }
 
@@ -318,7 +364,7 @@ Future<void> _emitOutputs({
     print('Markdown report saved to ${file.path}');
   }
 
-  final jsonResult = _generateJsonReport(
+  final jsonResult = generateJsonReport(
     args: args,
     capabilities: capabilityResults,
     results: benchmarkResults,
@@ -420,7 +466,7 @@ void _writeMarkdownRuntime(
   final rows = [
     for (final MapEntry(key: browser, value: records) in results.entries)
       for (final MapEntry(:key, value: multi) in records.entries)
-        if (multi.runtime case final runtime?) (browser, key, runtime),
+        if (multi.runtime case final runtime?) (browser, key, multi, runtime),
   ];
   if (rows.isEmpty) return;
   buffer.writeln('## 🔎 Runtime Verification');
@@ -432,9 +478,15 @@ void _writeMarkdownRuntime(
   buffer.writeln(
     '| :--- | :--- | ---: | :---: | :---: | :---: | :--- | :--- | :--- |',
   );
-  for (final (browser, key, runtime) in rows) {
-    final reason = runtime.invalidReason(key.mode);
-    final status = reason == null ? '✅ valid' : '⚠️ INVALID: $reason';
+  for (final (browser, key, multi, runtime) in rows) {
+    final status = switch ((
+      runtime.invalidReason(key.mode),
+      multi.errorMessage,
+    )) {
+      (final reason?, _) => '⚠️ INVALID: $reason',
+      (null, final error?) => '⚠️ ERROR: $error',
+      (null, null) => '✅ valid',
+    };
     buffer.writeln(
       '| ${browser.label} | ${key.mode.label} | ${key.nodes} | '
       '${runtime.isWimp ?? 'n/a'} | ${runtime.isMultiThreaded ?? 'n/a'} | '
@@ -544,15 +596,16 @@ void _writeMarkdownTakeaways(
 
 /// Node counts with a successful record for every mode the takeaways compare.
 ///
-/// Error records carry no samples, so they are excluded rather than reported
-/// as zeroed medians.
+/// Error records carry no usable samples, and INVALID runs measured a
+/// different renderer than their label, so both are excluded rather than
+/// compared.
 Iterable<int> _matchingNodeCounts(
   List<int> nodeCounts,
   Map<BenchmarkKey, MultiSampleRecord> browserResults,
 ) {
   bool succeeded(BenchmarkMode mode, int nodes) {
     final record = browserResults[BenchmarkKey(mode, nodes)];
-    return record != null && record.errorMessage == null;
+    return record != null && record.failureReason(mode) == null;
   }
 
   return nodeCounts.where(
@@ -649,7 +702,9 @@ String formatFieller(FiellerInterval fieller) {
   return '${r}x [${low}x, ${high}x] (95% CI)';
 }
 
-Map<String, Object?> _generateJsonReport({
+/// Builds the JSON telemetry report. Failed points are kept as entries with an
+/// `error` field, their collected `samples` count, and the `runtime` probe.
+Map<String, Object?> generateJsonReport({
   required BenchmarkArgs args,
   required Map<BrowserType, CapabilityRecord> capabilities,
   required Map<BrowserType, Map<BenchmarkKey, MultiSampleRecord>> results,
@@ -681,6 +736,8 @@ Map<String, Object?> _generateJsonReport({
           'workload': args.workload,
           'nodes': key.nodes,
           'error': multi.errorMessage,
+          'samples': multi.samplesCount,
+          'runtime': multi.runtime?.toJson(key.mode),
         });
       } else {
         benchmarksList.add({
@@ -971,10 +1028,10 @@ class MultiSampleRecord({
   final RuntimeRecord? runtime,
   final String? errorMessage,
 }) {
-  factory error(String error) {
+  factory error(String error, {int samplesCount = 0, RuntimeRecord? runtime}) {
     final empty = BenchmarkMetrics.fromSamples([0]);
     return MultiSampleRecord(
-      samplesCount: 0,
+      samplesCount: samplesCount,
       isPipelined: false,
       fps: empty,
       buildTime: empty,
@@ -984,9 +1041,15 @@ class MultiSampleRecord({
       rawFps: const [],
       rawBuildMs: const [],
       rawRasterMs: const [],
+      runtime: runtime,
       errorMessage: error,
     );
   }
+
+  /// Why this point does not count as a measurement of [mode]: its sampling or
+  /// driver error, else its runtime-validation failure, else `null`.
+  String? failureReason(BenchmarkMode mode) =>
+      errorMessage ?? runtime?.invalidReason(mode);
 
   factory fromRecords(List<BenchmarkRecord> records, {RuntimeRecord? runtime}) {
     final rawFps = records.map((r) => r.effectiveFps).toList();
