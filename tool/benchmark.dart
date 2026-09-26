@@ -542,19 +542,24 @@ void _writeMarkdownTakeaways(
   }
 }
 
+/// Node counts with a successful record for every mode the takeaways compare.
+///
+/// Error records carry no samples, so they are excluded rather than reported
+/// as zeroed medians.
 Iterable<int> _matchingNodeCounts(
   List<int> nodeCounts,
   Map<BenchmarkKey, MultiSampleRecord> browserResults,
 ) {
+  bool succeeded(BenchmarkMode mode, int nodes) {
+    final record = browserResults[BenchmarkKey(mode, nodes)];
+    return record != null && record.errorMessage == null;
+  }
+
   return nodeCounts.where(
     (int n) =>
-        browserResults.containsKey(
-          BenchmarkKey(BenchmarkMode.wasmMultithreaded, n),
-        ) &&
-        browserResults.containsKey(
-          BenchmarkKey(BenchmarkMode.wasmSingleThreaded, n),
-        ) &&
-        browserResults.containsKey(BenchmarkKey(BenchmarkMode.jsCanvasKit, n)),
+        succeeded(BenchmarkMode.wasmMultithreaded, n) &&
+        succeeded(BenchmarkMode.wasmSingleThreaded, n) &&
+        succeeded(BenchmarkMode.jsCanvasKit, n),
   );
 }
 
@@ -1140,6 +1145,33 @@ String? selectCdpPageTargetWsUrl(List<dynamic> targets) {
   return null;
 }
 
+/// Builds the command line for the Chrome CDP driver.
+///
+/// [extraFlags] (from repeated `--chrome-flag=` arguments) are appended after
+/// the built-in defaults; [initialUrl] is always the last argument.
+List<String> buildChromeArgs({
+  required bool isLinux,
+  required int debugPort,
+  required int viewportWidth,
+  required int viewportHeight,
+  required String? userDataDir,
+  required List<String> extraFlags,
+  required String initialUrl,
+}) => [
+  if (isLinux) ...['--headless=new', '--no-sandbox', '--no-proxy-server'],
+  '--enable-experimental-web-platform-features',
+  '--remote-debugging-port=$debugPort',
+  if (userDataDir != null) '--user-data-dir=$userDataDir',
+  '--disable-background-timer-throttling',
+  '--disable-backgrounding-occluded-windows',
+  '--disable-renderer-backgrounding',
+  '--no-first-run',
+  '--no-default-browser-check',
+  '--window-size=${viewportWidth + 100},${viewportHeight + 100}',
+  ...extraFlags,
+  initialUrl,
+];
+
 /// Drives Chrome via native Chrome DevTools Protocol (CDP) WebSocket.
 class _ChromeCdpDriver([
   final String? customBinary,
@@ -1157,9 +1189,11 @@ class _ChromeCdpDriver([
 
   @override
   Future<bool> isAvailable() async {
-    final chromePath = customBinary ?? _findChromeBinary();
+    final chromePath = _chromePath;
     return chromePath != null && File(chromePath).existsSync();
   }
+
+  String? get _chromePath => customBinary ?? _findChromeBinary();
 
   static String? _findChromeBinary() {
     if (Platform.isMacOS) {
@@ -1179,29 +1213,25 @@ class _ChromeCdpDriver([
   }) async {
     _viewportWidth = viewportWidth;
     _viewportHeight = viewportHeight;
-    final chromePath = _findChromeBinary()!;
+    final chromePath = _chromePath!;
     _port = await _findAvailablePort();
     if (!Platform.isLinux) {
       _tempDir = await Directory.systemTemp.createTemp('chrome_bench_');
     }
 
-    _process = await Process.start(chromePath, [
-      if (Platform.isLinux) ...[
-        '--headless=new',
-        '--no-sandbox',
-        '--no-proxy-server',
-      ],
-      '--enable-experimental-web-platform-features',
-      '--remote-debugging-port=$_port',
-      if (!Platform.isLinux) '--user-data-dir=${_tempDir!.path}',
-      '--disable-background-timer-throttling',
-      '--disable-backgrounding-occluded-windows',
-      '--disable-renderer-backgrounding',
-      '--no-first-run',
-      '--no-default-browser-check',
-      '--window-size=${viewportWidth + 100},${viewportHeight + 100}',
-      initialUrl,
-    ], mode: ProcessStartMode.normal);
+    _process = await Process.start(
+      chromePath,
+      buildChromeArgs(
+        isLinux: Platform.isLinux,
+        debugPort: _port,
+        viewportWidth: viewportWidth,
+        viewportHeight: viewportHeight,
+        userDataDir: _tempDir?.path,
+        extraFlags: customFlags,
+        initialUrl: initialUrl,
+      ),
+      mode: ProcessStartMode.normal,
+    );
 
     await _connectToPageTarget();
   }
@@ -1811,9 +1841,9 @@ Options:
   --workload=<name>        Workload type: bouncy (layout churn) or grid (card grid).
                            Default: bouncy
   --preset=<name>          Convenience workload preset: light, medium, heavy, or all.
-                           (bouncy: 32, 64, 128; grid: 100, 1000, 8000)
+                           (bouncy: 32, 64, 128; grid: 100, 1000, 5000)
   --nodes=<counts>         Comma-separated list of stress node counts.
-                           Default: 32,64,128 (bouncy) or 100,1000,8000 (grid)
+                           Default: 32,64,128 (bouncy) or 100,1000,5000 (grid)
   --modes=<modes>          Comma-separated list of engine modes: wasm_mt, wasm_st, wimp_mt, wimp_st, js, wp (or all).
                            Default: wasm_mt,wasm_st,js
   --viewport=<WxH>         Enforced inner viewport size in pixels across all browsers.
@@ -1828,6 +1858,10 @@ Options:
   --json                   Print formatted JSON telemetry results to stdout.
   --json-output=<file>     Optional file path to save the JSON telemetry results.
   --skip-capability-probe  Skip the initial Wasm JS-string capability probe.
+  --chrome-flag=<flag>     Extra Chrome flag, appended after the built-in defaults.
+                           Repeatable, e.g. --chrome-flag=--disable-gpu-vsync
+  --chrome-binary=<path>   Chrome executable to launch.
+                           Default: /usr/bin/google-chrome (Linux) or Google Chrome.app (macOS)
   --help, -h               Show this help message.
 
 Examples:
