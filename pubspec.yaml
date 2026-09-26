@@ -36,6 +36,7 @@ dependencies:
   web: ^1.1.1
 
 dev_dependencies:
+  args: ^2.6.0
   bench_press: ^0.3.0
   dart_flutter_team_lints: ^3.5.2
   flutter_test:

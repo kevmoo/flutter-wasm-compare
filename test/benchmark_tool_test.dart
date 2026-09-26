@@ -78,20 +78,25 @@ void main() {
 
       final full = BenchmarkArgs.parse([
         '--url=http://localhost:8080/',
-        '--browsers=chrome,firefox',
-        '--modes=mt,js',
+        '--browser=chrome,firefox',
+        '--modes=wasm_mt,js,webparagraph',
         '--viewport=1920x1080',
         '--settle-seconds=2',
         '--output=doc/bench.md',
         '--json-output=doc/bench.json',
         '--skip-capability-probe',
+        '--headed',
       ]);
       expect(full.showHelp, isFalse);
       expect(full.baseUrl, equals('http://localhost:8080/'));
       expect(full.browsers, equals([BrowserType.chrome, BrowserType.firefox]));
       expect(
         full.modes,
-        equals([BenchmarkMode.wasmMultithreaded, BenchmarkMode.jsCanvasKit]),
+        equals([
+          BenchmarkMode.wasmMultithreaded,
+          BenchmarkMode.jsCanvasKit,
+          BenchmarkMode.jsWebParagraph,
+        ]),
       );
       expect(full.viewportWidth, equals(1920));
       expect(full.viewportHeight, equals(1080));
@@ -99,6 +104,7 @@ void main() {
       expect(full.outputPath, equals('doc/bench.md'));
       expect(full.jsonOutputPath, equals('doc/bench.json'));
       expect(full.skipCapabilityProbe, isTrue);
+      expect(full.headed, isTrue);
     });
 
     test('parses WIMP mode tokens', () {
@@ -117,17 +123,103 @@ void main() {
       final defaults = BenchmarkArgs.parse([]);
       expect(defaults.chromeFlags, isEmpty);
       expect(defaults.chromeBinary, isNull);
+      expect(defaults.headed, isFalse);
 
       final args = BenchmarkArgs.parse([
         '--chrome-flag=--disable-gpu-vsync',
         '--chrome-flag=--disable-frame-rate-limit',
+        '--chrome-flag=--enable-features=Foo,Bar',
         '--chrome-binary=/opt/chrome/chrome',
       ]);
       expect(
         args.chromeFlags,
-        equals(['--disable-gpu-vsync', '--disable-frame-rate-limit']),
+        equals([
+          '--disable-gpu-vsync',
+          '--disable-frame-rate-limit',
+          '--enable-features=Foo,Bar',
+        ]),
       );
       expect(args.chromeBinary, equals('/opt/chrome/chrome'));
+    });
+
+    test('buildParser.usage documents --headed and canonical flags', () {
+      final usage = BenchmarkArgs.buildParser().usage;
+      expect(usage, contains('--headed'));
+      expect(usage, contains('--browser'));
+      expect(usage, contains('--sample-interval'));
+      expect(usage, isNot(contains('--browsers')));
+      expect(usage, isNot(contains('--sample-interval-ms')));
+    });
+
+    test('throws FormatException on unknown flags or positional args', () {
+      for (final badArgs in [
+        ['--unknown'],
+        ['--browsers=chrome'],
+        ['--sample-interval-ms=1000'],
+        ['--mode=wasm_mt'],
+        ['--node=64'],
+        ['-x'],
+        ['bouncy'],
+        ['--browser=chrome', 'extra'],
+      ]) {
+        expect(
+          () => BenchmarkArgs.parse(badArgs),
+          throwsFormatException,
+          reason: 'Expected FormatException for $badArgs',
+        );
+      }
+    });
+
+    test('throws FormatException on invalid option values', () {
+      for (final badArgs in [
+        ['--workload=foo'],
+        ['--workload='],
+        ['--preset=ultra'],
+        ['--preset=max'],
+        ['--preset='],
+        ['--browser=ie'],
+        ['--browser=chrome,'],
+        ['--browser='],
+        ['--modes=foo'],
+        ['--modes=mt'],
+        ['--modes=st'],
+        ['--modes=wp'],
+        ['--modes=js_wp'],
+        ['--modes=wasm_mt,foo'],
+        ['--modes='],
+        ['--viewport=100'],
+        ['--viewport=0x720'],
+        ['--viewport=1280x-10'],
+        ['--viewport=axb'],
+        ['--nodes=abc'],
+        ['--nodes=0'],
+        ['--nodes=64,-1'],
+        ['--nodes='],
+        ['--samples=0'],
+        ['--samples=-1'],
+        ['--samples=abc'],
+        ['--sample-interval=0'],
+        ['--sample-interval=-100'],
+        ['--settle-seconds=-1'],
+        ['--settle-seconds=abc'],
+        ['--url='],
+        ['--output='],
+        ['--json-output='],
+        ['--chrome-binary='],
+        ['--chrome-flag='],
+      ]) {
+        expect(
+          () => BenchmarkArgs.parse(badArgs),
+          throwsFormatException,
+          reason: 'Expected FormatException for $badArgs',
+        );
+      }
+
+      // --settle-seconds=0 is valid (non-negative).
+      expect(
+        BenchmarkArgs.parse(['--settle-seconds=0']).settleSeconds,
+        equals(0),
+      );
     });
   });
 
@@ -244,6 +336,7 @@ void main() {
       required bool isLinux,
       String? userDataDir,
       List<String> extraFlags = const [],
+      bool headed = false,
     }) => buildChromeArgs(
       isLinux: isLinux,
       debugPort: 9222,
@@ -252,6 +345,7 @@ void main() {
       userDataDir: userDataDir,
       extraFlags: extraFlags,
       initialUrl: url,
+      headed: headed,
     );
 
     test('keeps the default Linux launch line', () {
@@ -272,6 +366,29 @@ void main() {
           url,
         ]),
       );
+    });
+
+    test('omits --headless=new and --no-sandbox when headed on Linux', () {
+      final args = build(
+        isLinux: true,
+        headed: true,
+        userDataDir: '/tmp/chrome_bench_headed',
+      );
+      expect(args, isNot(contains('--headless=new')));
+      expect(args, isNot(contains('--no-sandbox')));
+      expect(args, contains('--no-proxy-server'));
+      expect(args, contains('--user-data-dir=/tmp/chrome_bench_headed'));
+      expect(args.last, equals(url));
+    });
+
+    test('hasLinuxDisplay checks DISPLAY and WAYLAND_DISPLAY', () {
+      expect(hasLinuxDisplay(const {}), isFalse);
+      expect(
+        hasLinuxDisplay(const {'DISPLAY': '  ', 'WAYLAND_DISPLAY': ''}),
+        isFalse,
+      );
+      expect(hasLinuxDisplay(const {'DISPLAY': ':0'}), isTrue);
+      expect(hasLinuxDisplay(const {'WAYLAND_DISPLAY': 'wayland-0'}), isTrue);
     });
 
     test('appends extra flags after the defaults, before the URL', () {
@@ -302,7 +419,7 @@ void main() {
   group('formatMarkdownReport', () {
     test('generates structured Markdown tables and speedup metrics', () {
       final args = BenchmarkArgs.parse([
-        '--browsers=chrome',
+        '--browser=chrome',
         '--modes=wasm_mt,wasm_st,js',
         '--nodes=64',
         '--samples=2',
@@ -434,7 +551,7 @@ void main() {
 
     test('flags runs whose runtime contradicts their mode label', () {
       final args = BenchmarkArgs.parse([
-        '--browsers=chrome',
+        '--browser=chrome',
         '--modes=wasm_mt,wimp_mt',
         '--nodes=128',
       ]);
@@ -511,7 +628,7 @@ void main() {
 
     test('omits takeaways for node counts with an errored mode', () {
       final args = BenchmarkArgs.parse([
-        '--browsers=chrome',
+        '--browser=chrome',
         '--modes=wasm_mt,wasm_st,js',
         '--nodes=64',
       ]);
