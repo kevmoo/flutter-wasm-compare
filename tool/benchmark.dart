@@ -32,7 +32,19 @@ Future<void> main(List<String> rawArgs) async {
     }
   }
 
-  if (benchmarkResults.isEmpty) {
+  var anyFailed = false;
+  var anySuccess = false;
+  for (final browserMap in benchmarkResults.values) {
+    for (final multi in browserMap.values) {
+      if (multi.errorMessage != null) {
+        anyFailed = true;
+      } else {
+        anySuccess = true;
+      }
+    }
+  }
+
+  if (!anySuccess) {
     print('\nNo benchmark results collected.');
     exitCode = 1;
     return;
@@ -43,6 +55,10 @@ Future<void> main(List<String> rawArgs) async {
     capabilityResults: capabilityResults,
     benchmarkResults: benchmarkResults,
   );
+
+  if (anyFailed) {
+    exitCode = 1;
+  }
 }
 
 void _printHeader(BenchmarkArgs args) {
@@ -67,7 +83,7 @@ Future<Map<BenchmarkKey, MultiSampleRecord>?> _runBrowserSuite({
   required BenchmarkArgs args,
   required Map<BrowserType, CapabilityRecord> capabilityResults,
 }) async {
-  final driver = _createDriver(browserType);
+  final driver = _createDriver(browserType, args);
   if (!await driver.isAvailable()) {
     print('⚠️  Skipping ${browserType.label}: binary/driver not found.');
     return null;
@@ -108,14 +124,21 @@ Future<Map<BenchmarkKey, MultiSampleRecord>?> _runBrowserSuite({
         continue;
       }
       for (final nodes in args.nodeCounts) {
-        final multi = await _runWorkloadForModeAndNodes(
-          driver: driver,
-          args: args,
-          mode: mode,
-          nodes: nodes,
-        );
-        if (multi != null) {
-          browserMap[BenchmarkKey(mode, nodes)] = multi;
+        try {
+          final multi = await _runWorkloadForModeAndNodes(
+            driver: driver,
+            args: args,
+            mode: mode,
+            nodes: nodes,
+          );
+          if (multi != null) {
+            browserMap[BenchmarkKey(mode, nodes)] = multi;
+          }
+        } catch (e) {
+          print('    ❌ Workload failed: $e');
+          browserMap[BenchmarkKey(mode, nodes)] = MultiSampleRecord.error(
+            e.toString(),
+          );
         }
       }
     }
@@ -161,15 +184,21 @@ Future<MultiSampleRecord?> _runWorkloadForModeAndNodes({
     workload: args.workload,
   );
 
-  await driver.evaluate('''
-    try {
-      localStorage.removeItem('${mode.storageKey}');
-      localStorage.removeItem('${mode.storageKey}_${args.workload}');
-      localStorage.removeItem('wasm_compare_active_node_count');
-      localStorage.removeItem('wasm_compare_active_node_count_${args.workload}');
-      localStorage.removeItem('wasm_compare_active_workload_id');
-    } catch (_) {}
-  ''');
+  try {
+    await driver.evaluate('''
+      (() => {
+        try {
+          localStorage.removeItem('${mode.storageKey}');
+          localStorage.removeItem('${mode.storageKey}_${args.workload}');
+          localStorage.removeItem('wasm_compare_active_node_count');
+          localStorage.removeItem('wasm_compare_active_node_count_${args.workload}');
+          localStorage.removeItem('wasm_compare_active_workload_id');
+        } catch (_) {}
+      })()
+    ''');
+  } catch (e) {
+    print('  ⚠️  localStorage clear failed: $e');
+  }
 
   stdout.write(
     '  • [${mode.label} / ${args.workload}] @ $nodes nodes: settling...',
@@ -472,14 +501,18 @@ void _writeMarkdownMatrix(
     for (final col in columns) {
       final rec = results[col.browser]?[BenchmarkKey(col.mode, nodes)];
       if (rec != null) {
-        final fpsStr = rec.fps.medianNs.toStringAsFixed(1);
-        final buildStr = (rec.buildTime.medianNs / 1e6).toStringAsFixed(2);
-        final rasterStr = (rec.rasterTime.medianNs / 1e6).toStringAsFixed(2);
-        final invalid = rec.runtime?.invalidReason(col.mode) != null;
-        final flag = invalid ? '⚠️ INVALID ' : '';
-        buffer.write(
-          ' $flag**$fpsStr FPS** / ${buildStr}ms / ${rasterStr}ms |',
-        );
+        if (rec.errorMessage != null) {
+          buffer.write(' ⚠️ ERROR |');
+        } else {
+          final fpsStr = rec.fps.medianNs.toStringAsFixed(1);
+          final buildStr = (rec.buildTime.medianNs / 1e6).toStringAsFixed(2);
+          final rasterStr = (rec.rasterTime.medianNs / 1e6).toStringAsFixed(2);
+          final invalid = rec.runtime?.invalidReason(col.mode) != null;
+          final flag = invalid ? '⚠️ INVALID ' : '';
+          buffer.write(
+            ' $flag**$fpsStr FPS** / ${buildStr}ms / ${rasterStr}ms |',
+          );
+        }
       } else {
         buffer.write(' N/A |');
       }
@@ -635,20 +668,32 @@ Map<String, Object?> _generateJsonReport({
       final key = mapEntry.key;
       final multi = mapEntry.value;
 
-      benchmarksList.add({
-        'browser': browser.label.toLowerCase(),
-        'mode': key.mode.name,
-        'mode_label': key.mode.label,
-        'nodes': key.nodes,
-        'samples': multi.samplesCount,
-        'is_pipelined': multi.isPipelined,
-        'fps': statsToJson(multi.fps, isMs: false),
-        'build_time_ms': statsToJson(multi.buildTime, isMs: true),
-        'raster_time_ms': statsToJson(multi.rasterTime, isMs: true),
-        'total_frame_time_ms': statsToJson(multi.totalFrameTime, isMs: true),
-        'jitter_ms': statsToJson(multi.jitter, isMs: true),
-        'runtime': multi.runtime?.toJson(key.mode),
-      });
+      if (multi.errorMessage != null) {
+        benchmarksList.add({
+          'browser': browser.label.toLowerCase(),
+          'mode': key.mode.name,
+          'mode_label': key.mode.label,
+          'workload': args.workload,
+          'nodes': key.nodes,
+          'error': multi.errorMessage,
+        });
+      } else {
+        benchmarksList.add({
+          'browser': browser.label.toLowerCase(),
+          'mode': key.mode.name,
+          'mode_label': key.mode.label,
+          'workload': args.workload,
+          'nodes': key.nodes,
+          'samples': multi.samplesCount,
+          'is_pipelined': multi.isPipelined,
+          'fps': statsToJson(multi.fps, isMs: false),
+          'build_time_ms': statsToJson(multi.buildTime, isMs: true),
+          'raster_time_ms': statsToJson(multi.rasterTime, isMs: true),
+          'total_frame_time_ms': statsToJson(multi.totalFrameTime, isMs: true),
+          'jitter_ms': statsToJson(multi.jitter, isMs: true),
+          'runtime': multi.runtime?.toJson(key.mode),
+        });
+      }
     }
 
     // Generate comparison ratios for matching node counts
@@ -919,7 +964,25 @@ class MultiSampleRecord({
   required final List<double> rawBuildMs,
   required final List<double> rawRasterMs,
   final RuntimeRecord? runtime,
+  final String? errorMessage,
 }) {
+  factory error(String error) {
+    final empty = BenchmarkMetrics.fromSamples([0]);
+    return MultiSampleRecord(
+      samplesCount: 0,
+      isPipelined: false,
+      fps: empty,
+      buildTime: empty,
+      rasterTime: empty,
+      totalFrameTime: empty,
+      jitter: empty,
+      rawFps: const [],
+      rawBuildMs: const [],
+      rawRasterMs: const [],
+      errorMessage: error,
+    );
+  }
+
   factory fromRecords(List<BenchmarkRecord> records, {RuntimeRecord? runtime}) {
     final rawFps = records.map((r) => r.effectiveFps).toList();
     final rawBuild = records.map((r) => r.buildTimeMs).toList();
@@ -997,6 +1060,7 @@ class RuntimeRecord({
       return isWimp == null ? null : 'skwasm engine loaded on a JS run';
     }
     if (isWimp != expected.wimp) {
+      if (isWimp == null) return 'no engine loaded (isWimp=null)';
       return expected.wimp
           ? 'WIMP not active (isWimp=$isWimp)'
           : 'skwasm run with isWimp=$isWimp';
@@ -1051,11 +1115,15 @@ abstract interface class BrowserDriver() {
   Future<void> stop();
 }
 
-BrowserDriver _createDriver(BrowserType type) => switch (type) {
-  BrowserType.chrome => _ChromeCdpDriver(),
-  BrowserType.safari => _SafariWebDriver(),
-  BrowserType.firefox => _FirefoxWebDriver(),
-};
+BrowserDriver _createDriver(BrowserType type, BenchmarkArgs args) =>
+    switch (type) {
+      BrowserType.chrome => _ChromeCdpDriver(
+        args.chromeBinary,
+        args.chromeFlags,
+      ),
+      BrowserType.safari => _SafariWebDriver(),
+      BrowserType.firefox => _FirefoxWebDriver(),
+    };
 
 /// Selects the first CDP page target whose URL starts with `http`.
 String? selectCdpPageTargetWsUrl(List<dynamic> targets) {
@@ -1073,7 +1141,10 @@ String? selectCdpPageTargetWsUrl(List<dynamic> targets) {
 }
 
 /// Drives Chrome via native Chrome DevTools Protocol (CDP) WebSocket.
-class _ChromeCdpDriver() implements BrowserDriver {
+class _ChromeCdpDriver([
+  final String? customBinary,
+  final List<String> customFlags = const [],
+]) implements BrowserDriver {
   Process? _process;
   WebSocket? _ws;
   Directory? _tempDir;
@@ -1086,7 +1157,7 @@ class _ChromeCdpDriver() implements BrowserDriver {
 
   @override
   Future<bool> isAvailable() async {
-    final chromePath = _findChromeBinary();
+    final chromePath = customBinary ?? _findChromeBinary();
     return chromePath != null && File(chromePath).existsSync();
   }
 
@@ -1394,7 +1465,19 @@ abstract class _W3cWebDriver() implements BrowserDriver {
     }
     final resp = await req.close().timeout(const Duration(seconds: 30));
     final body = await resp.transform(utf8.decoder).join();
-    return jsonDecode(body) as Map<String, dynamic>;
+    if (resp.statusCode >= 400) {
+      throw StateError('WebDriver HTTP ${resp.statusCode}: $body');
+    }
+    final json = jsonDecode(body) as Map<String, dynamic>;
+    if (json.containsKey('value') && json['value'] is Map) {
+      final val = json['value'] as Map<String, dynamic>;
+      if (val['error'] != null) {
+        throw StateError(
+          'WebDriver error: ${val['error']} - ${val['message']}',
+        );
+      }
+    }
+    return json;
   }
 }
 
@@ -1509,6 +1592,8 @@ class BenchmarkArgs({
   required final bool jsonOutput,
   required final String? jsonOutputPath,
   required final bool skipCapabilityProbe,
+  required final List<String> chromeFlags,
+  required final String? chromeBinary,
 }) {
   static List<int> _defaultNodesForWorkload(String workload, [String? preset]) {
     final isGrid = workload == 'grid';
@@ -1518,9 +1603,9 @@ class BenchmarkArgs({
       case 'medium':
         return isGrid ? [1000] : [64];
       case 'heavy' || 'max':
-        return isGrid ? [8000] : [128];
+        return isGrid ? [5000] : [128];
       default:
-        return isGrid ? [100, 1000, 8000] : [32, 64, 128];
+        return isGrid ? [100, 1000, 5000] : [32, 64, 128];
     }
   }
 
@@ -1541,6 +1626,8 @@ class BenchmarkArgs({
         jsonOutput: false,
         jsonOutputPath: null,
         skipCapabilityProbe: false,
+        chromeFlags: const [],
+        chromeBinary: null,
       );
     }
 
@@ -1575,12 +1662,18 @@ class _MutableBenchmarkArgs() {
   bool jsonOutput = false;
   String? jsonOutputPath;
   bool skipCapabilityProbe = false;
+  List<String> chromeFlags = [];
+  String? chromeBinary;
 
   void applyArg(String arg) {
     if (arg == '--json') {
       jsonOutput = true;
     } else if (arg == '--skip-capability-probe') {
       skipCapabilityProbe = true;
+    } else if (arg.startsWith('--chrome-flag=')) {
+      chromeFlags.add(arg.substring('--chrome-flag='.length).trim());
+    } else if (arg.startsWith('--chrome-binary=')) {
+      chromeBinary = arg.substring('--chrome-binary='.length).trim();
     } else if (arg.startsWith('--')) {
       _applyKeyValueArg(arg);
     }
@@ -1698,6 +1791,8 @@ class _MutableBenchmarkArgs() {
       jsonOutput: jsonOutput,
       jsonOutputPath: jsonOutputPath,
       skipCapabilityProbe: skipCapabilityProbe,
+      chromeFlags: chromeFlags,
+      chromeBinary: chromeBinary,
     );
   }
 }
