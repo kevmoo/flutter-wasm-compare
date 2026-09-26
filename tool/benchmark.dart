@@ -171,7 +171,7 @@ Future<void> _probeCapabilities({
   print('    - Cross-Origin Isolated:     ${probe.crossOriginIsolated}');
 }
 
-Future<MultiSampleRecord?> _runWorkloadForModeAndNodes({
+Future<MultiSampleRecord> _runWorkloadForModeAndNodes({
   required BrowserDriver driver,
   required BenchmarkArgs args,
   required BenchmarkMode mode,
@@ -222,9 +222,20 @@ Future<MultiSampleRecord?> _runWorkloadForModeAndNodes({
   );
   stdout.write(' done.\r');
 
-  final multi = collected.isNotEmpty
-      ? MultiSampleRecord.fromRecords(collected, runtime: runtime)
-      : null;
+  MultiSampleRecord multi;
+  if (collected.isEmpty) {
+    multi = MultiSampleRecord.error(
+      'No metrics found in localStorage after ${args.settleSeconds}s settle',
+      runtime: runtime,
+    );
+  } else if (collected.length < args.samples) {
+    multi = MultiSampleRecord.error(
+      'Incomplete sample count: collected ${collected.length}/${args.samples} samples before timeout',
+      runtime: runtime,
+    );
+  } else {
+    multi = MultiSampleRecord.fromRecords(collected, runtime: runtime);
+  }
   _printWorkloadSummary(mode, nodes, multi, runtime);
   return multi;
 }
@@ -552,7 +563,9 @@ Iterable<int> _matchingNodeCounts(
 ) {
   bool succeeded(BenchmarkMode mode, int nodes) {
     final record = browserResults[BenchmarkKey(mode, nodes)];
-    return record != null && record.errorMessage == null;
+    return record != null &&
+        record.errorMessage == null &&
+        record.runtime?.invalidReason(mode) == null;
   }
 
   return nodeCounts.where(
@@ -930,10 +943,10 @@ class BenchmarkRecord({
         return normMode == 'wasm' && isPipelined;
       case BenchmarkMode.wasmSingleThreaded:
         return normMode == 'wasm' && !isPipelined;
-      case BenchmarkMode.wimpMultithreaded || BenchmarkMode.wimpSingleThreaded:
-        // The app reports every WIMP run as `isPipelined: false`, so WIMP
-        // threading is verified from engine exports via [RuntimeRecord].
-        return normMode == 'wimp';
+      case BenchmarkMode.wimpMultithreaded:
+        return normMode == 'wimp' && isPipelined;
+      case BenchmarkMode.wimpSingleThreaded:
+        return normMode == 'wimp' && !isPipelined;
       case BenchmarkMode.jsCanvasKit:
         return normMode == 'js';
       case BenchmarkMode.jsWebParagraph:
@@ -971,7 +984,7 @@ class MultiSampleRecord({
   final RuntimeRecord? runtime,
   final String? errorMessage,
 }) {
-  factory error(String error) {
+  factory error(String error, {RuntimeRecord? runtime}) {
     final empty = BenchmarkMetrics.fromSamples([0]);
     return MultiSampleRecord(
       samplesCount: 0,
@@ -985,6 +998,7 @@ class MultiSampleRecord({
       rawBuildMs: const [],
       rawRasterMs: const [],
       errorMessage: error,
+      runtime: runtime,
     );
   }
 
@@ -1151,6 +1165,7 @@ String? selectCdpPageTargetWsUrl(List<dynamic> targets) {
 /// the built-in defaults; [initialUrl] is always the last argument.
 List<String> buildChromeArgs({
   required bool isLinux,
+  required bool headed,
   required int debugPort,
   required int viewportWidth,
   required int viewportHeight,
@@ -1158,7 +1173,12 @@ List<String> buildChromeArgs({
   required List<String> extraFlags,
   required String initialUrl,
 }) => [
-  if (isLinux) ...['--headless=new', '--no-sandbox', '--no-proxy-server'],
+  if (isLinux && !headed) ...[
+    '--headless=new',
+    '--no-sandbox',
+    '--no-proxy-server',
+  ],
+  if (isLinux && headed) ...['--no-sandbox', '--no-proxy-server'],
   '--enable-experimental-web-platform-features',
   '--remote-debugging-port=$debugPort',
   if (userDataDir != null) '--user-data-dir=$userDataDir',
@@ -1210,12 +1230,13 @@ class _ChromeCdpDriver([
     required int viewportWidth,
     required int viewportHeight,
     String initialUrl = 'http://localhost:8899/',
+    bool headed = false,
   }) async {
     _viewportWidth = viewportWidth;
     _viewportHeight = viewportHeight;
     final chromePath = _chromePath!;
     _port = await _findAvailablePort();
-    if (!Platform.isLinux) {
+    if (!Platform.isLinux || headed) {
       _tempDir = await Directory.systemTemp.createTemp('chrome_bench_');
     }
 
@@ -1223,6 +1244,7 @@ class _ChromeCdpDriver([
       chromePath,
       buildChromeArgs(
         isLinux: Platform.isLinux,
+        headed: headed,
         debugPort: _port,
         viewportWidth: viewportWidth,
         viewportHeight: viewportHeight,
@@ -1397,6 +1419,7 @@ abstract class _W3cWebDriver() implements BrowserDriver {
     required int viewportWidth,
     required int viewportHeight,
     String initialUrl = 'http://localhost:8899/',
+    bool headed = false,
   }) async {
     _port = await _findAvailablePort();
     _driverProcess = await Process.start(executablePath, [
@@ -1694,51 +1717,72 @@ class _MutableBenchmarkArgs() {
   bool skipCapabilityProbe = false;
   List<String> chromeFlags = [];
   String? chromeBinary;
+  bool headed = false;
 
   void applyArg(String arg) {
     if (arg == '--json') {
       jsonOutput = true;
     } else if (arg == '--skip-capability-probe') {
       skipCapabilityProbe = true;
+    } else if (arg == '--headed') {
+      headed = true;
     } else if (arg.startsWith('--chrome-flag=')) {
       chromeFlags.add(arg.substring('--chrome-flag='.length).trim());
     } else if (arg.startsWith('--chrome-binary=')) {
       chromeBinary = arg.substring('--chrome-binary='.length).trim();
     } else if (arg.startsWith('--')) {
       _applyKeyValueArg(arg);
+    } else {
+      throw FormatException('Unknown or malformed option: $arg');
     }
   }
 
   void _applyKeyValueArg(String arg) {
     final eqIdx = arg.indexOf('=');
-    if (eqIdx < 0) return;
+    if (eqIdx < 0) throw FormatException('Unknown or malformed option: $arg');
     final key = arg.substring(0, eqIdx);
     final val = arg.substring(eqIdx + 1);
     switch (key) {
       case '--url':
         baseUrl = val;
       case '--workload':
-        workload = val.toLowerCase().trim() == 'grid' ? 'grid' : 'bouncy';
+        final w = val.toLowerCase().trim();
+        if (w != 'grid' && w != 'bouncy')
+          throw FormatException('Unknown workload: $val');
+        workload = w;
       case '--browser' || '--browsers':
         browsers = _parseBrowsers(val);
       case '--modes':
         modes = _parseModes(val);
       case '--preset':
         presetVal = val.toLowerCase();
+        if (!const ['light', 'medium', 'heavy', 'all'].contains(presetVal)) {
+          throw FormatException('Unknown preset: $presetVal');
+        }
       case '--nodes':
         explicitNodeCounts = _parseNodes(val);
       case '--viewport':
         _applyViewport(val);
       case '--settle-seconds':
-        settleSeconds = int.tryParse(val) ?? settleSeconds;
+        final s = int.tryParse(val);
+        if (s == null || s < 0)
+          throw FormatException('Invalid settle-seconds: $val');
+        settleSeconds = s;
       case '--samples':
-        samples = int.tryParse(val) ?? samples;
+        final s = int.tryParse(val);
+        if (s == null || s <= 0) throw FormatException('Invalid samples: $val');
+        samples = s;
       case '--sample-interval' || '--sample-interval-ms':
-        sampleIntervalMs = int.tryParse(val) ?? sampleIntervalMs;
+        final s = int.tryParse(val);
+        if (s == null || s <= 0)
+          throw FormatException('Invalid sample-interval: $val');
+        sampleIntervalMs = s;
       case '--output':
         outputPath = val;
       case '--json-output':
         jsonOutputPath = val;
+      default:
+        throw FormatException('Unknown option: $arg');
     }
   }
 
@@ -1754,6 +1798,8 @@ class _MutableBenchmarkArgs() {
           result.add(BrowserType.safari);
         case 'firefox':
           result.add(BrowserType.firefox);
+        default:
+          throw FormatException('Unknown browser: $token');
       }
     }
     return result;
@@ -1777,6 +1823,8 @@ class _MutableBenchmarkArgs() {
           result.add(BenchmarkMode.jsCanvasKit);
         case 'webparagraph' || 'wp' || 'js_wp':
           result.add(BenchmarkMode.jsWebParagraph);
+        default:
+          throw FormatException('Unknown mode: $token');
       }
     }
     return result;
@@ -1793,9 +1841,11 @@ class _MutableBenchmarkArgs() {
     if (parts.length != 2) return;
     final w = int.tryParse(parts[0].trim());
     final h = int.tryParse(parts[1].trim());
-    if (w != null && h != null) {
+    if (w != null && w > 0 && h != null && h > 0) {
       viewportWidth = w;
       viewportHeight = h;
+    } else {
+      throw FormatException('Invalid viewport: $val');
     }
   }
 
@@ -1823,6 +1873,7 @@ class _MutableBenchmarkArgs() {
       skipCapabilityProbe: skipCapabilityProbe,
       chromeFlags: chromeFlags,
       chromeBinary: chromeBinary,
+      headed: headed,
     );
   }
 }

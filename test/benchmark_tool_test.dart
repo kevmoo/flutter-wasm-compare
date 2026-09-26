@@ -246,6 +246,7 @@ void main() {
       List<String> extraFlags = const [],
     }) => buildChromeArgs(
       isLinux: isLinux,
+      headed: false,
       debugPort: 9222,
       viewportWidth: 1280,
       viewportHeight: 720,
