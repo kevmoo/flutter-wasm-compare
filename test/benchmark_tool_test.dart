@@ -696,11 +696,11 @@ void main() {
         expect(parsed.crossOriginIsolated, isFalse);
         expect(
           parsed.invalidReason(BenchmarkMode.wimpMultithreaded),
-          equals('WIMP not active (isWimp=null)'),
+          equals('no engine loaded (isWimp=null)'),
         );
         expect(
           parsed.invalidReason(BenchmarkMode.wasmSingleThreaded),
-          equals('skwasm run with isWimp=null'),
+          equals('no engine loaded (isWimp=null)'),
         );
       }
     });
