@@ -100,6 +100,18 @@ void main() {
       expect(full.jsonOutputPath, equals('doc/bench.json'));
       expect(full.skipCapabilityProbe, isTrue);
     });
+
+    test('parses WIMP mode tokens', () {
+      final args = BenchmarkArgs.parse(['--modes=wimp_mt,wimp_st,wasm_mt']);
+      expect(
+        args.modes,
+        equals([
+          BenchmarkMode.wimpMultithreaded,
+          BenchmarkMode.wimpSingleThreaded,
+          BenchmarkMode.wasmMultithreaded,
+        ]),
+      );
+    });
   });
 
   group('buildBenchmarkUrl & selectCdpPageTargetWsUrl', () {
@@ -153,6 +165,30 @@ void main() {
         wpUrl,
         equals(
           'https://example.com/?workload=bouncy&stress=manual&nodes=500&mode=webparagraph',
+        ),
+      );
+    });
+
+    test('buildBenchmarkUrl selects the WIMP renderer for WIMP modes', () {
+      expect(
+        buildBenchmarkUrl(
+          'https://example.com/',
+          BenchmarkMode.wimpMultithreaded,
+          128,
+        ),
+        equals(
+          'https://example.com/?workload=bouncy&stress=manual&nodes=128&mode=wimp&optin=true&st=0',
+        ),
+      );
+      expect(
+        buildBenchmarkUrl(
+          'https://example.com/',
+          BenchmarkMode.wimpSingleThreaded,
+          1000,
+          workload: 'grid',
+        ),
+        equals(
+          'https://example.com/?workload=grid&stress=manual&nodes=1000&mode=wimp&optin=true&st=1',
         ),
       );
     });
@@ -314,6 +350,84 @@ void main() {
       expect(markdown, contains('Worker Raster Overhead:'));
       expect(markdown, contains('Pipelining Throughput Win:'));
       expect(markdown, contains('Dart2Wasm vs Dart2JS:'));
+      expect(markdown, isNot(contains('## 🔎 Runtime Verification')));
+    });
+
+    test('flags runs whose runtime contradicts their mode label', () {
+      final args = BenchmarkArgs.parse([
+        '--browsers=chrome',
+        '--modes=wasm_mt,wimp_mt',
+        '--nodes=128',
+      ]);
+      const renderer = 'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device))';
+
+      MultiSampleRecord multi(String mode, RuntimeRecord runtime) =>
+          MultiSampleRecord.fromRecords([
+            BenchmarkRecord(
+              fps: 30.0,
+              buildTimeMs: 25.0,
+              rasterTimeMs: 30.0,
+              totalFrameTimeMs: 55.0,
+              jitterMs: 1.0,
+              isPipelined: mode == 'wasm',
+              nodeCount: 128,
+              mode: mode,
+            ),
+          ], runtime: runtime);
+
+      final results = {
+        BrowserType.chrome: {
+          const BenchmarkKey(BenchmarkMode.wasmMultithreaded, 128): multi(
+            'wasm',
+            RuntimeRecord(
+              isWimp: false,
+              isMultiThreaded: true,
+              crossOriginIsolated: true,
+              webglRenderer: renderer,
+              webglVendor: 'Google Inc. (Google)',
+            ),
+          ),
+          const BenchmarkKey(BenchmarkMode.wimpMultithreaded, 128): multi(
+            'wimp',
+            RuntimeRecord(
+              isWimp: false,
+              isMultiThreaded: true,
+              crossOriginIsolated: true,
+              webglRenderer: renderer,
+            ),
+          ),
+        },
+      };
+
+      final markdown = formatMarkdownReport(
+        args: args,
+        capabilities: const {},
+        results: results,
+      );
+
+      expect(markdown, contains('## 🔎 Runtime Verification'));
+      expect(
+        markdown,
+        contains(
+          '| Chrome | Wasm MT (st=0) | 128 | false | true | true | '
+          '`$renderer` | `Google Inc. (Google)` | ✅ valid |',
+        ),
+      );
+      expect(
+        markdown,
+        contains(
+          '| Chrome | WIMP MT (st=0) | 128 | false | true | true | '
+          '`$renderer` | `n/a` | ⚠️ INVALID: WIMP not active (isWimp=false) |',
+        ),
+      );
+      expect(markdown, contains('| Chrome WIMP MT |'));
+      expect(
+        markdown,
+        contains(
+          '| **Nodes (128)** | **30.0 FPS** / 25.00ms / 30.00ms | '
+          '⚠️ INVALID **30.0 FPS** / 25.00ms / 30.00ms |',
+        ),
+      );
     });
   });
 
@@ -433,6 +547,184 @@ void main() {
       expect(recordWP.matches(BenchmarkMode.jsCanvasKit, 1000), isFalse);
       expect(recordWP.matches(BenchmarkMode.wasmMultithreaded, 1000), isFalse);
       expect(recordWP.matches(BenchmarkMode.wasmSingleThreaded, 1000), isFalse);
+    });
+
+    test('matches WIMP modes on mode wimp regardless of isPipelined', () {
+      for (final isPipelined in [false, true]) {
+        final recordWimp = makeRecord(
+          mode: 'wimp',
+          isPipelined: isPipelined,
+          fps: 24.0,
+          buildTimeMs: 30.0,
+          rasterTimeMs: 39.0,
+          totalFrameTimeMs: 70.0,
+        );
+
+        expect(
+          recordWimp.matches(BenchmarkMode.wimpMultithreaded, 1000),
+          isTrue,
+        );
+        expect(
+          recordWimp.matches(BenchmarkMode.wimpSingleThreaded, 1000),
+          isTrue,
+        );
+        expect(
+          recordWimp.matches(BenchmarkMode.wasmMultithreaded, 1000),
+          isFalse,
+        );
+        expect(
+          recordWimp.matches(BenchmarkMode.wasmSingleThreaded, 1000),
+          isFalse,
+        );
+        expect(recordWimp.matches(BenchmarkMode.jsCanvasKit, 1000), isFalse);
+      }
+
+      final recordWasm = makeRecord(
+        mode: 'wasm',
+        isPipelined: true,
+        fps: 36.0,
+        buildTimeMs: 26.0,
+        rasterTimeMs: 26.0,
+        totalFrameTimeMs: 27.0,
+      );
+      expect(
+        recordWasm.matches(BenchmarkMode.wimpMultithreaded, 1000),
+        isFalse,
+      );
+    });
+  });
+
+  group('RuntimeRecord', () {
+    RuntimeRecord runtime({
+      bool? isWimp,
+      bool? isMultiThreaded,
+      bool crossOriginIsolated = true,
+    }) => RuntimeRecord(
+      isWimp: isWimp,
+      isMultiThreaded: isMultiThreaded,
+      crossOriginIsolated: crossOriginIsolated,
+    );
+
+    test('parses the probe JSON payload', () {
+      final parsed = RuntimeRecord.parse(
+        jsonEncode({
+          'isWimp': true,
+          'isMultiThreaded': true,
+          'crossOriginIsolated': true,
+          'webglRenderer': 'ANGLE (SwiftShader)',
+          'webglVendor': 'Google Inc. (Google)',
+        }),
+      );
+      expect(parsed.isWimp, isTrue);
+      expect(parsed.isMultiThreaded, isTrue);
+      expect(parsed.crossOriginIsolated, isTrue);
+      expect(parsed.webglRenderer, equals('ANGLE (SwiftShader)'));
+      expect(parsed.webglVendor, equals('Google Inc. (Google)'));
+      expect(parsed.invalidReason(BenchmarkMode.wimpMultithreaded), isNull);
+    });
+
+    test('accepts runtimes that match their mode', () {
+      expect(
+        runtime(
+          isWimp: false,
+          isMultiThreaded: true,
+        ).invalidReason(BenchmarkMode.wasmMultithreaded),
+        isNull,
+      );
+      expect(
+        runtime(
+          isWimp: false,
+          isMultiThreaded: false,
+        ).invalidReason(BenchmarkMode.wasmSingleThreaded),
+        isNull,
+      );
+      expect(
+        runtime(
+          isWimp: true,
+          isMultiThreaded: false,
+        ).invalidReason(BenchmarkMode.wimpSingleThreaded),
+        isNull,
+      );
+      expect(runtime().invalidReason(BenchmarkMode.jsCanvasKit), isNull);
+    });
+
+    test('flags WIMP-labelled runs where WIMP is not active', () {
+      expect(
+        runtime(
+          isWimp: false,
+          isMultiThreaded: true,
+        ).invalidReason(BenchmarkMode.wimpMultithreaded),
+        equals('WIMP not active (isWimp=false)'),
+      );
+      expect(
+        runtime(
+          isWimp: true,
+          isMultiThreaded: true,
+        ).invalidReason(BenchmarkMode.wasmMultithreaded),
+        equals('skwasm run with isWimp=true'),
+      );
+    });
+
+    test('flags threading and isolation mismatches', () {
+      expect(
+        runtime(
+          isWimp: true,
+          isMultiThreaded: false,
+        ).invalidReason(BenchmarkMode.wimpMultithreaded),
+        equals('isMultiThreaded=false, expected true'),
+      );
+      expect(
+        runtime(
+          isWimp: false,
+          isMultiThreaded: true,
+          crossOriginIsolated: false,
+        ).invalidReason(BenchmarkMode.wasmMultithreaded),
+        equals('multi-threaded run without crossOriginIsolated'),
+      );
+      expect(
+        runtime(
+          isWimp: false,
+          isMultiThreaded: false,
+        ).invalidReason(BenchmarkMode.jsCanvasKit),
+        equals('skwasm engine loaded on a JS run'),
+      );
+    });
+
+    test('fails closed when the probe result is unreadable', () {
+      for (final raw in [null, '', 'not json', 42]) {
+        final parsed = RuntimeRecord.parse(raw);
+        expect(parsed.crossOriginIsolated, isFalse);
+        expect(
+          parsed.invalidReason(BenchmarkMode.wimpMultithreaded),
+          equals('WIMP not active (isWimp=null)'),
+        );
+        expect(
+          parsed.invalidReason(BenchmarkMode.wasmSingleThreaded),
+          equals('skwasm run with isWimp=null'),
+        );
+      }
+    });
+
+    test('toJson reports validity alongside the raw fields', () {
+      final invalid = runtime(
+        isWimp: false,
+        isMultiThreaded: true,
+      ).toJson(BenchmarkMode.wimpMultithreaded);
+      expect(() => jsonEncode(invalid), returnsNormally);
+      expect(invalid['valid'], isFalse);
+      expect(
+        invalid['invalid_reason'],
+        equals('WIMP not active (isWimp=false)'),
+      );
+      expect(invalid['is_wimp'], isFalse);
+      expect(invalid['cross_origin_isolated'], isTrue);
+
+      final valid = runtime(
+        isWimp: true,
+        isMultiThreaded: true,
+      ).toJson(BenchmarkMode.wimpMultithreaded);
+      expect(valid['valid'], isTrue);
+      expect(valid['invalid_reason'], isNull);
     });
   });
 

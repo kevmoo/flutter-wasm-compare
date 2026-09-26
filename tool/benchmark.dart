@@ -188,12 +188,15 @@ Future<MultiSampleRecord?> _runWorkloadForModeAndNodes({
     mode: mode,
     nodes: nodes,
   );
+  final runtime = RuntimeRecord.parse(
+    await driver.evaluate(_runtimeProbeScript),
+  );
   stdout.write(' done.\r');
 
   final multi = collected.isNotEmpty
-      ? MultiSampleRecord.fromRecords(collected)
+      ? MultiSampleRecord.fromRecords(collected, runtime: runtime)
       : null;
-  _printWorkloadSummary(mode, nodes, multi);
+  _printWorkloadSummary(mode, nodes, multi, runtime);
   return multi;
 }
 
@@ -233,13 +236,16 @@ void _printWorkloadSummary(
   BenchmarkMode mode,
   int nodes,
   MultiSampleRecord? multi,
+  RuntimeRecord runtime,
 ) {
   final label = mode.label.padRight(15);
   final nodeStr = nodes.toString().padLeft(4);
+  final invalidReason = runtime.invalidReason(mode);
+  final invalidTag = invalidReason == null ? '' : ' [INVALID: $invalidReason]';
   if (multi == null) {
     print(
       '  ✗ [$label] @ $nodeStr nodes -> '
-      'No metrics found in localStorage.',
+      'No metrics found in localStorage.$invalidTag',
     );
     return;
   }
@@ -251,13 +257,14 @@ void _printWorkloadSummary(
   final rasterStr = (multi.rasterTime.medianNs / 1e6).toStringAsFixed(2);
   final rasterMad = (multi.rasterTime.madNs / 1e6).toStringAsFixed(2);
   final stabilityTag = multi.buildTime.isRobustStable ? 'STABLE' : 'UNSTABLE';
+  final marker = invalidReason == null ? '✓' : '✗';
 
   print(
-    '  ✓ [$label] @ $nodeStr nodes -> '
+    '  $marker [$label] @ $nodeStr nodes -> '
     '$fpsStr FPS (p95: $p95Fps) | '
     'Build: ${buildStr}ms (MAD: ${buildMad}ms) | '
     'Raster: ${rasterStr}ms (MAD: ${rasterMad}ms) '
-    '[$stabilityTag]',
+    '[$stabilityTag]$invalidTag',
   );
 }
 
@@ -324,6 +331,14 @@ String buildBenchmarkUrl(
       query['mode'] = 'wasm';
       query['optin'] = 'true';
       query['st'] = '1';
+    case BenchmarkMode.wimpMultithreaded:
+      query['mode'] = 'wimp';
+      query['optin'] = 'true';
+      query['st'] = '0';
+    case BenchmarkMode.wimpSingleThreaded:
+      query['mode'] = 'wimp';
+      query['optin'] = 'true';
+      query['st'] = '1';
     case BenchmarkMode.jsCanvasKit:
       query['mode'] = 'js';
       query.remove('optin');
@@ -344,6 +359,7 @@ String formatMarkdownReport({
 }) {
   final buffer = StringBuffer();
   _writeMarkdownHeader(buffer, args);
+  _writeMarkdownRuntime(buffer, results);
   _writeMarkdownCapabilities(buffer, capabilities);
   _writeMarkdownMatrix(buffer, args, results);
   _writeMarkdownTakeaways(buffer, args, results);
@@ -365,6 +381,38 @@ void _writeMarkdownHeader(StringBuffer buffer, BenchmarkArgs args) {
     '- **Sampling**: ${args.samples} trials per run after '
     '${args.settleSeconds}s initial settle',
   );
+  buffer.writeln();
+}
+
+void _writeMarkdownRuntime(
+  StringBuffer buffer,
+  Map<BrowserType, Map<BenchmarkKey, MultiSampleRecord>> results,
+) {
+  final rows = [
+    for (final MapEntry(key: browser, value: records) in results.entries)
+      for (final MapEntry(:key, value: multi) in records.entries)
+        if (multi.runtime case final runtime?) (browser, key, runtime),
+  ];
+  if (rows.isEmpty) return;
+  buffer.writeln('## 🔎 Runtime Verification');
+  buffer.writeln();
+  buffer.writeln(
+    '| Browser | Mode | Nodes | WIMP Active | Engine MT | '
+    'Cross-Origin Isolated | WebGL Renderer | WebGL Vendor | Status |',
+  );
+  buffer.writeln(
+    '| :--- | :--- | ---: | :---: | :---: | :---: | :--- | :--- | :--- |',
+  );
+  for (final (browser, key, runtime) in rows) {
+    final reason = runtime.invalidReason(key.mode);
+    final status = reason == null ? '✅ valid' : '⚠️ INVALID: $reason';
+    buffer.writeln(
+      '| ${browser.label} | ${key.mode.label} | ${key.nodes} | '
+      '${runtime.isWimp ?? 'n/a'} | ${runtime.isMultiThreaded ?? 'n/a'} | '
+      '${runtime.crossOriginIsolated} | `${runtime.webglRenderer ?? 'n/a'}` | '
+      '`${runtime.webglVendor ?? 'n/a'}` | $status |',
+    );
+  }
   buffer.writeln();
 }
 
@@ -427,7 +475,11 @@ void _writeMarkdownMatrix(
         final fpsStr = rec.fps.medianNs.toStringAsFixed(1);
         final buildStr = (rec.buildTime.medianNs / 1e6).toStringAsFixed(2);
         final rasterStr = (rec.rasterTime.medianNs / 1e6).toStringAsFixed(2);
-        buffer.write(' **$fpsStr FPS** / ${buildStr}ms / ${rasterStr}ms |');
+        final invalid = rec.runtime?.invalidReason(col.mode) != null;
+        final flag = invalid ? '⚠️ INVALID ' : '';
+        buffer.write(
+          ' $flag**$fpsStr FPS** / ${buildStr}ms / ${rasterStr}ms |',
+        );
       } else {
         buffer.write(' N/A |');
       }
@@ -595,6 +647,7 @@ Map<String, Object?> _generateJsonReport({
         'raster_time_ms': statsToJson(multi.rasterTime, isMs: true),
         'total_frame_time_ms': statsToJson(multi.totalFrameTime, isMs: true),
         'jitter_ms': statsToJson(multi.jitter, isMs: true),
+        'runtime': multi.runtime?.toJson(key.mode),
       });
     }
 
@@ -712,6 +765,43 @@ const _capabilityProbeScript = '''(() => {
   });
 })()''';
 
+/// Reads the live engine flags (skwasm/WIMP exports) so every run can prove it
+/// exercised the renderer it is labelled with.
+///
+/// The WebGL renderer and vendor come from a throwaway main-thread WebGL2
+/// context, so they identify the page's GPU backend (e.g. SwiftShader vs. a
+/// hardware GPU), not the context the engine renders with.
+const _runtimeProbeScript = '''(() => {
+  const inst = window._flutter_skwasmInstance;
+  const flag = (name) => {
+    if (!inst) return null;
+    const fn = inst["_" + name] || (inst.wasmExports && inst.wasmExports[name]);
+    if (typeof fn !== "function") return null;
+    try { return Number(fn()) === 1; } catch (e) { return null; }
+  };
+  let renderer = null;
+  let vendor = null;
+  try {
+    const gl = document.createElement("canvas").getContext("webgl2");
+    if (gl) {
+      const info = gl.getExtension("WEBGL_debug_renderer_info");
+      if (info) {
+        renderer = gl.getParameter(info.UNMASKED_RENDERER_WEBGL);
+        vendor = gl.getParameter(info.UNMASKED_VENDOR_WEBGL);
+      }
+      const lose = gl.getExtension("WEBGL_lose_context");
+      if (lose) lose.loseContext();
+    }
+  } catch (e) {}
+  return JSON.stringify({
+    isWimp: flag("skwasm_isWimp"),
+    isMultiThreaded: flag("skwasm_isMultiThreaded"),
+    crossOriginIsolated: window.crossOriginIsolated === true,
+    webglRenderer: renderer,
+    webglVendor: vendor
+  });
+})()''';
+
 enum BrowserType(final String label) {
   chrome('Chrome'),
   safari('Safari'),
@@ -725,6 +815,8 @@ enum BenchmarkMode(
 ) {
   wasmMultithreaded('Wasm MT (st=0)', 'Wasm MT', 'wasm_compare_last_wasm_run'),
   wasmSingleThreaded('Wasm ST (st=1)', 'Wasm ST', 'wasm_compare_last_wasm_run'),
+  wimpMultithreaded('WIMP MT (st=0)', 'WIMP MT', 'wasm_compare_last_wimp_run'),
+  wimpSingleThreaded('WIMP ST (st=1)', 'WIMP ST', 'wasm_compare_last_wimp_run'),
   jsCanvasKit('JS CanvasKit', 'JS', 'wasm_compare_last_js_run'),
   jsWebParagraph(
     'JS WebParagraph',
@@ -788,6 +880,10 @@ class BenchmarkRecord({
         return normMode == 'wasm' && isPipelined;
       case BenchmarkMode.wasmSingleThreaded:
         return normMode == 'wasm' && !isPipelined;
+      case BenchmarkMode.wimpMultithreaded || BenchmarkMode.wimpSingleThreaded:
+        // The app reports every WIMP run as `isPipelined: false`, so WIMP
+        // threading is verified from engine exports via [RuntimeRecord].
+        return normMode == 'wimp';
       case BenchmarkMode.jsCanvasKit:
         return normMode == 'js';
       case BenchmarkMode.jsWebParagraph:
@@ -822,8 +918,9 @@ class MultiSampleRecord({
   required final List<double> rawFps,
   required final List<double> rawBuildMs,
   required final List<double> rawRasterMs,
+  final RuntimeRecord? runtime,
 }) {
-  factory fromRecords(List<BenchmarkRecord> records) {
+  factory fromRecords(List<BenchmarkRecord> records, {RuntimeRecord? runtime}) {
     final rawFps = records.map((r) => r.effectiveFps).toList();
     final rawBuild = records.map((r) => r.buildTimeMs).toList();
     final rawRaster = records.map((r) => r.rasterTimeMs).toList();
@@ -849,7 +946,81 @@ class MultiSampleRecord({
       rawFps: List.unmodifiable(rawFps),
       rawBuildMs: List.unmodifiable(rawBuild),
       rawRasterMs: List.unmodifiable(rawRaster),
+      runtime: runtime,
     );
+  }
+}
+
+/// Engine and renderer state read from the page after sampling, used to prove
+/// that a run exercised the renderer its [BenchmarkMode] claims.
+class RuntimeRecord({
+  required final bool? isWimp,
+  required final bool? isMultiThreaded,
+  required final bool crossOriginIsolated,
+  final String? webglRenderer,
+  final String? webglVendor,
+}) {
+  /// Parses the result of `_runtimeProbeScript`. Unreadable input yields
+  /// `null` engine flags, which makes every Wasm mode fail validation.
+  factory parse(dynamic raw) {
+    Object? decoded = raw;
+    if (raw is String) {
+      try {
+        decoded = jsonDecode(raw);
+      } on FormatException {
+        decoded = null;
+      }
+    }
+    final map = decoded is Map<String, dynamic>
+        ? decoded
+        : const <String, dynamic>{};
+    return RuntimeRecord(
+      isWimp: map['isWimp'] as bool?,
+      isMultiThreaded: map['isMultiThreaded'] as bool?,
+      crossOriginIsolated: map['crossOriginIsolated'] as bool? ?? false,
+      webglRenderer: map['webglRenderer'] as String?,
+      webglVendor: map['webglVendor'] as String?,
+    );
+  }
+
+  /// Returns why this runtime state contradicts [mode], or `null` if the run
+  /// is valid.
+  String? invalidReason(BenchmarkMode mode) {
+    final expected = switch (mode) {
+      BenchmarkMode.wasmMultithreaded => (wimp: false, mt: true),
+      BenchmarkMode.wasmSingleThreaded => (wimp: false, mt: false),
+      BenchmarkMode.wimpMultithreaded => (wimp: true, mt: true),
+      BenchmarkMode.wimpSingleThreaded => (wimp: true, mt: false),
+      BenchmarkMode.jsCanvasKit || BenchmarkMode.jsWebParagraph => null,
+    };
+    if (expected == null) {
+      return isWimp == null ? null : 'skwasm engine loaded on a JS run';
+    }
+    if (isWimp != expected.wimp) {
+      return expected.wimp
+          ? 'WIMP not active (isWimp=$isWimp)'
+          : 'skwasm run with isWimp=$isWimp';
+    }
+    if (isMultiThreaded != expected.mt) {
+      return 'isMultiThreaded=$isMultiThreaded, expected ${expected.mt}';
+    }
+    if (expected.mt && !crossOriginIsolated) {
+      return 'multi-threaded run without crossOriginIsolated';
+    }
+    return null;
+  }
+
+  Map<String, Object?> toJson(BenchmarkMode mode) {
+    final reason = invalidReason(mode);
+    return {
+      'is_wimp': isWimp,
+      'is_multi_threaded': isMultiThreaded,
+      'cross_origin_isolated': crossOriginIsolated,
+      'webgl_renderer': webglRenderer,
+      'webgl_vendor': webglVendor,
+      'valid': reason == null,
+      'invalid_reason': reason,
+    };
   }
 }
 
@@ -1475,6 +1646,10 @@ class _MutableBenchmarkArgs() {
           result.add(BenchmarkMode.wasmMultithreaded);
         case 'wasm_st' || 'st':
           result.add(BenchmarkMode.wasmSingleThreaded);
+        case 'wimp_mt':
+          result.add(BenchmarkMode.wimpMultithreaded);
+        case 'wimp_st':
+          result.add(BenchmarkMode.wimpSingleThreaded);
         case 'js':
           result.add(BenchmarkMode.jsCanvasKit);
         case 'webparagraph' || 'wp' || 'js_wp':
@@ -1544,7 +1719,7 @@ Options:
                            (bouncy: 32, 64, 128; grid: 100, 1000, 8000)
   --nodes=<counts>         Comma-separated list of stress node counts.
                            Default: 32,64,128 (bouncy) or 100,1000,8000 (grid)
-  --modes=<modes>          Comma-separated list of engine modes: wasm_mt, wasm_st, js, wp (or all).
+  --modes=<modes>          Comma-separated list of engine modes: wasm_mt, wasm_st, wimp_mt, wimp_st, js, wp (or all).
                            Default: wasm_mt,wasm_st,js
   --viewport=<WxH>         Enforced inner viewport size in pixels across all browsers.
                            Default: 1280x720
