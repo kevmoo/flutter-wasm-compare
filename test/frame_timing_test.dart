@@ -1,7 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wasm_compare/src/metrics/benchmark_run.dart';
+import 'package:wasm_compare/src/metrics/benchmark_storage.dart';
 import 'package:wasm_compare/src/metrics/frame_timing_service.dart';
 import 'package:wasm_compare/src/shell/performance_hud.dart';
 
@@ -28,6 +28,7 @@ BenchmarkRun _makeRun({
   required double rasterTimeMs,
   required double totalFrameTimeMs,
   double jitterMs = 0.3,
+  bool? isPipelined,
 }) => BenchmarkRun(
   mode: mode,
   fps: fps,
@@ -36,6 +37,7 @@ BenchmarkRun _makeRun({
   totalFrameTimeMs: totalFrameTimeMs,
   jitterMs: jitterMs,
   stressLevel: 'Manual (200)',
+  isPipelined: isPipelined,
 );
 
 FrameTimingMetrics _metrics(
@@ -279,25 +281,78 @@ void main() {
     });
 
     test('generates comparison when wasmRun is from Impeller (wimp mode)', () {
-      final wimpSavedRun = _makeRun(
+      final wimpMtSavedRun = _makeRun(
         mode: 'wimp',
         buildTimeMs: 10.0,
         rasterTimeMs: 5.0,
         totalFrameTimeMs: 15.0,
         jitterMs: 0.25,
       );
+      expect(wimpMtSavedRun.isPipelined, isTrue);
 
-      final comparison = _eval(
-        currentActive: 10.0,
-        currentJitter: 0.25,
-        wasmRun: wimpSavedRun,
+      final mtComparison = _eval(
+        currentActive: 32.0,
+        currentJitter: 5.2,
+        wasmRun: wimpMtSavedRun,
         jsRun: jsSavedRun,
+        isCurrentWasm: false,
       );
 
       _expectSpeedBadge(
-        comparison,
+        mtComparison,
         title: '⚡ Wasm 3.2x Faster',
         detail: '10.0ms vs 32.0ms',
+      );
+
+      final wimpStSavedRun = _makeRun(
+        mode: 'wimp',
+        buildTimeMs: 10.0,
+        rasterTimeMs: 5.0,
+        totalFrameTimeMs: 15.0,
+        jitterMs: 0.25,
+        isPipelined: false,
+      );
+      expect(wimpStSavedRun.isPipelined, isFalse);
+
+      final stComparison = _eval(
+        currentActive: 32.0,
+        currentJitter: 5.2,
+        wasmRun: wimpStSavedRun,
+        jsRun: jsSavedRun,
+        isCurrentWasm: false,
+      );
+
+      _expectSpeedBadge(
+        stComparison,
+        title: '⚡ Wasm (ST) 2.1x Faster',
+        detail: '15.0ms vs 32.0ms',
+      );
+    });
+
+    test('BenchmarkStorage.saveMetrics defaults isPipelined to true for wimp '
+        'and respects explicit override', () {
+      BenchmarkStorage.resetInMemoryCacheForTesting();
+      addTearDown(BenchmarkStorage.resetInMemoryCacheForTesting);
+
+      final metrics = _metrics(58.0, 10.0, 4.0, 14.0);
+      BenchmarkStorage.saveMetrics(
+        mode: 'wimp',
+        metrics: metrics,
+        stressLevel: 'Manual (200)',
+        nodeCount: 200,
+      );
+      expect(BenchmarkStorage.getRunForMode(mode: 'wimp')?.isPipelined, isTrue);
+
+      BenchmarkStorage.saveMetrics(
+        mode: 'wimp',
+        metrics: metrics,
+        stressLevel: 'Manual (200)',
+        nodeCount: 200,
+        isPipelined: false,
+      );
+      expect(
+        BenchmarkStorage.getRunForMode(mode: 'wimp')?.isPipelined,
+        isFalse,
       );
     });
   });

@@ -102,7 +102,7 @@ class BenchmarkStorage() {
       stressLevel: stressLevel,
       nodeCount: nodeCount,
       workloadId: workloadId,
-      isPipelined: isPipelined ?? (mode.toLowerCase() == 'wasm'),
+      isPipelined: isPipelined,
     );
   }
 
@@ -139,7 +139,7 @@ class BenchmarkStorage() {
     required String stressLevel,
     required int nodeCount,
     String workloadId = 'bouncy',
-    bool isPipelined = false,
+    bool? isPipelined,
   }) => save(
     BenchmarkRun.sample(
       mode,
