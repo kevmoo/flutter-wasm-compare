@@ -112,6 +112,23 @@ void main() {
         ]),
       );
     });
+
+    test('parses repeated --chrome-flag and --chrome-binary', () {
+      final defaults = BenchmarkArgs.parse([]);
+      expect(defaults.chromeFlags, isEmpty);
+      expect(defaults.chromeBinary, isNull);
+
+      final args = BenchmarkArgs.parse([
+        '--chrome-flag=--disable-gpu-vsync',
+        '--chrome-flag=--disable-frame-rate-limit',
+        '--chrome-binary=/opt/chrome/chrome',
+      ]);
+      expect(
+        args.chromeFlags,
+        equals(['--disable-gpu-vsync', '--disable-frame-rate-limit']),
+      );
+      expect(args.chromeBinary, equals('/opt/chrome/chrome'));
+    });
   });
 
   group('buildBenchmarkUrl & selectCdpPageTargetWsUrl', () {
@@ -217,6 +234,68 @@ void main() {
         equals('ws://127.0.0.1:9222/devtools/page/app'),
       );
       expect(selectCdpPageTargetWsUrl(const []), isNull);
+    });
+  });
+
+  group('buildChromeArgs', () {
+    const url = 'http://127.0.0.1:8899/';
+
+    List<String> build({
+      required bool isLinux,
+      String? userDataDir,
+      List<String> extraFlags = const [],
+    }) => buildChromeArgs(
+      isLinux: isLinux,
+      debugPort: 9222,
+      viewportWidth: 1280,
+      viewportHeight: 720,
+      userDataDir: userDataDir,
+      extraFlags: extraFlags,
+      initialUrl: url,
+    );
+
+    test('keeps the default Linux launch line', () {
+      expect(
+        build(isLinux: true),
+        equals([
+          '--headless=new',
+          '--no-sandbox',
+          '--no-proxy-server',
+          '--enable-experimental-web-platform-features',
+          '--remote-debugging-port=9222',
+          '--disable-background-timer-throttling',
+          '--disable-backgrounding-occluded-windows',
+          '--disable-renderer-backgrounding',
+          '--no-first-run',
+          '--no-default-browser-check',
+          '--window-size=1380,820',
+          url,
+        ]),
+      );
+    });
+
+    test('appends extra flags after the defaults, before the URL', () {
+      final defaults = build(isLinux: true);
+      expect(
+        build(
+          isLinux: true,
+          extraFlags: ['--disable-gpu-vsync', '--disable-frame-rate-limit'],
+        ),
+        equals([
+          ...defaults.sublist(0, defaults.length - 1),
+          '--disable-gpu-vsync',
+          '--disable-frame-rate-limit',
+          url,
+        ]),
+      );
+    });
+
+    test('uses a profile dir instead of Linux-only flags elsewhere', () {
+      final args = build(isLinux: false, userDataDir: '/tmp/chrome_bench_x');
+      expect(args, isNot(contains('--headless=new')));
+      expect(args, isNot(contains('--no-sandbox')));
+      expect(args, contains('--user-data-dir=/tmp/chrome_bench_x'));
+      expect(args.last, equals(url));
     });
   });
 
@@ -428,6 +507,57 @@ void main() {
           '⚠️ INVALID **30.0 FPS** / 25.00ms / 30.00ms |',
         ),
       );
+    });
+
+    test('omits takeaways for node counts with an errored mode', () {
+      final args = BenchmarkArgs.parse([
+        '--browsers=chrome',
+        '--modes=wasm_mt,wasm_st,js',
+        '--nodes=64',
+      ]);
+
+      MultiSampleRecord multi(String mode, {required bool pipelined}) =>
+          MultiSampleRecord.fromRecords([
+            for (final fps in [30.0, 31.0])
+              BenchmarkRecord(
+                fps: fps,
+                buildTimeMs: 10.0,
+                rasterTimeMs: 5.0,
+                totalFrameTimeMs: 15.0,
+                jitterMs: 0.5,
+                isPipelined: pipelined,
+                nodeCount: 64,
+                mode: mode,
+              ),
+          ]);
+
+      String report(MultiSampleRecord mt) => formatMarkdownReport(
+        args: args,
+        capabilities: const {},
+        results: {
+          BrowserType.chrome: {
+            const BenchmarkKey(BenchmarkMode.wasmMultithreaded, 64): mt,
+            const BenchmarkKey(BenchmarkMode.wasmSingleThreaded, 64): multi(
+              'wasm',
+              pipelined: false,
+            ),
+            const BenchmarkKey(BenchmarkMode.jsCanvasKit, 64): multi(
+              'js',
+              pipelined: false,
+            ),
+          },
+        },
+      );
+
+      expect(
+        report(multi('wasm', pipelined: true)),
+        contains('* **Chrome (at 64 nodes)**:'),
+      );
+
+      final markdown = report(MultiSampleRecord.error('page crashed'));
+      expect(markdown, contains('⚠️ ERROR |'));
+      expect(markdown, isNot(contains('Key Takeaways')));
+      expect(markdown, isNot(contains('(at 64 nodes)')));
     });
   });
 
