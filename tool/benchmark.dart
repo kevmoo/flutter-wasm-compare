@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:args/args.dart';
 import 'package:bench_press/bench_press.dart';
 
 /// Automated browser benchmark driver for `flutter-wasm-compare`.
@@ -9,7 +10,14 @@ import 'package:bench_press/bench_press.dart';
 /// Supports Chrome, Safari, and Firefox on macOS/Linux with statistical
 /// sampling and telemetry powered by `package:bench_press`.
 Future<void> main(List<String> rawArgs) async {
-  final args = BenchmarkArgs.parse(rawArgs);
+  final BenchmarkArgs args;
+  try {
+    args = BenchmarkArgs.parse(rawArgs);
+  } on FormatException catch (e) {
+    stderr.writeln('Error: ${e.message}\n');
+    _printUsage(stderr);
+    exit(2);
+  }
   if (args.showHelp) {
     _printUsage();
     return;
@@ -147,6 +155,7 @@ Future<Map<BenchmarkKey, MultiSampleRecord>?> _runBrowserSuite({
     return browserMap;
   } catch (e, st) {
     print('❌ Error running ${browserType.label}: $e\n$st');
+    exitCode = 1;
     return null;
   } finally {
     await driver.stop();
@@ -1186,8 +1195,9 @@ abstract interface class BrowserDriver() {
 BrowserDriver _createDriver(BrowserType type, BenchmarkArgs args) =>
     switch (type) {
       BrowserType.chrome => _ChromeCdpDriver(
-        args.chromeBinary,
-        args.chromeFlags,
+        customBinary: args.chromeBinary,
+        customFlags: args.chromeFlags,
+        headed: args.headed,
       ),
       BrowserType.safari => _SafariWebDriver(),
       BrowserType.firefox => _FirefoxWebDriver(),
@@ -1208,6 +1218,11 @@ String? selectCdpPageTargetWsUrl(List<dynamic> targets) {
   return null;
 }
 
+/// Whether [env] provides an X11 or Wayland display server on Linux.
+bool hasLinuxDisplay(Map<String, String> env) =>
+    (env['DISPLAY']?.trim().isNotEmpty ?? false) ||
+    (env['WAYLAND_DISPLAY']?.trim().isNotEmpty ?? false);
+
 /// Builds the command line for the Chrome CDP driver.
 ///
 /// [extraFlags] (from repeated `--chrome-flag=` arguments) are appended after
@@ -1220,8 +1235,10 @@ List<String> buildChromeArgs({
   required String? userDataDir,
   required List<String> extraFlags,
   required String initialUrl,
+  bool headed = false,
 }) => [
-  if (isLinux) ...['--headless=new', '--no-sandbox', '--no-proxy-server'],
+  if (isLinux && !headed) ...['--headless=new', '--no-sandbox'],
+  if (isLinux) '--no-proxy-server',
   '--enable-experimental-web-platform-features',
   '--remote-debugging-port=$debugPort',
   if (userDataDir != null) '--user-data-dir=$userDataDir',
@@ -1236,10 +1253,11 @@ List<String> buildChromeArgs({
 ];
 
 /// Drives Chrome via native Chrome DevTools Protocol (CDP) WebSocket.
-class _ChromeCdpDriver([
+class _ChromeCdpDriver({
   final String? customBinary,
   final List<String> customFlags = const [],
-]) implements BrowserDriver {
+  final bool headed = false,
+}) implements BrowserDriver {
   Process? _process;
   WebSocket? _ws;
   Directory? _tempDir;
@@ -1274,11 +1292,17 @@ class _ChromeCdpDriver([
     required int viewportHeight,
     String initialUrl = 'http://localhost:8899/',
   }) async {
+    if (Platform.isLinux && headed && !hasLinuxDisplay(Platform.environment)) {
+      throw StateError(
+        'Cannot launch Chrome with --headed on Linux: '
+        'neither DISPLAY nor WAYLAND_DISPLAY is set.',
+      );
+    }
     _viewportWidth = viewportWidth;
     _viewportHeight = viewportHeight;
     final chromePath = _chromePath!;
     _port = await _findAvailablePort();
-    if (!Platform.isLinux) {
+    if (!Platform.isLinux || headed) {
       _tempDir = await Directory.systemTemp.createTemp('chrome_bench_');
     }
 
@@ -1286,6 +1310,7 @@ class _ChromeCdpDriver([
       chromePath,
       buildChromeArgs(
         isLinux: Platform.isLinux,
+        headed: headed,
         debugPort: _port,
         viewportWidth: viewportWidth,
         viewportHeight: viewportHeight,
@@ -1685,25 +1710,172 @@ class BenchmarkArgs({
   required final bool jsonOutput,
   required final String? jsonOutputPath,
   required final bool skipCapabilityProbe,
+  final bool headed = false,
   required final List<String> chromeFlags,
   required final String? chromeBinary,
 }) {
+  static const List<BenchmarkMode> _defaultModes = [
+    BenchmarkMode.wasmMultithreaded,
+    BenchmarkMode.wasmSingleThreaded,
+    BenchmarkMode.jsCanvasKit,
+  ];
+
+  static ArgParser buildParser() => ArgParser()
+    ..addOption(
+      'browser',
+      defaultsTo: 'all',
+      valueHelp: 'name',
+      help:
+          'Browsers to test: chrome, safari, firefox, or all '
+          '(comma-separated).',
+    )
+    ..addOption(
+      'url',
+      defaultsTo: 'https://flutter-wasm-compare.web.app/',
+      valueHelp: 'url',
+      help: 'Target app base URL.',
+    )
+    ..addOption(
+      'workload',
+      defaultsTo: 'bouncy',
+      valueHelp: 'name',
+      help: 'Workload type: bouncy (layout churn) or grid (card grid).',
+    )
+    ..addOption(
+      'preset',
+      valueHelp: 'name',
+      help:
+          'Convenience workload preset: light, medium, heavy, or all.\n'
+          '(bouncy: 32, 64, 128; grid: 100, 1000, 5000)',
+    )
+    ..addOption(
+      'nodes',
+      valueHelp: 'counts',
+      help:
+          'Comma-separated list of stress node counts.\n'
+          'Default: 32,64,128 (bouncy) or 100,1000,5000 (grid)',
+    )
+    ..addOption(
+      'modes',
+      valueHelp: 'modes',
+      help:
+          'Comma-separated list of engine modes: wasm_mt, wasm_st, wimp_mt,\n'
+          'wimp_st, js, webparagraph (or all). Default: wasm_mt,wasm_st,js',
+    )
+    ..addOption(
+      'viewport',
+      defaultsTo: '1280x720',
+      valueHelp: 'WxH',
+      help: 'Enforced inner viewport size in pixels across all browsers.',
+    )
+    ..addOption(
+      'settle-seconds',
+      defaultsTo: '5',
+      valueHelp: 'sec',
+      help: 'Seconds to wait after navigation before sampling.',
+    )
+    ..addOption(
+      'samples',
+      defaultsTo: '5',
+      valueHelp: 'count',
+      help: 'Number of trial samples to record per workload.',
+    )
+    ..addOption(
+      'sample-interval',
+      defaultsTo: '1200',
+      valueHelp: 'ms',
+      help:
+          'Milliseconds to wait between successive samples.\n'
+          "(Exceeds app's 1000ms HUD throttle)",
+    )
+    ..addOption(
+      'output',
+      valueHelp: 'file',
+      help: 'Optional file path to save the generated Markdown report.',
+    )
+    ..addFlag(
+      'json',
+      negatable: false,
+      help: 'Print formatted JSON telemetry results to stdout.',
+    )
+    ..addOption(
+      'json-output',
+      valueHelp: 'file',
+      help: 'Optional file path to save the JSON telemetry results.',
+    )
+    ..addFlag(
+      'skip-capability-probe',
+      negatable: false,
+      help: 'Skip the initial Wasm JS-string capability probe.',
+    )
+    ..addFlag(
+      'headed',
+      negatable: false,
+      help:
+          'Launch Chrome in a visible window on Linux instead of '
+          '--headless=new.',
+    )
+    ..addMultiOption(
+      'chrome-flag',
+      splitCommas: false,
+      valueHelp: 'flag',
+      help:
+          'Extra Chrome flag, appended after the built-in defaults.\n'
+          'Repeatable, e.g. --chrome-flag=--disable-gpu-vsync',
+    )
+    ..addOption(
+      'chrome-binary',
+      valueHelp: 'path',
+      help:
+          'Chrome executable to launch.\n'
+          'Default: /usr/bin/google-chrome (Linux) or '
+          'Google Chrome.app (macOS)',
+    )
+    ..addFlag(
+      'help',
+      abbr: 'h',
+      negatable: false,
+      help: 'Show this help message.',
+    );
+
   static List<int> _defaultNodesForWorkload(String workload, [String? preset]) {
     final isGrid = workload == 'grid';
-    switch (preset) {
-      case 'light':
-        return isGrid ? [100] : [32];
-      case 'medium':
-        return isGrid ? [1000] : [64];
-      case 'heavy' || 'max':
-        return isGrid ? [5000] : [128];
-      default:
-        return isGrid ? [100, 1000, 5000] : [32, 64, 128];
-    }
+    return switch (preset) {
+      'light' => isGrid ? [100] : [32],
+      'medium' => isGrid ? [1000] : [64],
+      'heavy' => isGrid ? [5000] : [128],
+      _ => isGrid ? [100, 1000, 5000] : [32, 64, 128],
+    };
   }
 
   factory parse(List<String> args) {
-    if (args.contains('--help') || args.contains('-h')) {
+    final ArgResults results;
+    try {
+      results = buildParser().parse(args);
+    } on ArgParserException catch (e) {
+      if (e.message.contains('"browsers"') ||
+          e.message.contains('"--browsers"')) {
+        throw const FormatException(
+          'Flag "--browsers" was renamed; use "--browser" instead.',
+        );
+      }
+      if (e.message.contains('"sample-interval-ms"') ||
+          e.message.contains('"--sample-interval-ms"')) {
+        throw const FormatException(
+          'Flag "--sample-interval-ms" was renamed; '
+          'use "--sample-interval" instead.',
+        );
+      }
+      throw FormatException(e.message);
+    }
+
+    if (results.rest.isNotEmpty) {
+      throw FormatException(
+        'Unexpected positional arguments: ${results.rest.join(' ')}',
+      );
+    }
+
+    if (results.flag('help')) {
       return BenchmarkArgs(
         showHelp: true,
         baseUrl: '',
@@ -1714,7 +1886,6 @@ class BenchmarkArgs({
         viewportHeight: 0,
         settleSeconds: 0,
         samples: 0,
-        sampleIntervalMs: 1200,
         outputPath: null,
         jsonOutput: false,
         jsonOutputPath: null,
@@ -1724,113 +1895,141 @@ class BenchmarkArgs({
       );
     }
 
-    final parsed = _MutableBenchmarkArgs();
-    for (final arg in args) {
-      parsed.applyArg(arg);
+    final baseUrl = results.option('url')!.trim();
+    if (baseUrl.isEmpty) {
+      throw const FormatException('Invalid --url value: URL cannot be empty.');
     }
-
-    return parsed.toBenchmarkArgs();
-  }
-}
-
-class _MutableBenchmarkArgs() {
-  static const List<BenchmarkMode> _defaultModes = [
-    BenchmarkMode.wasmMultithreaded,
-    BenchmarkMode.wasmSingleThreaded,
-    BenchmarkMode.jsCanvasKit,
-  ];
-
-  String baseUrl = 'https://flutter-wasm-compare.web.app/';
-  String workload = 'bouncy';
-  List<BrowserType> browsers = BrowserType.values.toList();
-  List<BenchmarkMode> modes = _defaultModes.toList();
-  List<int>? explicitNodeCounts;
-  String? presetVal;
-  int viewportWidth = 1280;
-  int viewportHeight = 720;
-  int settleSeconds = 5;
-  int samples = 5;
-  int sampleIntervalMs = 1200;
-  String? outputPath;
-  bool jsonOutput = false;
-  String? jsonOutputPath;
-  bool skipCapabilityProbe = false;
-  List<String> chromeFlags = [];
-  String? chromeBinary;
-
-  void applyArg(String arg) {
-    if (arg == '--json') {
-      jsonOutput = true;
-    } else if (arg == '--skip-capability-probe') {
-      skipCapabilityProbe = true;
-    } else if (arg.startsWith('--chrome-flag=')) {
-      chromeFlags.add(arg.substring('--chrome-flag='.length).trim());
-    } else if (arg.startsWith('--chrome-binary=')) {
-      chromeBinary = arg.substring('--chrome-binary='.length).trim();
-    } else if (arg.startsWith('--')) {
-      _applyKeyValueArg(arg);
+    final workload = _parseWorkload(results.option('workload')!);
+    final preset = _parsePreset(results.option('preset'));
+    final browsers = _parseBrowsers(results.option('browser')!);
+    final modes = _parseModes(results.option('modes'));
+    final rawNodes = results.option('nodes');
+    final nodeCounts = rawNodes != null
+        ? _parseNodes(rawNodes)
+        : _defaultNodesForWorkload(workload, preset);
+    final (viewportWidth, viewportHeight) = _parseViewport(
+      results.option('viewport')!,
+    );
+    final settleSeconds = _parseNonNegativeInt(
+      results.option('settle-seconds')!,
+      'settle-seconds',
+    );
+    final samples = _parsePositiveInt(results.option('samples')!, 'samples');
+    final sampleIntervalMs = _parsePositiveInt(
+      results.option('sample-interval')!,
+      'sample-interval',
+    );
+    final outputPath = _parseOptionalPath(results.option('output'), 'output');
+    final jsonOutputPath = _parseOptionalPath(
+      results.option('json-output'),
+      'json-output',
+    );
+    final chromeFlags = <String>[];
+    for (final rawFlag in results.multiOption('chrome-flag')) {
+      final trimmed = rawFlag.trim();
+      if (trimmed.isEmpty) {
+        throw const FormatException(
+          'Invalid --chrome-flag value: flag cannot be empty.',
+        );
+      }
+      chromeFlags.add(trimmed);
     }
-  }
+    final chromeBinary = _parseOptionalPath(
+      results.option('chrome-binary'),
+      'chrome-binary',
+    );
 
-  void _applyKeyValueArg(String arg) {
-    final eqIdx = arg.indexOf('=');
-    if (eqIdx < 0) return;
-    final key = arg.substring(0, eqIdx);
-    final val = arg.substring(eqIdx + 1);
-    switch (key) {
-      case '--url':
-        baseUrl = val;
-      case '--workload':
-        workload = val.toLowerCase().trim() == 'grid' ? 'grid' : 'bouncy';
-      case '--browser' || '--browsers':
-        browsers = _parseBrowsers(val);
-      case '--modes':
-        modes = _parseModes(val);
-      case '--preset':
-        presetVal = val.toLowerCase();
-      case '--nodes':
-        explicitNodeCounts = _parseNodes(val);
-      case '--viewport':
-        _applyViewport(val);
-      case '--settle-seconds':
-        settleSeconds = int.tryParse(val) ?? settleSeconds;
-      case '--samples':
-        samples = int.tryParse(val) ?? samples;
-      case '--sample-interval' || '--sample-interval-ms':
-        sampleIntervalMs = int.tryParse(val) ?? sampleIntervalMs;
-      case '--output':
-        outputPath = val;
-      case '--json-output':
-        jsonOutputPath = val;
-    }
+    return BenchmarkArgs(
+      showHelp: false,
+      baseUrl: baseUrl,
+      workload: workload,
+      browsers: browsers,
+      modes: modes,
+      nodeCounts: nodeCounts,
+      viewportWidth: viewportWidth,
+      viewportHeight: viewportHeight,
+      settleSeconds: settleSeconds,
+      samples: samples,
+      sampleIntervalMs: sampleIntervalMs,
+      outputPath: outputPath,
+      jsonOutput: results.flag('json'),
+      jsonOutputPath: jsonOutputPath,
+      skipCapabilityProbe: results.flag('skip-capability-probe'),
+      headed: results.flag('headed'),
+      chromeFlags: chromeFlags,
+      chromeBinary: chromeBinary,
+    );
   }
 
-  static List<BrowserType> _parseBrowsers(String val) {
-    final lower = val.toLowerCase();
-    if (lower == 'all') return BrowserType.values.toList();
+  static String _parseWorkload(String raw) {
+    final normalized = raw.trim().toLowerCase();
+    return switch (normalized) {
+      'bouncy' || 'grid' => normalized,
+      _ => throw FormatException(
+        'Invalid --workload value "$raw" (allowed: bouncy, grid).',
+      ),
+    };
+  }
+
+  static String? _parsePreset(String? raw) {
+    if (raw == null) return null;
+    final normalized = raw.trim().toLowerCase();
+    return switch (normalized) {
+      'light' || 'medium' || 'heavy' || 'all' => normalized,
+      'max' => throw const FormatException(
+        'Preset "max" was removed; use "heavy" instead.',
+      ),
+      _ => throw FormatException(
+        'Invalid --preset value "$raw" (allowed: light, medium, heavy, all).',
+      ),
+    };
+  }
+
+  static List<BrowserType> _parseBrowsers(String raw) {
+    final trimmed = raw.trim().toLowerCase();
+    if (trimmed.isEmpty) {
+      throw const FormatException(
+        'Invalid --browser value "": expected chrome, safari, firefox, or all.',
+      );
+    }
+    if (trimmed == 'all') return BrowserType.values.toList();
     final result = <BrowserType>[];
-    for (final token in lower.split(',')) {
-      switch (token.trim()) {
+    for (final part in raw.split(',')) {
+      final token = part.trim().toLowerCase();
+      switch (token) {
         case 'chrome':
           result.add(BrowserType.chrome);
         case 'safari':
           result.add(BrowserType.safari);
         case 'firefox':
           result.add(BrowserType.firefox);
+        default:
+          throw FormatException(
+            'Invalid --browser value "$part" '
+            '(allowed: chrome, safari, firefox, all).',
+          );
       }
     }
     return result;
   }
 
-  static List<BenchmarkMode> _parseModes(String val) {
-    final lower = val.toLowerCase().trim();
-    if (lower == 'all') return BenchmarkMode.values.toList();
+  static List<BenchmarkMode> _parseModes(String? raw) {
+    if (raw == null) return _defaultModes.toList();
+    final trimmed = raw.trim().toLowerCase();
+    if (trimmed.isEmpty) {
+      throw const FormatException(
+        'Invalid --modes value "": expected wasm_mt, wasm_st, wimp_mt, '
+        'wimp_st, js, webparagraph, or all.',
+      );
+    }
+    if (trimmed == 'all') return BenchmarkMode.values.toList();
     final result = <BenchmarkMode>[];
-    for (final token in lower.split(',')) {
-      switch (token.trim()) {
-        case 'wasm_mt' || 'mt':
+    for (final part in raw.split(',')) {
+      final token = part.trim().toLowerCase();
+      switch (token) {
+        case 'wasm_mt':
           result.add(BenchmarkMode.wasmMultithreaded);
-        case 'wasm_st' || 'st':
+        case 'wasm_st':
           result.add(BenchmarkMode.wasmSingleThreaded);
         case 'wimp_mt':
           result.add(BenchmarkMode.wimpMultithreaded);
@@ -1838,99 +2037,114 @@ class _MutableBenchmarkArgs() {
           result.add(BenchmarkMode.wimpSingleThreaded);
         case 'js':
           result.add(BenchmarkMode.jsCanvasKit);
-        case 'webparagraph' || 'wp' || 'js_wp':
+        case 'webparagraph':
           result.add(BenchmarkMode.jsWebParagraph);
+        case 'mt':
+          throw const FormatException(
+            'Mode "mt" was renamed; use "wasm_mt" instead.',
+          );
+        case 'st':
+          throw const FormatException(
+            'Mode "st" was renamed; use "wasm_st" instead.',
+          );
+        case 'wp' || 'js_wp':
+          throw FormatException(
+            'Mode "$token" was renamed; use "webparagraph" instead.',
+          );
+        default:
+          throw FormatException(
+            'Invalid --modes value "$part" (allowed: wasm_mt, wasm_st, '
+            'wimp_mt, wimp_st, js, webparagraph, all).',
+          );
       }
     }
     return result;
   }
 
-  static List<int> _parseNodes(String val) => val
-      .split(',')
-      .map((s) => int.tryParse(s.trim()))
-      .whereType<int>()
-      .toList();
-
-  void _applyViewport(String val) {
-    final parts = val.toLowerCase().split('x');
-    if (parts.length != 2) return;
-    final w = int.tryParse(parts[0].trim());
-    final h = int.tryParse(parts[1].trim());
-    if (w != null && h != null) {
-      viewportWidth = w;
-      viewportHeight = h;
+  static List<int> _parseNodes(String raw) {
+    if (raw.trim().isEmpty) {
+      throw const FormatException(
+        'Invalid --nodes value "": expected comma-separated positive integers.',
+      );
     }
+    final result = <int>[];
+    for (final part in raw.split(',')) {
+      final parsed = int.tryParse(part.trim());
+      if (parsed == null || parsed <= 0) {
+        throw FormatException(
+          'Invalid --nodes value "$part": expected a positive integer.',
+        );
+      }
+      result.add(parsed);
+    }
+    return result;
   }
 
-  BenchmarkArgs toBenchmarkArgs() {
-    final resolvedNodeCounts =
-        (explicitNodeCounts != null && explicitNodeCounts!.isNotEmpty)
-        ? explicitNodeCounts!
-        : BenchmarkArgs._defaultNodesForWorkload(workload, presetVal);
+  static (int, int) _parseViewport(String raw) {
+    final parts = raw.trim().toLowerCase().split('x');
+    if (parts.length != 2) {
+      throw FormatException(
+        'Invalid --viewport value "$raw": '
+        'expected <width>x<height> in positive pixels (e.g. 1280x720).',
+      );
+    }
+    final w = int.tryParse(parts[0].trim());
+    final h = int.tryParse(parts[1].trim());
+    if (w == null || h == null || w <= 0 || h <= 0) {
+      throw FormatException(
+        'Invalid --viewport value "$raw": '
+        'expected <width>x<height> in positive pixels (e.g. 1280x720).',
+      );
+    }
+    return (w, h);
+  }
 
-    return BenchmarkArgs(
-      showHelp: false,
-      baseUrl: baseUrl,
-      workload: workload,
-      browsers: browsers.isEmpty ? BrowserType.values.toList() : browsers,
-      modes: modes.isEmpty ? _defaultModes.toList() : modes,
-      nodeCounts: resolvedNodeCounts,
-      viewportWidth: viewportWidth,
-      viewportHeight: viewportHeight,
-      settleSeconds: settleSeconds,
-      samples: samples,
-      sampleIntervalMs: sampleIntervalMs,
-      outputPath: outputPath,
-      jsonOutput: jsonOutput,
-      jsonOutputPath: jsonOutputPath,
-      skipCapabilityProbe: skipCapabilityProbe,
-      chromeFlags: chromeFlags,
-      chromeBinary: chromeBinary,
-    );
+  static int _parsePositiveInt(String raw, String flagName) {
+    final parsed = int.tryParse(raw.trim());
+    if (parsed == null || parsed <= 0) {
+      throw FormatException(
+        'Invalid --$flagName value "$raw": expected a positive integer (> 0).',
+      );
+    }
+    return parsed;
+  }
+
+  static int _parseNonNegativeInt(String raw, String flagName) {
+    final parsed = int.tryParse(raw.trim());
+    if (parsed == null || parsed < 0) {
+      throw FormatException(
+        'Invalid --$flagName value "$raw": '
+        'expected a non-negative integer (>= 0).',
+      );
+    }
+    return parsed;
+  }
+
+  static String? _parseOptionalPath(String? raw, String flagName) {
+    if (raw == null) return null;
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) {
+      throw FormatException('Invalid --$flagName value: path cannot be empty.');
+    }
+    return trimmed;
   }
 }
 
-void _printUsage() {
-  print('''
+void _printUsage([IOSink? out]) {
+  final sink = out ?? stdout;
+  sink.writeln(
+    '''
 Usage: dart tool/benchmark.dart [options]
 
 Automated empirical browser benchmark runner for flutter-wasm-compare.
 
 Options:
-  --browser=<name>         Browsers to test: chrome, safari, firefox, or all (comma-separated).
-                           Default: all
-  --url=<url>              Target app base URL.
-                           Default: https://flutter-wasm-compare.web.app/
-  --workload=<name>        Workload type: bouncy (layout churn) or grid (card grid).
-                           Default: bouncy
-  --preset=<name>          Convenience workload preset: light, medium, heavy, or all.
-                           (bouncy: 32, 64, 128; grid: 100, 1000, 5000)
-  --nodes=<counts>         Comma-separated list of stress node counts.
-                           Default: 32,64,128 (bouncy) or 100,1000,5000 (grid)
-  --modes=<modes>          Comma-separated list of engine modes: wasm_mt, wasm_st, wimp_mt, wimp_st, js, wp (or all).
-                           Default: wasm_mt,wasm_st,js
-  --viewport=<WxH>         Enforced inner viewport size in pixels across all browsers.
-                           Default: 1280x720
-  --settle-seconds=<sec>   Seconds to wait after navigation before sampling.
-                           Default: 5
-  --samples=<count>        Number of trial samples to record per workload.
-                           Default: 5
-  --sample-interval=<ms>   Milliseconds to wait between successive samples.
-                           Default: 1200 (exceeds app's 1000ms HUD throttle)
-  --output=<file>          Optional file path to save the generated Markdown report.
-  --json                   Print formatted JSON telemetry results to stdout.
-  --json-output=<file>     Optional file path to save the JSON telemetry results.
-  --skip-capability-probe  Skip the initial Wasm JS-string capability probe.
-  --chrome-flag=<flag>     Extra Chrome flag, appended after the built-in defaults.
-                           Repeatable, e.g. --chrome-flag=--disable-gpu-vsync
-  --chrome-binary=<path>   Chrome executable to launch.
-                           Default: /usr/bin/google-chrome (Linux) or Google Chrome.app (macOS)
-  --help, -h               Show this help message.
+${BenchmarkArgs.buildParser().usage}
 
 Examples:
   dart tool/benchmark.dart --browser=chrome --json
   dart tool/benchmark.dart --workload=grid --preset=heavy --browser=chrome
   dart tool/benchmark.dart --browser=safari,firefox --nodes=64 --json-output=results.json
-  dart tool/benchmark.dart --url=http://localhost:8080 --output=doc/benchmarks.md
-''');
+  dart tool/benchmark.dart --url=http://localhost:8080 --output=doc/benchmarks.md''',
+  );
 }
