@@ -50,10 +50,10 @@ void main() {
         '--preset=heavy',
       ]);
       expect(gridHeavy.workload, equals('grid'));
-      expect(gridHeavy.nodeCounts, equals([8000]));
+      expect(gridHeavy.nodeCounts, equals([5000]));
 
       final gridDefault = BenchmarkArgs.parse(['--workload=grid']);
-      expect(gridDefault.nodeCounts, equals([100, 1000, 8000]));
+      expect(gridDefault.nodeCounts, equals([100, 1000, 5000]));
     });
 
     test('parses custom sample interval and nodes', () {
