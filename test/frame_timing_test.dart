@@ -1,7 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:wasm_compare/src/metrics/benchmark_run.dart';
+import 'package:wasm_compare/src/metrics/benchmark_storage.dart';
 import 'package:wasm_compare/src/metrics/frame_timing_service.dart';
 import 'package:wasm_compare/src/shell/performance_hud.dart';
 
@@ -286,6 +286,7 @@ void main() {
         totalFrameTimeMs: 15.0,
         jitterMs: 0.25,
       );
+      expect(wimpSavedRun.isPipelined, isTrue);
 
       final comparison = _eval(
         currentActive: 10.0,
@@ -298,6 +299,33 @@ void main() {
         comparison,
         title: '⚡ Wasm 3.2x Faster',
         detail: '10.0ms vs 32.0ms',
+      );
+    });
+
+    test('BenchmarkStorage.saveMetrics defaults isPipelined to true for wimp '
+        'and respects explicit override', () {
+      BenchmarkStorage.resetInMemoryCacheForTesting();
+      addTearDown(BenchmarkStorage.resetInMemoryCacheForTesting);
+
+      final metrics = _metrics(58.0, 10.0, 4.0, 14.0);
+      BenchmarkStorage.saveMetrics(
+        mode: 'wimp',
+        metrics: metrics,
+        stressLevel: 'Manual (200)',
+        nodeCount: 200,
+      );
+      expect(BenchmarkStorage.getRunForMode(mode: 'wimp')?.isPipelined, isTrue);
+
+      BenchmarkStorage.saveMetrics(
+        mode: 'wimp',
+        metrics: metrics,
+        stressLevel: 'Manual (200)',
+        nodeCount: 200,
+        isPipelined: false,
+      );
+      expect(
+        BenchmarkStorage.getRunForMode(mode: 'wimp')?.isPipelined,
+        isFalse,
       );
     });
   });

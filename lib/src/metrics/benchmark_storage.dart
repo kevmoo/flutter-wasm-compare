@@ -102,7 +102,9 @@ class BenchmarkStorage() {
       stressLevel: stressLevel,
       nodeCount: nodeCount,
       workloadId: workloadId,
-      isPipelined: isPipelined ?? (mode.toLowerCase() == 'wasm'),
+      isPipelined:
+          isPipelined ??
+          (mode.toLowerCase() == 'wasm' || mode.toLowerCase() == 'wimp'),
     );
   }
 

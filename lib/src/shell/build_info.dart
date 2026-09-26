@@ -157,7 +157,6 @@ class const BuildInfoDialog({
                 label: 'Threading',
                 child: _buildThreadingValue(
                   context,
-                  isWimp: isWimp,
                   isSingleThreaded: isSingleThreaded,
                 ),
               ),
@@ -285,15 +284,8 @@ class const BuildInfoDialog({
 
   Widget _buildThreadingValue(
     BuildContext context, {
-    required bool isWimp,
     required bool isSingleThreaded,
   }) {
-    if (isWimp) {
-      return const Text(
-        'Single-threaded (forced by engine)',
-        style: TextStyle(fontFamily: 'monospace', fontSize: 13),
-      );
-    }
     return Tooltip(
       message: 'Press Ctrl+Shift+S (or ⌘+Shift+S) to toggle',
       child: ActionChip(

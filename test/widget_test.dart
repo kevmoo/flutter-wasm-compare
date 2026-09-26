@@ -261,14 +261,21 @@ void main() {
     await tester.pump();
   });
 
-  testWidgets('BuildInfoDialog renders Wasm + Impeller (Exp)', (
+  testWidgets('BuildInfoDialog renders Wasm + Impeller (Exp) MT and ST', (
     WidgetTester tester,
   ) async {
     await _pumpBuildInfoDialog(tester, isWimp: true);
     _expectTexts([
       '⚡ WASM + Impeller (Exp)',
       'Impeller (wimp.wasm) • Experimental',
-      'Single-threaded (forced by engine)',
+      'Multi-threaded (Toggle)',
+    ]);
+
+    await _pumpBuildInfoDialog(tester, isWimp: true, isSingleThreaded: true);
+    _expectTexts([
+      '⚡ WASM + Impeller (Exp, ST)',
+      'Impeller (wimp.wasm) • Experimental',
+      'Single-threaded (Toggle)',
     ]);
   });
 

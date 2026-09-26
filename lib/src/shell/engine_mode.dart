@@ -21,7 +21,7 @@ final bool _isWebParagraph = !isCurrentlyWasm() && isWebParagraphActive;
 bool isCurrentlyWebParagraph() => _isWebParagraph;
 
 bool isCurrentlySingleThreaded() =>
-    isCurrentlyWasm() && (isCurrentlyWimp() || isSingleThreaded());
+    isCurrentlyWasm() && !(skwasmIsMultiThreaded ?? !isSingleThreaded());
 
 bool isCurrentlyPipelined() =>
     isCurrentlyWasm() && !isCurrentlySingleThreaded();
@@ -34,19 +34,9 @@ String currentEngineMode() {
 }
 
 void toggleSingleThreadedMode(BuildContext context) {
-  if (isCurrentlyWimp()) {
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-      const SnackBar(
-        duration: Duration(seconds: 3),
-        content: Text(
-          '⚡ Web Impeller is currently single-threaded only in the engine.',
-        ),
-      ),
-    );
-    return;
-  }
-
-  final currentSt = isSingleThreaded();
+  final currentSt = isCurrentlyWasm()
+      ? isCurrentlySingleThreaded()
+      : isSingleThreaded();
   final newSt = !currentSt;
   savePersistedSingleThreaded(newSt);
 

@@ -436,7 +436,7 @@ class const _EngineTogglePill({
             isSelected: isCurrentWasm,
             selectedColor: Colors.lightBlueAccent,
             onTap: isCurrentWasm
-                ? (isWimp ? null : () => toggleSingleThreadedMode(context))
+                ? () => toggleSingleThreadedMode(context)
                 : () =>
                       switchEngineMode(context, mode: isWimp ? 'wimp' : 'wasm'),
             tooltip: _wasmTooltip(isWimp),
@@ -470,10 +470,9 @@ class const _EngineTogglePill({
 
   String _wasmTooltip(bool isWimp) {
     if (!isCurrentWasm) return 'Switch to WebAssembly';
-    if (isWimp) return 'Wasm + Impeller (Experimental • Single-threaded)';
-    return isSingleThreaded
-        ? 'Wasm + Skia (Single-threaded) • Tap to toggle threading'
-        : 'Wasm + Skia (Multi-threaded) • Tap to toggle threading';
+    final renderer = isWimp ? 'Impeller (Exp)' : 'Skia';
+    final threading = isSingleThreaded ? 'Single-threaded' : 'Multi-threaded';
+    return 'Wasm + $renderer ($threading) • Tap to toggle threading';
   }
 
   String _jsTooltip(bool isWebParagraph) {
@@ -698,7 +697,7 @@ class const _DualEngineCards({
 
   VoidCallback? _wasmOnTap(BuildContext context) {
     if (isCurrentWasm) {
-      return isCurrentlyWimp() ? null : () => toggleSingleThreadedMode(context);
+      return () => toggleSingleThreadedMode(context);
     }
     return () => switchEngineMode(
       context,
@@ -855,9 +854,6 @@ class const _EngineMiniCard({
       return 'Click to switch to $targetEngine';
     }
     if (!isWasmCard) return 'Currently active runtime engine';
-    if (isCurrentlyWimp()) {
-      return 'Active: Web Impeller (Experimental • Single-threaded)';
-    }
     return isSingleThreaded
         ? 'Active: Single-threaded • Tap or Ctrl+Shift+S to toggle'
         : 'Active: Multi-threaded • Tap or Ctrl+Shift+S to toggle';

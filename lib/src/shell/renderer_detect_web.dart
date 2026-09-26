@@ -18,6 +18,9 @@ extension type _SkwasmInstance(JSObject _) implements JSObject {
 extension type _WasmExports(JSObject _) implements JSObject {
   @JS('skwasm_isWimp')
   external JSNumber? isWimp();
+
+  @JS('skwasm_isMultiThreaded')
+  external JSNumber? isMultiThreaded();
 }
 
 extension type _CanvasKitInstance(JSObject _) implements JSObject {
@@ -34,6 +37,14 @@ bool get isWimpActive {
     }
   } catch (_) {}
   return false;
+}
+
+bool? get skwasmIsMultiThreaded {
+  try {
+    final res = _skwasmInstance?.wasmExports?.isMultiThreaded();
+    if (res != null) return res.toDartInt == 1;
+  } catch (_) {}
+  return null;
 }
 
 bool get _isChromiumBrowser {
