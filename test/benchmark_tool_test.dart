@@ -565,7 +565,7 @@ void main() {
               rasterTimeMs: 30.0,
               totalFrameTimeMs: 55.0,
               jitterMs: 1.0,
-              isPipelined: mode == 'wasm',
+              isPipelined: mode == 'wasm' || mode == 'wimp',
               nodeCount: 128,
               mode: mode,
             ),
@@ -1035,35 +1035,58 @@ void main() {
       expect(recordWP.matches(BenchmarkMode.wasmSingleThreaded, 1000), isFalse);
     });
 
-    test('matches WIMP modes on mode wimp regardless of isPipelined', () {
-      for (final isPipelined in [false, true]) {
-        final recordWimp = makeRecord(
-          mode: 'wimp',
-          isPipelined: isPipelined,
-          fps: 24.0,
-          buildTimeMs: 30.0,
-          rasterTimeMs: 39.0,
-          totalFrameTimeMs: 70.0,
-        );
+    test('matches WIMP MT and ST modes based on mode wimp and isPipelined', () {
+      final recordWimpMt = makeRecord(
+        mode: 'wimp',
+        isPipelined: true,
+        fps: 24.0,
+        buildTimeMs: 30.0,
+        rasterTimeMs: 39.0,
+        totalFrameTimeMs: 70.0,
+      );
+      expect(
+        recordWimpMt.matches(BenchmarkMode.wimpMultithreaded, 1000),
+        isTrue,
+      );
+      expect(
+        recordWimpMt.matches(BenchmarkMode.wimpSingleThreaded, 1000),
+        isFalse,
+      );
+      expect(
+        recordWimpMt.matches(BenchmarkMode.wasmMultithreaded, 1000),
+        isFalse,
+      );
+      expect(
+        recordWimpMt.matches(BenchmarkMode.wasmSingleThreaded, 1000),
+        isFalse,
+      );
+      expect(recordWimpMt.matches(BenchmarkMode.jsCanvasKit, 1000), isFalse);
 
-        expect(
-          recordWimp.matches(BenchmarkMode.wimpMultithreaded, 1000),
-          isTrue,
-        );
-        expect(
-          recordWimp.matches(BenchmarkMode.wimpSingleThreaded, 1000),
-          isTrue,
-        );
-        expect(
-          recordWimp.matches(BenchmarkMode.wasmMultithreaded, 1000),
-          isFalse,
-        );
-        expect(
-          recordWimp.matches(BenchmarkMode.wasmSingleThreaded, 1000),
-          isFalse,
-        );
-        expect(recordWimp.matches(BenchmarkMode.jsCanvasKit, 1000), isFalse);
-      }
+      final recordWimpSt = makeRecord(
+        mode: 'wimp',
+        isPipelined: false,
+        fps: 24.0,
+        buildTimeMs: 30.0,
+        rasterTimeMs: 39.0,
+        totalFrameTimeMs: 70.0,
+      );
+      expect(
+        recordWimpSt.matches(BenchmarkMode.wimpMultithreaded, 1000),
+        isFalse,
+      );
+      expect(
+        recordWimpSt.matches(BenchmarkMode.wimpSingleThreaded, 1000),
+        isTrue,
+      );
+      expect(
+        recordWimpSt.matches(BenchmarkMode.wasmMultithreaded, 1000),
+        isFalse,
+      );
+      expect(
+        recordWimpSt.matches(BenchmarkMode.wasmSingleThreaded, 1000),
+        isFalse,
+      );
+      expect(recordWimpSt.matches(BenchmarkMode.jsCanvasKit, 1000), isFalse);
 
       final recordWasm = makeRecord(
         mode: 'wasm',

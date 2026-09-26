@@ -996,10 +996,10 @@ class BenchmarkRecord({
         return normMode == 'wasm' && isPipelined;
       case BenchmarkMode.wasmSingleThreaded:
         return normMode == 'wasm' && !isPipelined;
-      case BenchmarkMode.wimpMultithreaded || BenchmarkMode.wimpSingleThreaded:
-        // The app reports every WIMP run as `isPipelined: false`, so WIMP
-        // threading is verified from engine exports via [RuntimeRecord].
-        return normMode == 'wimp';
+      case BenchmarkMode.wimpMultithreaded:
+        return normMode == 'wimp' && isPipelined;
+      case BenchmarkMode.wimpSingleThreaded:
+        return normMode == 'wimp' && !isPipelined;
       case BenchmarkMode.jsCanvasKit:
         return normMode == 'js';
       case BenchmarkMode.jsWebParagraph:
