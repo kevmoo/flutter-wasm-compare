@@ -1738,11 +1738,13 @@ class BenchmarkArgs({
     ..addOption(
       'workload',
       defaultsTo: 'bouncy',
+      allowed: const ['bouncy', 'grid'],
       valueHelp: 'name',
       help: 'Workload type: bouncy (layout churn) or grid (card grid).',
     )
     ..addOption(
       'preset',
+      allowed: const ['light', 'medium', 'heavy', 'all'],
       valueHelp: 'name',
       help:
           'Convenience workload preset: light, medium, heavy, or all.\n'
@@ -1849,26 +1851,7 @@ class BenchmarkArgs({
   }
 
   factory parse(List<String> args) {
-    final ArgResults results;
-    try {
-      results = buildParser().parse(args);
-    } on ArgParserException catch (e) {
-      if (e.message.contains('"browsers"') ||
-          e.message.contains('"--browsers"')) {
-        throw const FormatException(
-          'Flag "--browsers" was renamed; use "--browser" instead.',
-        );
-      }
-      if (e.message.contains('"sample-interval-ms"') ||
-          e.message.contains('"--sample-interval-ms"')) {
-        throw const FormatException(
-          'Flag "--sample-interval-ms" was renamed; '
-          'use "--sample-interval" instead.',
-        );
-      }
-      throw FormatException(e.message);
-    }
-
+    final results = buildParser().parse(args);
     if (results.rest.isNotEmpty) {
       throw FormatException(
         'Unexpected positional arguments: ${results.rest.join(' ')}',
@@ -1899,8 +1882,8 @@ class BenchmarkArgs({
     if (baseUrl.isEmpty) {
       throw const FormatException('Invalid --url value: URL cannot be empty.');
     }
-    final workload = _parseWorkload(results.option('workload')!);
-    final preset = _parsePreset(results.option('preset'));
+    final workload = results.option('workload')!;
+    final preset = results.option('preset');
     final browsers = _parseBrowsers(results.option('browser')!);
     final modes = _parseModes(results.option('modes'));
     final rawNodes = results.option('nodes');
@@ -1961,30 +1944,6 @@ class BenchmarkArgs({
     );
   }
 
-  static String _parseWorkload(String raw) {
-    final normalized = raw.trim().toLowerCase();
-    return switch (normalized) {
-      'bouncy' || 'grid' => normalized,
-      _ => throw FormatException(
-        'Invalid --workload value "$raw" (allowed: bouncy, grid).',
-      ),
-    };
-  }
-
-  static String? _parsePreset(String? raw) {
-    if (raw == null) return null;
-    final normalized = raw.trim().toLowerCase();
-    return switch (normalized) {
-      'light' || 'medium' || 'heavy' || 'all' => normalized,
-      'max' => throw const FormatException(
-        'Preset "max" was removed; use "heavy" instead.',
-      ),
-      _ => throw FormatException(
-        'Invalid --preset value "$raw" (allowed: light, medium, heavy, all).',
-      ),
-    };
-  }
-
   static List<BrowserType> _parseBrowsers(String raw) {
     final trimmed = raw.trim().toLowerCase();
     if (trimmed.isEmpty) {
@@ -2039,18 +1998,6 @@ class BenchmarkArgs({
           result.add(BenchmarkMode.jsCanvasKit);
         case 'webparagraph':
           result.add(BenchmarkMode.jsWebParagraph);
-        case 'mt':
-          throw const FormatException(
-            'Mode "mt" was renamed; use "wasm_mt" instead.',
-          );
-        case 'st':
-          throw const FormatException(
-            'Mode "st" was renamed; use "wasm_st" instead.',
-          );
-        case 'wp' || 'js_wp':
-          throw FormatException(
-            'Mode "$token" was renamed; use "webparagraph" instead.',
-          );
         default:
           throw FormatException(
             'Invalid --modes value "$part" (allowed: wasm_mt, wasm_st, '

@@ -154,6 +154,8 @@ void main() {
     test('throws FormatException on unknown flags or positional args', () {
       for (final badArgs in [
         ['--unknown'],
+        ['--browsers=chrome'],
+        ['--sample-interval-ms=1000'],
         ['--mode=wasm_mt'],
         ['--node=64'],
         ['-x'],
@@ -168,81 +170,21 @@ void main() {
       }
     });
 
-    test('throws prescriptive FormatException on retired aliases', () {
-      expect(
-        () => BenchmarkArgs.parse(['--browsers=chrome']),
-        throwsA(
-          isA<FormatException>().having(
-            (e) => e.message,
-            'message',
-            contains('use "--browser" instead'),
-          ),
-        ),
-      );
-      expect(
-        () => BenchmarkArgs.parse(['--sample-interval-ms=1000']),
-        throwsA(
-          isA<FormatException>().having(
-            (e) => e.message,
-            'message',
-            contains('use "--sample-interval" instead'),
-          ),
-        ),
-      );
-      expect(
-        () => BenchmarkArgs.parse(['--preset=max']),
-        throwsA(
-          isA<FormatException>().having(
-            (e) => e.message,
-            'message',
-            contains('use "heavy" instead'),
-          ),
-        ),
-      );
-      expect(
-        () => BenchmarkArgs.parse(['--modes=mt']),
-        throwsA(
-          isA<FormatException>().having(
-            (e) => e.message,
-            'message',
-            contains('use "wasm_mt" instead'),
-          ),
-        ),
-      );
-      expect(
-        () => BenchmarkArgs.parse(['--modes=st']),
-        throwsA(
-          isA<FormatException>().having(
-            (e) => e.message,
-            'message',
-            contains('use "wasm_st" instead'),
-          ),
-        ),
-      );
-      for (final modeAlias in ['wp', 'js_wp']) {
-        expect(
-          () => BenchmarkArgs.parse(['--modes=$modeAlias']),
-          throwsA(
-            isA<FormatException>().having(
-              (e) => e.message,
-              'message',
-              contains('use "webparagraph" instead'),
-            ),
-          ),
-        );
-      }
-    });
-
     test('throws FormatException on invalid option values', () {
       for (final badArgs in [
         ['--workload=foo'],
         ['--workload='],
         ['--preset=ultra'],
+        ['--preset=max'],
         ['--preset='],
         ['--browser=ie'],
         ['--browser=chrome,'],
         ['--browser='],
         ['--modes=foo'],
+        ['--modes=mt'],
+        ['--modes=st'],
+        ['--modes=wp'],
+        ['--modes=js_wp'],
         ['--modes=wasm_mt,foo'],
         ['--modes='],
         ['--viewport=100'],
