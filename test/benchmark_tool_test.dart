@@ -759,6 +759,45 @@ void main() {
       expect(markdown(stRuntime), isNot(contains('Key Takeaways')));
       expect(comparisons(stRuntime), isEmpty);
     });
+
+    test('Runtime Verification shows ⚠️ ERROR on sampling failure', () {
+      final args = BenchmarkArgs.parse([
+        '--browser=chrome',
+        '--modes=wasm_mt',
+        '--nodes=64',
+      ]);
+      final markdown = formatMarkdownReport(
+        args: args,
+        capabilities: const {},
+        results: {
+          BrowserType.chrome: {
+            const BenchmarkKey(
+              BenchmarkMode.wasmMultithreaded,
+              64,
+            ): summarizeSamples(
+              [sample(30.0)],
+              requestedSamples: 5,
+              runtime: validMt,
+            ),
+          },
+        },
+      );
+
+      expect(
+        markdown,
+        contains(
+          '⚠️ ERROR: Incomplete sample count (1 of 5 requested samples)',
+        ),
+      );
+      expect(markdown, isNot(contains('✅ valid')));
+      expect(markdown, contains('| **Nodes (64)** | ⚠️ ERROR |'));
+    });
+
+    test('maxSampleAttempts scales budget for sub-throttle intervals', () {
+      expect(maxSampleAttempts(samples: 5, sampleIntervalMs: 1200), equals(20));
+      expect(maxSampleAttempts(samples: 5, sampleIntervalMs: 2000), equals(20));
+      expect(maxSampleAttempts(samples: 5, sampleIntervalMs: 200), equals(120));
+    });
   });
 
   group('BenchmarkRecord matching & filtering', () {

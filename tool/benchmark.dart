@@ -32,10 +32,10 @@ Future<void> main(List<String> rawArgs) async {
     }
   }
 
-  final anySuccess = benchmarkResults.values.any(
-    (records) => records.values.any((multi) => multi.errorMessage == null),
+  final anyRecorded = benchmarkResults.values.any(
+    (records) => records.isNotEmpty,
   );
-  if (!anySuccess) {
+  if (!anyRecorded) {
     print('\nNo benchmark results collected.');
     exitCode = 1;
     return;
@@ -241,7 +241,10 @@ Future<List<BenchmarkRecord>> _collectSamples({
 }) async {
   final collected = <BenchmarkRecord>[];
   final readExpr = "localStorage.getItem('${mode.storageKey}')";
-  final maxAttempts = args.samples * 3 + 5;
+  final maxAttempts = maxSampleAttempts(
+    samples: args.samples,
+    sampleIntervalMs: args.sampleIntervalMs,
+  );
   var attempts = 0;
   var lastTotalFrameTime = -1.0;
 
@@ -263,6 +266,20 @@ Future<List<BenchmarkRecord>> _collectSamples({
     }
   }
   return collected;
+}
+
+/// Maximum `localStorage` poll attempts for [samples] at [sampleIntervalMs].
+///
+/// The app throttles `localStorage` publishes to once per 1000ms, so when
+/// [sampleIntervalMs] is set below the default 1200ms, the attempt count is
+/// scaled up to preserve at least `(samples * 3 + 5) * 1200ms` of wall-clock
+/// budget.
+int maxSampleAttempts({required int samples, required int sampleIntervalMs}) {
+  final baseAttempts = samples * 3 + 5;
+  if (sampleIntervalMs <= 0 || sampleIntervalMs >= 1200) {
+    return baseAttempts;
+  }
+  return (baseAttempts * 1200 + sampleIntervalMs - 1) ~/ sampleIntervalMs;
 }
 
 /// Aggregates the samples collected for one point, failing closed.
@@ -449,7 +466,7 @@ void _writeMarkdownRuntime(
   final rows = [
     for (final MapEntry(key: browser, value: records) in results.entries)
       for (final MapEntry(:key, value: multi) in records.entries)
-        if (multi.runtime case final runtime?) (browser, key, runtime),
+        if (multi.runtime case final runtime?) (browser, key, multi, runtime),
   ];
   if (rows.isEmpty) return;
   buffer.writeln('## 🔎 Runtime Verification');
@@ -461,9 +478,15 @@ void _writeMarkdownRuntime(
   buffer.writeln(
     '| :--- | :--- | ---: | :---: | :---: | :---: | :--- | :--- | :--- |',
   );
-  for (final (browser, key, runtime) in rows) {
-    final reason = runtime.invalidReason(key.mode);
-    final status = reason == null ? '✅ valid' : '⚠️ INVALID: $reason';
+  for (final (browser, key, multi, runtime) in rows) {
+    final status = switch ((
+      runtime.invalidReason(key.mode),
+      multi.errorMessage,
+    )) {
+      (final reason?, _) => '⚠️ INVALID: $reason',
+      (null, final error?) => '⚠️ ERROR: $error',
+      (null, null) => '✅ valid',
+    };
     buffer.writeln(
       '| ${browser.label} | ${key.mode.label} | ${key.nodes} | '
       '${runtime.isWimp ?? 'n/a'} | ${runtime.isMultiThreaded ?? 'n/a'} | '
