@@ -32,8 +32,8 @@ Future<void> main(List<String> rawArgs) async {
     }
   }
 
-  bool anyFailed = false;
-  bool anySuccess = false;
+  var anyFailed = false;
+  var anySuccess = false;
   for (final browserMap in benchmarkResults.values) {
     for (final multi in browserMap.values) {
       if (multi.errorMessage != null) {
@@ -966,7 +966,7 @@ class MultiSampleRecord({
   final RuntimeRecord? runtime,
   final String? errorMessage,
 }) {
-  factory MultiSampleRecord.error(String error) {
+  factory error(String error) {
     final empty = BenchmarkMetrics.fromSamples([0]);
     return MultiSampleRecord(
       samplesCount: 0,
@@ -983,10 +983,7 @@ class MultiSampleRecord({
     );
   }
 
-  factory MultiSampleRecord.fromRecords(
-    List<BenchmarkRecord> records, {
-    RuntimeRecord? runtime,
-  }) {
+  factory fromRecords(List<BenchmarkRecord> records, {RuntimeRecord? runtime}) {
     final rawFps = records.map((r) => r.effectiveFps).toList();
     final rawBuild = records.map((r) => r.buildTimeMs).toList();
     final rawRaster = records.map((r) => r.rasterTimeMs).toList();
@@ -1144,12 +1141,10 @@ String? selectCdpPageTargetWsUrl(List<dynamic> targets) {
 }
 
 /// Drives Chrome via native Chrome DevTools Protocol (CDP) WebSocket.
-class _ChromeCdpDriver implements BrowserDriver {
-  final String? customBinary;
-  final List<String> customFlags;
-
-  _ChromeCdpDriver([this.customBinary, this.customFlags = const []]);
-
+class _ChromeCdpDriver([
+  final String? customBinary,
+  final List<String> customFlags = const [],
+]) implements BrowserDriver {
   Process? _process;
   WebSocket? _ws;
   Directory? _tempDir;
@@ -1612,7 +1607,7 @@ class BenchmarkArgs({
     }
   }
 
-  factory BenchmarkArgs.parse(List<String> args) {
+  factory parse(List<String> args) {
     if (args.contains('--help') || args.contains('-h')) {
       return BenchmarkArgs(
         showHelp: true,
