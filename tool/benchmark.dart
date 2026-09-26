@@ -1469,11 +1469,13 @@ abstract class _W3cWebDriver() implements BrowserDriver {
       throw StateError('WebDriver HTTP ${resp.statusCode}: $body');
     }
     final json = jsonDecode(body) as Map<String, dynamic>;
-    if (json.containsKey('value') &&
-        json['value'] is Map &&
-        json['value']['error'] != null) {
+    if (json.containsKey('value') && json['value'] is Map) {
       final val = json['value'] as Map<String, dynamic>;
-      throw StateError('WebDriver error: ${val['error']} - ${val['message']}');
+      if (val['error'] != null) {
+        throw StateError(
+          'WebDriver error: ${val['error']} - ${val['message']}',
+        );
+      }
     }
     return json;
   }
