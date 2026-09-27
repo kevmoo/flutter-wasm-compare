@@ -12,9 +12,6 @@ import 'src/shell/compatibility_shield.dart';
 import 'src/shell/engine_mode.dart';
 import 'src/shell/performance_hud.dart';
 
-import 'src/shell/build_info.dart';
-import 'src/shell/build_info_export.dart';
-
 void main() {
   exposeBuildInfoToWindow();
   runApp(const WasmCompareApp());

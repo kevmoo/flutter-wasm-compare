@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'engine_mode.dart';
 import 'url_helper.dart';
 
-class BuildInfoAccessor {
+class BuildInfoAccessor() {
   static const gitSha = String.fromEnvironment('GIT_SHA', defaultValue: '');
   static const dartVersion = String.fromEnvironment(
     'DART_VERSION',

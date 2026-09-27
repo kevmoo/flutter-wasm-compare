@@ -136,20 +136,13 @@ String? _readJsonField(String path, String key) {
   }
 }
 
-class FlutterVersionInfo {
-  final String frameworkVersion;
-  final String frameworkRevision;
-  final String engineRevision;
-  final String dartSdkVersion;
-
-  const FlutterVersionInfo({
-    required this.frameworkVersion,
-    required this.frameworkRevision,
-    required this.engineRevision,
-    required this.dartSdkVersion,
-  });
-
-  factory FlutterVersionInfo.fromJson(Map<String, dynamic> json) {
+class const FlutterVersionInfo({
+  required final String frameworkVersion,
+  required final String frameworkRevision,
+  required final String engineRevision,
+  required final String dartSdkVersion,
+}) {
+  factory fromJson(Map<String, dynamic> json) {
     return FlutterVersionInfo(
       frameworkVersion: json['frameworkVersion'] as String? ?? '',
       frameworkRevision: json['frameworkRevision'] as String? ?? '',
@@ -166,7 +159,8 @@ class FlutterVersionInfo {
     try {
       final result = await Process.run(executable, ['--version', '--machine']);
       if (result.exitCode == 0) {
-        final Map<String, dynamic> json = jsonDecode(result.stdout as String);
+        final json =
+            jsonDecode(result.stdout as String) as Map<String, dynamic>;
         return FlutterVersionInfo.fromJson(json);
       }
     } catch (_) {}
@@ -188,7 +182,7 @@ Future<FlutterVersionInfo> _resolveSdkVersions(String executable) async {
       _readJsonField('.fvmrc', 'flutter') ??
       '3.47.0';
 
-  String dart = '';
+  var dart = '';
   final dartJson = _readJsonField(
     '.fvm/flutter_sdk/bin/cache/flutter.version.json',
     'dartSdkVersion',
