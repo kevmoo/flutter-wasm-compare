@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -205,7 +206,7 @@ class const _BouncyLeafWidget({super.key, required final int index})
       ),
     };
 
-    return Container(
+    Widget result = Container(
       margin: const EdgeInsets.all(0.5),
       decoration: BoxDecoration(
         border: Border.all(
@@ -244,5 +245,40 @@ class const _BouncyLeafWidget({super.key, required final int index})
         ),
       ),
     );
+
+    final effectsParam = Uri.base.queryParameters['effects'];
+    if (effectsParam == 'multipass') {
+      result = ColorFiltered(
+        colorFilter: const ColorFilter.matrix([
+          0.2126,
+          0.7152,
+          0.0722,
+          0,
+          0,
+          0.2126,
+          0.7152,
+          0.0722,
+          0,
+          0,
+          0.2126,
+          0.7152,
+          0.0722,
+          0,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+        ]),
+        child: ClipRect(
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 5.0, sigmaY: 5.0),
+            child: Opacity(opacity: 0.8, child: result),
+          ),
+        ),
+      );
+    }
+    return result;
   }
 }
