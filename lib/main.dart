@@ -12,6 +12,7 @@ import 'src/shell/engine_mode.dart';
 import 'src/shell/performance_hud.dart';
 
 void main() {
+  exposeBuildInfoToWindow();
   runApp(const WasmCompareApp());
 }
 

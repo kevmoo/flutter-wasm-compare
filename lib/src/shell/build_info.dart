@@ -3,7 +3,16 @@ import 'package:flutter/material.dart';
 import 'engine_mode.dart';
 import 'url_helper.dart';
 
-class _BuildInfo() {
+void exposeBuildInfoToWindow() {
+  exportBuildInfo(
+    gitSha: _BuildInfo.gitSha,
+    flutterVersion: _BuildInfo.flutterVersion,
+    dartVersion: _BuildInfo.dartVersion,
+    isCleanBuild: _BuildInfo.isCleanBuild,
+  );
+}
+
+abstract final class _BuildInfo._() {
   static const gitSha = String.fromEnvironment('GIT_SHA', defaultValue: '');
   static const dartVersion = String.fromEnvironment(
     'DART_VERSION',

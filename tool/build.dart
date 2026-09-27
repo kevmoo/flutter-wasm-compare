@@ -21,8 +21,13 @@ Future<bool> buildWeb({
 
   final isClean = _isWorkingTreeClean();
   final gitSha = _runGit(['rev-parse', 'HEAD']);
-  final dartVersion = _getDartVersion();
-  final flutterVersion = _getFlutterVersion();
+
+  final fvmFlutter = File('.fvm/flutter_sdk/bin/flutter');
+  final executable = fvmFlutter.existsSync() ? fvmFlutter.path : 'flutter';
+
+  final sdkInfo = await _resolveSdkVersions(executable);
+  final dartVersion = sdkInfo.dartSdkVersion;
+  final flutterVersion = sdkInfo.formattedFrameworkVersion;
 
   _printBuildHeader(
     gitSha: gitSha,
@@ -32,8 +37,6 @@ Future<bool> buildWeb({
   );
 
   final stopwatch = Stopwatch()..start();
-  final fvmFlutter = File('.fvm/flutter_sdk/bin/flutter');
-  final executable = fvmFlutter.existsSync() ? fvmFlutter.path : 'flutter';
 
   final buildArgs = [
     'build',
@@ -133,30 +136,88 @@ String? _readJsonField(String path, String key) {
   }
 }
 
-String _getDartVersion() {
-  final dartSdkVersion = _readJsonField(
-    '.fvm/flutter_sdk/bin/cache/flutter.version.json',
-    'dartSdkVersion',
-  );
-  if (dartSdkVersion != null) {
-    return dartSdkVersion.split(' ').first;
+class const FlutterVersionInfo({
+  required final String frameworkVersion,
+  required final String frameworkRevision,
+  required final String engineRevision,
+  required final String dartSdkVersion,
+}) {
+  factory fromJson(Map<String, dynamic> json) {
+    return FlutterVersionInfo(
+      frameworkVersion: json['frameworkVersion'] as String? ?? '',
+      frameworkRevision: json['frameworkRevision'] as String? ?? '',
+      engineRevision: json['engineRevision'] as String? ?? '',
+      dartSdkVersion: (json['dartSdkVersion'] as String? ?? '')
+          .split(' ')
+          .first,
+    );
   }
 
-  final fvmDartSdk = File('.fvm/flutter_sdk/bin/cache/dart-sdk/version');
-  if (fvmDartSdk.existsSync()) {
+  String get formattedFrameworkVersion {
+    if (frameworkVersion.isEmpty || frameworkRevision.isEmpty) {
+      return frameworkVersion;
+    }
+    final shortRev = frameworkRevision.length >= 7
+        ? frameworkRevision.substring(0, 7)
+        : frameworkRevision;
+    return '$frameworkVersion ($shortRev)';
+  }
+
+  static Future<FlutterVersionInfo?> runFlutterVersionMachine(
+    String executable,
+  ) async {
     try {
-      return fvmDartSdk.readAsStringSync().trim().split(' ').first;
+      final result = await Process.run(executable, ['--version', '--machine']);
+      if (result.exitCode == 0) {
+        final json =
+            jsonDecode(result.stdout as String) as Map<String, dynamic>;
+        final info = FlutterVersionInfo.fromJson(json);
+        if (info.frameworkVersion.isNotEmpty &&
+            info.dartSdkVersion.isNotEmpty) {
+          return info;
+        }
+      }
     } catch (_) {}
+    return null;
   }
-
-  return Platform.version.split(' ').first;
 }
 
-String _getFlutterVersion() {
-  return _readJsonField(
+Future<FlutterVersionInfo> _resolveSdkVersions(String executable) async {
+  final info = await FlutterVersionInfo.runFlutterVersionMachine(executable);
+  if (info != null) {
+    return info;
+  }
+
+  final flutter =
+      _readJsonField(
         '.fvm/flutter_sdk/bin/cache/flutter.version.json',
         'flutterVersion',
       ) ??
       _readJsonField('.fvmrc', 'flutter') ??
       '3.47.0';
+
+  var dart = '';
+  final dartJson = _readJsonField(
+    '.fvm/flutter_sdk/bin/cache/flutter.version.json',
+    'dartSdkVersion',
+  );
+  if (dartJson != null) dart = dartJson.split(' ').first;
+
+  if (dart.isEmpty) {
+    final fvmDartSdk = File('.fvm/flutter_sdk/bin/cache/dart-sdk/version');
+    if (fvmDartSdk.existsSync()) {
+      try {
+        dart = fvmDartSdk.readAsStringSync().trim().split(' ').first;
+      } catch (_) {}
+    }
+  }
+
+  if (dart.isEmpty) dart = Platform.version.split(' ').first;
+
+  return FlutterVersionInfo(
+    frameworkVersion: flutter,
+    frameworkRevision: '',
+    engineRevision: '',
+    dartSdkVersion: dart,
+  );
 }
