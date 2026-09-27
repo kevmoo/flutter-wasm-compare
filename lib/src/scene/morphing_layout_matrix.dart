@@ -35,7 +35,8 @@ class const MorphingLayoutMatrix({super.key, required super.nodeCount})
         );
 
         // Ensure inner content doesn't collapse to 0.
-        // Required minimum width and height per item is ~6.0 px (2px margin + 4px inner box).
+        // Required minimum width and height per item is ~6.0 px
+        // (2px margin + 4px inner box).
         final maxAllowedSpacingW = (w - 6.0 * columns) / (columns + 1);
         final maxAllowedSpacingH =
             (w - 6.0 * columns * dynamicAspect) / (columns + 1);
