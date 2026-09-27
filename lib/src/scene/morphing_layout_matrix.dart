@@ -44,14 +44,16 @@ class const MorphingLayoutMatrix({super.key, required super.nodeCount})
         final spacingScale = (maxAllowed / 12.0).clamp(0.0, 1.0);
         final spacing = (8.0 + 4.0 * math.sin(t)) * spacingScale;
 
+        final delegate = SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: columns,
+          mainAxisSpacing: spacing,
+          crossAxisSpacing: spacing,
+          childAspectRatio: dynamicAspect,
+        );
+
         return GridView.builder(
           padding: EdgeInsets.all(spacing),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: columns,
-            mainAxisSpacing: spacing,
-            crossAxisSpacing: spacing,
-            childAspectRatio: dynamicAspect,
-          ),
+          gridDelegate: delegate,
           itemCount: nodeCount,
           itemBuilder: (context, index) {
             return PolymorphicCard(
