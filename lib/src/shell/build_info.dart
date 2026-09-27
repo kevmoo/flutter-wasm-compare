@@ -3,7 +3,16 @@ import 'package:flutter/material.dart';
 import 'engine_mode.dart';
 import 'url_helper.dart';
 
-class BuildInfoAccessor() {
+void exposeBuildInfoToWindow() {
+  exportBuildInfo(
+    gitSha: _BuildInfo.gitSha,
+    flutterVersion: _BuildInfo.flutterVersion,
+    dartVersion: _BuildInfo.dartVersion,
+    isCleanBuild: _BuildInfo.isCleanBuild,
+  );
+}
+
+abstract final class _BuildInfo._() {
   static const gitSha = String.fromEnvironment('GIT_SHA', defaultValue: '');
   static const dartVersion = String.fromEnvironment(
     'DART_VERSION',
@@ -60,7 +69,7 @@ class const BuildInfoDialog({
     final isWebParagraph = isWebParagraphOverride ?? isCurrentlyWebParagraph();
     final isSingleThreaded =
         isSingleThreadedOverride ?? isCurrentlySingleThreaded();
-    final hasGitInfo = hasGitInfoOverride ?? BuildInfoAccessor.hasGitInfo;
+    final hasGitInfo = hasGitInfoOverride ?? _BuildInfo.hasGitInfo;
     final theme = Theme.of(context);
 
     return AlertDialog(
@@ -88,22 +97,22 @@ class const BuildInfoDialog({
               label: 'Commit',
               child: _buildCommitValue(hasGitInfo),
             ),
-            if (BuildInfoAccessor.dartVersion.isNotEmpty) ...[
+            if (_BuildInfo.dartVersion.isNotEmpty) ...[
               const SizedBox(height: 8),
               const _BuildInfoRow(
                 label: 'Dart SDK',
                 child: Text(
-                  BuildInfoAccessor.dartVersion,
+                  _BuildInfo.dartVersion,
                   style: TextStyle(fontFamily: 'monospace', fontSize: 13),
                 ),
               ),
             ],
-            if (BuildInfoAccessor.flutterVersion.isNotEmpty) ...[
+            if (_BuildInfo.flutterVersion.isNotEmpty) ...[
               const SizedBox(height: 8),
               const _BuildInfoRow(
                 label: 'Flutter SDK',
                 child: Text(
-                  BuildInfoAccessor.flutterVersion,
+                  _BuildInfo.flutterVersion,
                   style: TextStyle(fontFamily: 'monospace', fontSize: 13),
                 ),
               ),
@@ -166,7 +175,7 @@ class const BuildInfoDialog({
             _BuildInfoRow(
               label: 'Repository',
               child: InkWell(
-                onTap: () => openExternalUrl(BuildInfoAccessor.repoUrl),
+                onTap: () => openExternalUrl(_BuildInfo.repoUrl),
                 borderRadius: BorderRadius.circular(4),
                 child: const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
@@ -253,7 +262,7 @@ class const BuildInfoDialog({
       );
     }
     return InkWell(
-      onTap: () => openExternalUrl(BuildInfoAccessor.commitUrl),
+      onTap: () => openExternalUrl(_BuildInfo.commitUrl),
       borderRadius: BorderRadius.circular(4),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
@@ -261,9 +270,7 @@ class const BuildInfoDialog({
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              BuildInfoAccessor.shortSha.isEmpty
-                  ? '4867f6c'
-                  : BuildInfoAccessor.shortSha,
+              _BuildInfo.shortSha.isEmpty ? '4867f6c' : _BuildInfo.shortSha,
               style: const TextStyle(
                 color: Colors.lightBlueAccent,
                 fontFamily: 'monospace',

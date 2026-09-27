@@ -8,6 +8,13 @@ void exportMetrics({
   double jitterMs = 0.0,
 }) {}
 
+void exportBuildInfo({
+  required String gitSha,
+  required String flutterVersion,
+  required String dartVersion,
+  required bool isCleanBuild,
+}) {}
+
 Future<double?> requestScreenRefreshRate() async => null;
 
 void savePersistedRefreshRate(double rate) {}

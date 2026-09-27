@@ -27,7 +27,7 @@ Future<bool> buildWeb({
 
   final sdkInfo = await _resolveSdkVersions(executable);
   final dartVersion = sdkInfo.dartSdkVersion;
-  final flutterVersion = sdkInfo.frameworkVersion;
+  final flutterVersion = sdkInfo.formattedFrameworkVersion;
 
   _printBuildHeader(
     gitSha: gitSha,
@@ -153,6 +153,16 @@ class const FlutterVersionInfo({
     );
   }
 
+  String get formattedFrameworkVersion {
+    if (frameworkVersion.isEmpty || frameworkRevision.isEmpty) {
+      return frameworkVersion;
+    }
+    final shortRev = frameworkRevision.length >= 7
+        ? frameworkRevision.substring(0, 7)
+        : frameworkRevision;
+    return '$frameworkVersion ($shortRev)';
+  }
+
   static Future<FlutterVersionInfo?> runFlutterVersionMachine(
     String executable,
   ) async {
@@ -161,7 +171,11 @@ class const FlutterVersionInfo({
       if (result.exitCode == 0) {
         final json =
             jsonDecode(result.stdout as String) as Map<String, dynamic>;
-        return FlutterVersionInfo.fromJson(json);
+        final info = FlutterVersionInfo.fromJson(json);
+        if (info.frameworkVersion.isNotEmpty &&
+            info.dartSdkVersion.isNotEmpty) {
+          return info;
+        }
       }
     } catch (_) {}
     return null;

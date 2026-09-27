@@ -18,6 +18,7 @@ void main() {
       final info = FlutterVersionInfo.fromJson(json);
       expect(info.frameworkVersion, '3.49.0-1.0.pre');
       expect(info.frameworkRevision, '1234567890abcdef');
+      expect(info.formattedFrameworkVersion, '3.49.0-1.0.pre (1234567)');
       expect(info.engineRevision, 'fedcba0987654321');
       expect(info.dartSdkVersion, '3.8.0');
     });
@@ -28,6 +29,7 @@ void main() {
       final info = FlutterVersionInfo.fromJson(json);
       expect(info.frameworkVersion, '');
       expect(info.frameworkRevision, '');
+      expect(info.formattedFrameworkVersion, '');
       expect(info.engineRevision, '');
       expect(info.dartSdkVersion, '');
     });

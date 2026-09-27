@@ -5,6 +5,9 @@ import 'package:web/web.dart' as web;
 @JS('window._lastFrameMetrics')
 external set _lastFrameMetrics(JSObject? value);
 
+@JS('window._flutterWasmCompareBuildInfo')
+external set _flutterWasmCompareBuildInfo(JSObject? value);
+
 void updateUrlQueryParam(String key, String value) {
   try {
     final url = web.URL(web.window.location.href);
@@ -31,6 +34,25 @@ void exportMetrics({
       'jitterMs': jitterMs,
     };
     _lastFrameMetrics = map.jsify() as JSObject?;
+  } catch (_) {
+    // Ignore
+  }
+}
+
+void exportBuildInfo({
+  required String gitSha,
+  required String flutterVersion,
+  required String dartVersion,
+  required bool isCleanBuild,
+}) {
+  try {
+    final map = <String, Object?>{
+      'gitSha': gitSha,
+      'flutterVersion': flutterVersion,
+      'dartVersion': dartVersion,
+      'isCleanBuild': isCleanBuild,
+    };
+    _flutterWasmCompareBuildInfo = map.jsify() as JSObject?;
   } catch (_) {
     // Ignore
   }
