@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'engine_mode.dart';
 import 'url_helper.dart';
 
-class _BuildInfo() {
+class BuildInfoAccessor {
   static const gitSha = String.fromEnvironment('GIT_SHA', defaultValue: '');
   static const dartVersion = String.fromEnvironment(
     'DART_VERSION',
@@ -60,7 +60,7 @@ class const BuildInfoDialog({
     final isWebParagraph = isWebParagraphOverride ?? isCurrentlyWebParagraph();
     final isSingleThreaded =
         isSingleThreadedOverride ?? isCurrentlySingleThreaded();
-    final hasGitInfo = hasGitInfoOverride ?? _BuildInfo.hasGitInfo;
+    final hasGitInfo = hasGitInfoOverride ?? BuildInfoAccessor.hasGitInfo;
     final theme = Theme.of(context);
 
     return AlertDialog(
@@ -88,22 +88,22 @@ class const BuildInfoDialog({
               label: 'Commit',
               child: _buildCommitValue(hasGitInfo),
             ),
-            if (_BuildInfo.dartVersion.isNotEmpty) ...[
+            if (BuildInfoAccessor.dartVersion.isNotEmpty) ...[
               const SizedBox(height: 8),
               const _BuildInfoRow(
                 label: 'Dart SDK',
                 child: Text(
-                  _BuildInfo.dartVersion,
+                  BuildInfoAccessor.dartVersion,
                   style: TextStyle(fontFamily: 'monospace', fontSize: 13),
                 ),
               ),
             ],
-            if (_BuildInfo.flutterVersion.isNotEmpty) ...[
+            if (BuildInfoAccessor.flutterVersion.isNotEmpty) ...[
               const SizedBox(height: 8),
               const _BuildInfoRow(
                 label: 'Flutter SDK',
                 child: Text(
-                  _BuildInfo.flutterVersion,
+                  BuildInfoAccessor.flutterVersion,
                   style: TextStyle(fontFamily: 'monospace', fontSize: 13),
                 ),
               ),
@@ -166,7 +166,7 @@ class const BuildInfoDialog({
             _BuildInfoRow(
               label: 'Repository',
               child: InkWell(
-                onTap: () => openExternalUrl(_BuildInfo.repoUrl),
+                onTap: () => openExternalUrl(BuildInfoAccessor.repoUrl),
                 borderRadius: BorderRadius.circular(4),
                 child: const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
@@ -253,7 +253,7 @@ class const BuildInfoDialog({
       );
     }
     return InkWell(
-      onTap: () => openExternalUrl(_BuildInfo.commitUrl),
+      onTap: () => openExternalUrl(BuildInfoAccessor.commitUrl),
       borderRadius: BorderRadius.circular(4),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
@@ -261,7 +261,9 @@ class const BuildInfoDialog({
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              _BuildInfo.shortSha.isEmpty ? '4867f6c' : _BuildInfo.shortSha,
+              BuildInfoAccessor.shortSha.isEmpty
+                  ? '4867f6c'
+                  : BuildInfoAccessor.shortSha,
               style: const TextStyle(
                 color: Colors.lightBlueAccent,
                 fontFamily: 'monospace',

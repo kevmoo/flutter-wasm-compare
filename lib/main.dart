@@ -7,11 +7,16 @@ import 'src/scene/adaptive_stress_scene.dart';
 import 'src/scene/stress_controller.dart';
 import 'src/scene/stress_workload.dart';
 import 'src/shell/build_info.dart';
+import 'src/shell/build_info_export.dart';
 import 'src/shell/compatibility_shield.dart';
 import 'src/shell/engine_mode.dart';
 import 'src/shell/performance_hud.dart';
 
+import 'src/shell/build_info.dart';
+import 'src/shell/build_info_export.dart';
+
 void main() {
+  exposeBuildInfoToWindow();
   runApp(const WasmCompareApp());
 }
 
@@ -237,7 +242,7 @@ class const _EngineSelectorButton() extends StatelessWidget {
   ];
 }
 
-class const _ThreadingModeButton({final bool isCompact = false})
+class _ThreadingModeButton({final bool isCompact = false})
     extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -297,7 +302,7 @@ class const _ThreadingModeButton({final bool isCompact = false})
   }
 }
 
-class const _DeviceDetailsButton({
+class _DeviceDetailsButton({
   required final StressController stressCtrl,
   final bool isCompact = false,
 }) extends StatelessWidget {

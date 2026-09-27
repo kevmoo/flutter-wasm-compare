@@ -724,6 +724,13 @@ Map<String, Object?> generateJsonReport({
       'settle_seconds': args.settleSeconds,
       'samples': args.samples,
       'sample_interval_ms': args.sampleIntervalMs,
+      'workload': args.workload,
+      'preset': args.preset,
+      'node_counts': args.nodeCounts,
+      'modes': args.modes.map((m) => m.name).toList(),
+      'chrome_binary': args.chromeBinary,
+      'chrome_flags': args.chromeFlags,
+      'headed': args.headed,
     },
   );
 
@@ -909,7 +916,11 @@ const _runtimeProbeScript = '''(() => {
       if (lose) lose.loseContext();
     }
   } catch (e) {}
+  const buildInfo = window._flutterWasmCompareBuildInfo || null;
   return JSON.stringify({
+    userAgent: navigator.userAgent,
+    devicePixelRatio: window.devicePixelRatio,
+    buildInfo: buildInfo,
     isWimp: flag("skwasm_isWimp"),
     isMultiThreaded: flag("skwasm_isMultiThreaded"),
     crossOriginIsolated: window.crossOriginIsolated === true,
@@ -1099,6 +1110,9 @@ class RuntimeRecord({
   required final bool crossOriginIsolated,
   final String? webglRenderer,
   final String? webglVendor,
+  final String? userAgent,
+  final num? devicePixelRatio,
+  final Map<String, dynamic>? buildInfo,
 }) {
   /// Parses the result of `_runtimeProbeScript`. Unreadable input yields
   /// `null` engine flags, which makes every Wasm mode fail validation.
@@ -1120,6 +1134,9 @@ class RuntimeRecord({
       crossOriginIsolated: map['crossOriginIsolated'] as bool? ?? false,
       webglRenderer: map['webglRenderer'] as String?,
       webglVendor: map['webglVendor'] as String?,
+      userAgent: map['userAgent'] as String?,
+      devicePixelRatio: map['devicePixelRatio'] as num?,
+      buildInfo: map['buildInfo'] as Map<String, dynamic>?,
     );
   }
 
@@ -1159,6 +1176,9 @@ class RuntimeRecord({
       'cross_origin_isolated': crossOriginIsolated,
       'webgl_renderer': webglRenderer,
       'webgl_vendor': webglVendor,
+      'user_agent': userAgent,
+      'device_pixel_ratio': devicePixelRatio,
+      'build_info': buildInfo,
       'valid': reason == null,
       'invalid_reason': reason,
     };
@@ -1698,6 +1718,7 @@ class BenchmarkArgs({
   required final bool showHelp,
   required final String baseUrl,
   final String workload = 'bouncy',
+  final String? preset,
   required final List<BrowserType> browsers,
   required final List<BenchmarkMode> modes,
   required final List<int> nodeCounts,
@@ -1937,6 +1958,7 @@ class BenchmarkArgs({
       outputPath: outputPath,
       jsonOutput: results.flag('json'),
       jsonOutputPath: jsonOutputPath,
+      preset: preset,
       skipCapabilityProbe: results.flag('skip-capability-probe'),
       headed: results.flag('headed'),
       chromeFlags: chromeFlags,
