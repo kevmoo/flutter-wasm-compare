@@ -34,12 +34,14 @@ class const MorphingLayoutMatrix({super.key, required super.nodeCount})
           5.0,
         );
 
-        // Ensure inner content doesn't collapse to 0.
-        // Required minimum width and height per item is ~6.0 px
-        // (2px margin + 4px inner box).
-        final maxAllowedSpacingW = (w - 6.0 * columns) / (columns + 1);
+        // Ensure inner FittedBox never collapses below 4x4 px.
+        // Each PolymorphicCard has 2px margin + 1px border (3px total inset),
+        // so a minimum cell extent of 8.0 px guarantees >= 5.0 px inner size.
+        const minCellExtent = 8.0;
+        final maxAllowedSpacingW =
+            (w - minCellExtent * columns) / (columns + 1);
         final maxAllowedSpacingH =
-            (w - 6.0 * columns * dynamicAspect) / (columns + 1);
+            (w - minCellExtent * columns * dynamicAspect) / (columns + 1);
         final maxAllowed = math.min(maxAllowedSpacingW, maxAllowedSpacingH);
 
         final spacingScale = (maxAllowed / 12.0).clamp(0.0, 1.0);

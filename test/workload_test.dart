@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:wasm_compare/src/metrics/benchmark_storage.dart';
 import 'package:wasm_compare/src/scene/bouncy_layout_matrix.dart';
+import 'package:wasm_compare/src/scene/morphing_layout_matrix.dart';
 import 'package:wasm_compare/src/scene/stress_controller.dart';
 import 'package:wasm_compare/src/scene/stress_workload.dart';
 
@@ -66,6 +67,52 @@ void main() {
           await tester.pump(const Duration(milliseconds: 500));
 
           expect(tester.takeException(), isNull);
+        }
+      },
+    );
+  });
+
+  group('MorphingLayoutMatrix grid@5000 cell bounds', () {
+    testWidgets(
+      'keeps FittedBox cells >= 4x4 px across spacing cycle at 800x600 and '
+      '1280x720',
+      (tester) async {
+        for (final size in [const Size(800, 600), const Size(1280, 720)]) {
+          await tester.pumpWidget(
+            MaterialApp(
+              home: Scaffold(
+                body: SizedBox(
+                  width: size.width,
+                  height: size.height,
+                  child: const MorphingLayoutMatrix(nodeCount: 5000),
+                ),
+              ),
+            ),
+          );
+          await tester.pump();
+          // 4-second period: 1000ms is animationValue = 0.25 (sin(pi/2) = 1.0,
+          // peak spacing).
+          for (final stepMs in [250, 500, 250, 1000]) {
+            await tester.pump(Duration(milliseconds: stepMs));
+            expect(tester.takeException(), isNull);
+            final fittedBoxes = tester.widgetList<FittedBox>(
+              find.byType(FittedBox),
+            );
+            expect(fittedBoxes, isNotEmpty);
+            for (final element in find.byType(FittedBox).evaluate()) {
+              final box = element.renderObject! as RenderBox;
+              expect(
+                box.size.width,
+                greaterThanOrEqualTo(4.0),
+                reason: 'FittedBox width collapsed at viewport $size',
+              );
+              expect(
+                box.size.height,
+                greaterThanOrEqualTo(4.0),
+                reason: 'FittedBox height collapsed at viewport $size',
+              );
+            }
+          }
         }
       },
     );

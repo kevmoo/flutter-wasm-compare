@@ -457,6 +457,8 @@ void _writeMarkdownHeader(StringBuffer buffer, BenchmarkArgs args) {
   buffer.writeln();
   buffer.writeln('- **Date**: ${DateTime.now().toUtc().toIso8601String()}');
   buffer.writeln('- **Target App**: [${args.baseUrl}](${args.baseUrl})');
+  final presetSuffix = args.preset != null ? ' (preset: `${args.preset}`)' : '';
+  buffer.writeln('- **Workload**: `${args.workload}`$presetSuffix');
   buffer.writeln(
     '- **Viewport**: ${args.viewportWidth}x${args.viewportHeight} px '
     '(calibrated identically across all browsers)',
@@ -465,6 +467,10 @@ void _writeMarkdownHeader(StringBuffer buffer, BenchmarkArgs args) {
     '- **Sampling**: ${args.samples} trials per run after '
     '${args.settleSeconds}s initial settle',
   );
+  if (args.chromeFlags.isNotEmpty) {
+    final flags = args.chromeFlags.map((f) => '`$f`').join(', ');
+    buffer.writeln('- **Chrome Flags**: $flags');
+  }
   buffer.writeln();
 }
 

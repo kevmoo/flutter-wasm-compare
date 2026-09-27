@@ -1122,6 +1122,14 @@ void main() {
           'crossOriginIsolated': true,
           'webglRenderer': 'ANGLE (SwiftShader)',
           'webglVendor': 'Google Inc. (Google)',
+          'userAgent': 'HeadlessChrome/154.0',
+          'devicePixelRatio': 2.0,
+          'buildInfo': {
+            'gitSha': '542354b',
+            'flutterVersion': '3.49.0-1.0.pre-171',
+            'dartVersion': '3.14.0',
+            'isCleanBuild': true,
+          },
         }),
       );
       expect(parsed.isWimp, isTrue);
@@ -1129,6 +1137,17 @@ void main() {
       expect(parsed.crossOriginIsolated, isTrue);
       expect(parsed.webglRenderer, equals('ANGLE (SwiftShader)'));
       expect(parsed.webglVendor, equals('Google Inc. (Google)'));
+      expect(parsed.userAgent, equals('HeadlessChrome/154.0'));
+      expect(parsed.devicePixelRatio, equals(2.0));
+      expect(
+        parsed.buildInfo,
+        equals({
+          'gitSha': '542354b',
+          'flutterVersion': '3.49.0-1.0.pre-171',
+          'dartVersion': '3.14.0',
+          'isCleanBuild': true,
+        }),
+      );
       expect(parsed.invalidReason(BenchmarkMode.wimpMultithreaded), isNull);
     });
 
@@ -1215,9 +1234,13 @@ void main() {
     });
 
     test('toJson reports validity alongside the raw fields', () {
-      final invalid = runtime(
+      final invalid = RuntimeRecord(
         isWimp: false,
         isMultiThreaded: true,
+        crossOriginIsolated: true,
+        userAgent: 'HeadlessChrome/154.0',
+        devicePixelRatio: 1.5,
+        buildInfo: const {'gitSha': '542354b', 'isCleanBuild': true},
       ).toJson(BenchmarkMode.wimpMultithreaded);
       expect(() => jsonEncode(invalid), returnsNormally);
       expect(invalid['valid'], isFalse);
@@ -1227,6 +1250,12 @@ void main() {
       );
       expect(invalid['is_wimp'], isFalse);
       expect(invalid['cross_origin_isolated'], isTrue);
+      expect(invalid['user_agent'], equals('HeadlessChrome/154.0'));
+      expect(invalid['device_pixel_ratio'], equals(1.5));
+      expect(
+        invalid['build_info'],
+        equals({'gitSha': '542354b', 'isCleanBuild': true}),
+      );
 
       final valid = runtime(
         isWimp: true,
@@ -1235,6 +1264,58 @@ void main() {
       expect(valid['valid'], isTrue);
       expect(valid['invalid_reason'], isNull);
     });
+
+    test(
+      'generateJsonReport and formatMarkdownReport include CLI provenance',
+      () {
+        final args = BenchmarkArgs.parse([
+          '--workload=grid',
+          '--preset=heavy',
+          '--browser=chrome',
+          '--modes=wasm_mt,wimp_mt',
+          '--chrome-binary=/opt/chrome/chrome',
+          '--chrome-flag=--use-angle=swiftshader',
+          '--chrome-flag=--enable-unsafe-swiftshader',
+          '--headed',
+          '--skip-capability-probe',
+        ]);
+        final report = generateJsonReport(
+          args: args,
+          capabilities: const {},
+          results: const {},
+        );
+        final decoded = jsonDecode(jsonEncode(report)) as Map<String, dynamic>;
+        final env = decoded['environment'] as Map<String, dynamic>;
+        final extra = env['extra'] as Map<String, dynamic>? ?? env;
+        expect(extra['workload'], equals('grid'));
+        expect(extra['preset'], equals('heavy'));
+        expect(extra['node_counts'], equals([5000]));
+        expect(
+          extra['modes'],
+          equals(['wasmMultithreaded', 'wimpMultithreaded']),
+        );
+        expect(extra['chrome_binary'], equals('/opt/chrome/chrome'));
+        expect(
+          extra['chrome_flags'],
+          equals(['--use-angle=swiftshader', '--enable-unsafe-swiftshader']),
+        );
+        expect(extra['headed'], isTrue);
+
+        final markdown = formatMarkdownReport(
+          args: args,
+          capabilities: const {},
+          results: const {},
+        );
+        expect(markdown, contains('- **Workload**: `grid` (preset: `heavy`)'));
+        expect(
+          markdown,
+          contains(
+            '- **Chrome Flags**: `--use-angle=swiftshader`, '
+            '`--enable-unsafe-swiftshader`',
+          ),
+        );
+      },
+    );
   });
 
   group('JSON Sanitization & Serialization', () {
