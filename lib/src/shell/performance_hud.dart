@@ -32,12 +32,6 @@ Color _getFpsColor(double fps, double targetHz) {
   return Colors.redAccent;
 }
 
-Color _getJitterColor(double jitterMs) {
-  if (jitterMs < 1.2) return Colors.greenAccent;
-  if (jitterMs < 3.0) return Colors.amberAccent;
-  return Colors.redAccent;
-}
-
 const _hudDecoration = BoxDecoration(
   color: Colors.black87,
   borderRadius: BorderRadius.all(Radius.circular(12)),
@@ -432,7 +426,12 @@ class const _EngineTogglePill({
         mainAxisSize: MainAxisSize.min,
         children: [
           _EnginePillButton(
-            label: _wasmLabel(isWimp),
+            label: switch ((isWimp, isSingleThreaded)) {
+              (true, true) => '⚡ Impeller (Exp, ST)',
+              (true, false) => '⚡ Impeller (Exp)',
+              (false, true) => '⚡ Wasm (ST)',
+              (false, false) => '⚡ Wasm',
+            },
             isSelected: isCurrentWasm,
             selectedColor: Colors.lightBlueAccent,
             onTap: isCurrentWasm
@@ -454,32 +453,23 @@ class const _EngineTogglePill({
                     context,
                     mode: isWebParagraph ? 'webparagraph' : 'js',
                   ),
-            tooltip: _jsTooltip(isWebParagraph),
+            tooltip: switch ((isCurrentWasm, isWebParagraph)) {
+              (true, _) => 'Switch to JavaScript',
+              (false, true) =>
+                'Running JavaScript (WebParagraph • Experimental)',
+              (false, false) => 'Running JavaScript (CanvasKit)',
+            },
           ),
         ],
       ),
     );
   }
 
-  String _wasmLabel(bool isWimp) => switch ((isWimp, isSingleThreaded)) {
-    (true, true) => '⚡ Impeller (Exp, ST)',
-    (true, false) => '⚡ Impeller (Exp)',
-    (false, true) => '⚡ Wasm (ST)',
-    (false, false) => '⚡ Wasm',
-  };
-
   String _wasmTooltip(bool isWimp) {
     if (!isCurrentWasm) return 'Switch to WebAssembly';
     final renderer = isWimp ? 'Impeller (Exp)' : 'Skia';
     final threading = isSingleThreaded ? 'Single-threaded' : 'Multi-threaded';
     return 'Wasm + $renderer ($threading) • Tap to toggle threading';
-  }
-
-  String _jsTooltip(bool isWebParagraph) {
-    if (isCurrentWasm) return 'Switch to JavaScript';
-    return isWebParagraph
-        ? 'Running JavaScript (WebParagraph • Experimental)'
-        : 'Running JavaScript (CanvasKit)';
   }
 }
 
@@ -642,6 +632,10 @@ class const _DualEngineCards({
       isPipelined: false,
     );
 
+    final isWp = !isCurrentWasm
+        ? isCurrentlyWebParagraph()
+        : jsRun?.mode.toLowerCase() == 'webparagraph';
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -667,8 +661,8 @@ class const _DualEngineCards({
         Expanded(
           child: _EngineMiniCard(
             title: '📜 JS',
-            subtitle: _jsSubtitle(),
-            titleColor: _jsTitleColor(),
+            subtitle: isWp ? 'WebParagraph (Exp)' : 'CanvasKit (Serial)',
+            titleColor: isWp ? Colors.orangeAccent : const Color(0xFFF1E05A),
             isLive: !isCurrentWasm,
             fps: jsMetrics.fps,
             activeMs: jsMetrics.activeMs,
@@ -703,20 +697,6 @@ class const _DualEngineCards({
       context,
       mode: wasmRun?.mode.toLowerCase() == 'wimp' ? 'wimp' : 'wasm',
     );
-  }
-
-  String _jsSubtitle() {
-    final isWp = !isCurrentWasm
-        ? isCurrentlyWebParagraph()
-        : jsRun?.mode.toLowerCase() == 'webparagraph';
-    return isWp ? 'WebParagraph (Exp)' : 'CanvasKit (Serial)';
-  }
-
-  Color _jsTitleColor() {
-    final isWp = !isCurrentWasm
-        ? isCurrentlyWebParagraph()
-        : jsRun?.mode.toLowerCase() == 'webparagraph';
-    return isWp ? Colors.orangeAccent : const Color(0xFFF1E05A);
   }
 
   VoidCallback? _jsOnTap(BuildContext context) {
@@ -1007,7 +987,11 @@ class const _EngineMetricsContent({
           _MiniMetricRow(
             label: 'Jitter',
             value: '±${jitter.toStringAsFixed(1)}ms',
-            valueColor: _getJitterColor(jitter),
+            valueColor: switch (jitter) {
+              < 1.2 => Colors.greenAccent,
+              < 3.0 => Colors.amberAccent,
+              _ => Colors.redAccent,
+            },
           ),
         _MiniMetricRow(
           label: 'Build',
