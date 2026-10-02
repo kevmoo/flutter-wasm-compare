@@ -129,12 +129,15 @@ class const _EngineSelectorButton() extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final current = currentEngineMode();
-    final color = _engineColor(current);
-    final label = _engineLabel(current);
-    final iconData = switch (current) {
-      'js' => Icons.javascript,
-      'webparagraph' => Icons.text_fields,
-      _ => Icons.bolt,
+    final (color, label, iconData) = switch (current) {
+      'wimp' => (Colors.tealAccent, 'Impeller (Exp)', Icons.bolt),
+      'wasm' => (Colors.lightBlueAccent, 'Skia', Icons.bolt),
+      'webparagraph' => (
+        Colors.orangeAccent,
+        'WebParagraph (Exp)',
+        Icons.text_fields,
+      ),
+      _ => (const Color(0xFFF1E05A), 'JS', Icons.javascript),
     };
 
     return Padding(
@@ -148,20 +151,6 @@ class const _EngineSelectorButton() extends StatelessWidget {
       ),
     );
   }
-
-  static Color _engineColor(String mode) => switch (mode) {
-    'wimp' => Colors.tealAccent,
-    'wasm' => Colors.lightBlueAccent,
-    'webparagraph' => Colors.orangeAccent,
-    _ => const Color(0xFFF1E05A),
-  };
-
-  static String _engineLabel(String mode) => switch (mode) {
-    'wimp' => 'Impeller (Exp)',
-    'wasm' => 'Skia',
-    'webparagraph' => 'WebParagraph (Exp)',
-    _ => 'JS',
-  };
 
   void _handleSelected(BuildContext context, String mode, String current) {
     if (mode == current) return;

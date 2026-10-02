@@ -121,18 +121,21 @@ class const BuildInfoDialog({
             _BuildInfoRow(
               label: 'Active Engine',
               child: Text(
-                _activeEngineLabel(
-                  isWasm: isWasm,
-                  isWimp: isWimp,
-                  isWebParagraph: isWebParagraph,
-                  isSingleThreaded: isSingleThreaded,
-                ),
+                switch ((isWasm, isWimp, isWebParagraph, isSingleThreaded)) {
+                  (false, _, true, _) => '📜 JS (WebParagraph) [Exp]',
+                  (false, _, false, _) => '📜 JS (CanvasKit)',
+                  (true, true, _, true) => '⚡ WASM + Impeller (Exp, ST)',
+                  (true, true, _, false) => '⚡ WASM + Impeller (Exp)',
+                  (true, false, _, true) => '⚡ WASM + Skia (ST)',
+                  (true, false, _, false) => '⚡ WASM + Skia',
+                },
                 style: TextStyle(
-                  color: _activeEngineColor(
-                    isWasm: isWasm,
-                    isWimp: isWimp,
-                    isWebParagraph: isWebParagraph,
-                  ),
+                  color: switch ((isWasm, isWimp, isWebParagraph)) {
+                    (true, true, _) => Colors.tealAccent,
+                    (true, false, _) => Colors.lightBlueAccent,
+                    (false, _, true) => Colors.orangeAccent,
+                    (false, _, false) => const Color(0xFFF1E05A),
+                  },
                   fontWeight: FontWeight.bold,
                   fontSize: 13,
                 ),
@@ -141,14 +144,13 @@ class const BuildInfoDialog({
             const SizedBox(height: 8),
             _BuildInfoRow(
               label: 'Renderer',
-              child: Text(
-                _rendererLabel(
-                  isWasm: isWasm,
-                  isWimp: isWimp,
-                  isWebParagraph: isWebParagraph,
-                ),
-                style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
-              ),
+              child: Text(switch ((isWasm, isWimp, isWebParagraph)) {
+                (true, true, _) => 'Impeller (wimp.wasm) • Experimental',
+                (true, false, _) => 'Skia (skwasm.wasm)',
+                (false, _, true) =>
+                  'CanvasKit (webparagraph/canvaskit.wasm • 3.6MB) • Exp',
+                (false, _, false) => 'CanvasKit (canvaskit.wasm)',
+              }, style: const TextStyle(fontFamily: 'monospace', fontSize: 13)),
             ),
             const SizedBox(height: 8),
             _BuildInfoRow(
@@ -213,42 +215,6 @@ class const BuildInfoDialog({
       ],
     );
   }
-
-  static Color _activeEngineColor({
-    required bool isWasm,
-    required bool isWimp,
-    required bool isWebParagraph,
-  }) => switch ((isWasm, isWimp, isWebParagraph)) {
-    (true, true, _) => Colors.tealAccent,
-    (true, false, _) => Colors.lightBlueAccent,
-    (false, _, true) => Colors.orangeAccent,
-    (false, _, false) => const Color(0xFFF1E05A),
-  };
-
-  static String _rendererLabel({
-    required bool isWasm,
-    required bool isWimp,
-    required bool isWebParagraph,
-  }) => switch ((isWasm, isWimp, isWebParagraph)) {
-    (true, true, _) => 'Impeller (wimp.wasm) • Experimental',
-    (true, false, _) => 'Skia (skwasm.wasm)',
-    (false, _, true) => 'CanvasKit (webparagraph/canvaskit.wasm • 3.6MB) • Exp',
-    (false, _, false) => 'CanvasKit (canvaskit.wasm)',
-  };
-
-  static String _activeEngineLabel({
-    required bool isWasm,
-    required bool isWimp,
-    required bool isWebParagraph,
-    required bool isSingleThreaded,
-  }) => switch ((isWasm, isWimp, isWebParagraph, isSingleThreaded)) {
-    (false, _, true, _) => '📜 JS (WebParagraph) [Exp]',
-    (false, _, false, _) => '📜 JS (CanvasKit)',
-    (true, true, _, true) => '⚡ WASM + Impeller (Exp, ST)',
-    (true, true, _, false) => '⚡ WASM + Impeller (Exp)',
-    (true, false, _, true) => '⚡ WASM + Skia (ST)',
-    (true, false, _, false) => '⚡ WASM + Skia',
-  };
 
   Widget _buildCommitValue(bool hasGitInfo) {
     if (!hasGitInfo) {
