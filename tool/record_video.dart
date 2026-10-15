@@ -447,13 +447,11 @@ Future<String> _waitForCdpWebSocketUrl(int port) async {
   throw StateError('Timed out waiting for Chrome CDP on port $port');
 }
 
-class _CdpSession(this._ws, this._framesDir) {
+class _CdpSession(final WebSocket _ws, final Directory _framesDir) {
   this {
     _sub = _ws.listen(_onMessage);
   }
 
-  final WebSocket _ws;
-  final Directory _framesDir;
   late final StreamSubscription<dynamic> _sub;
   int _nextId = 0;
   final Map<int, Completer<Map<String, dynamic>>> _pending = {};
