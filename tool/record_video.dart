@@ -138,9 +138,9 @@ class CaptureConfig({
       'Usage: dart run tool/record_video.dart [options]\n\n'
       'Records standalone 16:9 MP4 videos (JavaScript vs. WebAssembly) plus a\n'
       'combined MP4 and keyframe PNG screenshots of flutter-wasm-compare via\n'
-      'Chrome DevTools Protocol (CDP) Page.startScreencast + ffmpeg. Pre-warms\n'
-      'both modes in localStorage so both side-by-side HUD comparison cards\n'
-      'are populated in each standalone video.\n\n'
+      'Chrome DevTools Protocol (CDP) Page.startScreencast + ffmpeg.\n'
+      'Pre-warms both modes in localStorage so both side-by-side HUD\n'
+      'comparison cards are populated in each standalone video.\n\n'
       '${buildParser().usage}\n';
 
   factory parse(List<String> rawArgs, {bool? isMacOS}) {
@@ -349,7 +349,8 @@ class CaptureConfig({
     final parsed = int.tryParse(raw.trim());
     if (parsed == null || parsed < 1 || parsed > 100) {
       throw FormatException(
-        'Invalid --quality value "$raw": expected an integer between 1 and 100.',
+        'Invalid --quality value "$raw": '
+        'expected an integer between 1 and 100.',
       );
     }
     return parsed;
@@ -446,8 +447,8 @@ Future<String> _waitForCdpWebSocketUrl(int port) async {
   throw StateError('Timed out waiting for Chrome CDP on port $port');
 }
 
-class _CdpSession {
-  _CdpSession(this._ws, this._framesDir) {
+class _CdpSession(this._ws, this._framesDir) {
+  this {
     _sub = _ws.listen(_onMessage);
   }
 
