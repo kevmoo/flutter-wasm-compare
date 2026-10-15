@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:wasm_compare/src/metrics/benchmark_storage.dart';
 import 'package:wasm_compare/src/scene/bouncy_layout_matrix.dart';
 import 'package:wasm_compare/src/scene/morphing_layout_matrix.dart';
